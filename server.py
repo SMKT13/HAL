@@ -81,6 +81,27 @@ def atr_series(hi, lo, cl, n=14):
     return out
 
 
+
+def mfi_series(hi, lo, cl, vol, n=14):
+    out = [None] * len(cl); pos = 0.0; neg = 0.0
+    for i in range(1, len(cl)):
+        tp = (hi[i] + lo[i] + cl[i]) / 3.0
+        ptp = (hi[i-1] + lo[i-1] + cl[i-1]) / 3.0
+        mf = tp * vol[i]
+        if tp > ptp: pos += mf
+        elif tp < ptp: neg += mf
+        if i > n:
+            j = i - n
+            tpj = (hi[j] + lo[j] + cl[j]) / 3.0
+            tpjp = (hi[j-1] + lo[j-1] + cl[j-1]) / 3.0
+            mfj = tpj * vol[j]
+            if tpj > tpjp: pos -= mfj
+            elif tpj < tpjp: neg -= mfj
+        if i >= n:
+            out[i] = 100.0 - 100.0 / (1.0 + (pos / neg if neg else 999.0))
+    return out
+
+
 def bs_put(S, K, T, r, iv):
     if T <= 0:
         return max(0.0, K - S)
@@ -134,6 +155,7 @@ def build(raw):
     sig = ema_series([0.0 if v is None else v for v in macd], 9)
     hist = [None if (a is None or b is None) else a - b for a, b in zip(macd, sig)]
     atr = atr_series(hi, lo, cl)
+    mfi = mfi_series(hi, lo, cl, [x['v'] for x in rows])
     mid = sma_series(cl, 20)
     sd = [None] * len(cl)
     for i in range(19, len(cl)):
@@ -180,6 +202,11 @@ def build(raw):
             'rsi14': rsi[i], 'macd': macd[i], 'macd_sig': sig[i], 'macd_hist': hist[i],
             'hist_prev': hist[i - 1], 'atr14': atr[i],
             'bb_lo': mid[i] - 2 * sd[i], 'bb_mid': mid[i], 'bb_up': mid[i] + 2 * sd[i],
+            'mfi14': mfi[i],
+            'mfi_rsi_spread': (mfi[i] - rsi[i]) if (mfi[i] is not None and rsi[i] is not None) else None,
+            'flow_signal': ('acc' if ((mfi[i] or 0) - (rsi[i] or 0)) >= 8
+                            else 'dist' if ((mfi[i] or 0) - (rsi[i] or 0)) <= -8
+                            else 'neutral'),
             'ann_vol_realized': ann_vol,
         },
         'levels': {
