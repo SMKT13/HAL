@@ -283,32 +283,6 @@ class Handler(BaseHTTPRequestHandler):
             data = get_data(force=force)
             data.pop('_ts', None)
             self._send(200, json.dumps(data).encode(), 'application/json')
-        elif path == '/qr':
-            host = self.headers.get('Host') or 'localhost:8000'
-            target = f'http://{host}/'
-            try:
-                import qrcode, qrcode.image.svg as svgf, io
-                img = qrcode.make(target, image_factory=svgf.SvgPathImage,
-                                  box_size=14, border=3)
-                buf = io.BytesIO(); img.save(buf)
-                svg = buf.getvalue().decode('utf-8', 'replace')
-                body = ('<html><head><meta charset="utf-8">'
-                        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-                        '<title>Scan to open HAL Dashboard</title></head>'
-                        '<body style="background:#0e1117;color:#e8e8e8;font-family:Segoe UI,Arial,sans-serif;text-align:center;padding:30px 16px;">'
-                        f'<h2 style="color:#4fc3f7;">📲 Scan to open the HAL Dashboard on your phone</h2>'
-                        f'<div style="background:#fff;display:inline-block;padding:18px;border-radius:14px;margin:18px 0">{svg}</div>'
-                        f'<p style="font-size:18px;"><b>{target}</b></p>'
-                        '<p style="color:#9e9e9e;font-size:13px;">Phone must be on the same Wi-Fi/network as this computer.</p>'
-                        '</body></html>').encode()
-                self._send(200, body, 'text/html; charset=utf-8')
-            except Exception as e:
-                self._send(200,
-                           f'<html><body style="font-family:Arial;background:#0e1117;color:#e8e8e8;padding:30px;text-align:center;">'
-                           f'<h3 style="color:#ffd54f;">QR page unavailable ({e})</h3>'
-                           f'<p>Run: <code>pip install qrcode</code> then reload this page.</p>'
-                           f'<p>Or just type on your phone: <b>{target}</b></p></body></html>'.encode(),
-                           'text/html; charset=utf-8')
         elif path == '/favicon.ico':
             self._send(204, b'', 'text/plain')
         else:

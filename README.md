@@ -10,7 +10,7 @@ levels, and your F&O position marked to market.
 - **Any terminal:** `python3 server.py`
 
 Serves on http://localhost:8000 (PC) — open `http://<pc-ip>:8000` on your phone
-(same Wi-Fi), or scan the QR at `http://localhost:8000/qr`.
+(same Wi-Fi).
 Open `http://<machine-ip>:8000` from any device on the same network, or port-forward /
 expose it (e.g. `ssh -L 8000:localhost:8000`) to reach it from your phone.
 
@@ -39,6 +39,9 @@ expose it (e.g. `ssh -L 8000:localhost:8000`) to reach it from your phone.
 - Educational tool only — not investment advice.
 
 ## Files
-- `server.py` — fetch, indicator engine (SMA/RSI/MACD/ATR/BB/pivots/BS), cache, HTTP
+- `server.py` — fetch, indicator engine (SMA/RSI/MACD/MFI/ATR/pivots/BS), cache, HTTP
 - `index.html` — responsive single-page UI (works on phone & PC), inline CSS/JS
 - `cache.json` — last data snapshot (auto-created)
+
+## Deploy
+See `../DEPLOY_FREE.md` (free Render.com hosting). Live: https://hal-5ndu.onrender.com
