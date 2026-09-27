@@ -13,9 +13,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(HERE, 'cache.json')
 CACHE_TTL = 15 * 60
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36'
-R_FREE = 0.065          # risk-free for futures carry / BS
-PE_IV = 0.247           # IV implied from user's actual 4500 PE fill (28-Aug-2026)
-PE_STRIKE = 4500
+R_FREE = 0.065          # risk-free for futures carry / BS (sent to the client, which marks the position legs)
 FLOOR = 4616.0        # hard floor = 16-Sep-2026 swing low (old 4750 floor failed on 15/16-Sep closes)
 REDUCE = 4750.0       # reduce line = old floor / 50-DMA zone
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
@@ -102,16 +100,8 @@ def mfi_series(hi, lo, cl, vol, n=14):
     return out
 
 
-def bs_put(S, K, T, r, iv):
-    if T <= 0:
-        return max(0.0, K - S)
-    d1 = (math.log(S / K) + (r + iv * iv / 2) * T) / (iv * math.sqrt(T))
-    d2 = d1 - iv * math.sqrt(T)
-    N = lambda x: 0.5 * (1 + math.erf(x / math.sqrt(2)))
-    return K * math.exp(-r * T) * N(-d2) - S * N(-d1)
-
-
 def last_tuesday(y, m):
+    """NSE monthly F&O expiry = last Tuesday of the month (holiday shifts not modelled)."""
     wd, nd = calendar.monthrange(y, m)
     d = datetime.date(y, m, nd)
     return d - datetime.timedelta(days=(d.weekday() - 1) % 7)
@@ -172,11 +162,9 @@ def build(raw):
     fib = {f: round(w52h - (w52h - w52l) * f, 1) for f in (0.236, 0.382, 0.5, 0.618)}
 
     today = datetime.datetime.now(IST).date()
-    exp = next_expiries(today, 2)
+    exp = next_expiries(today, 4)
     d1e = (datetime.date.fromisoformat(exp[0]) - today).days
     d2e = (datetime.date.fromisoformat(exp[1]) - today).days
-    fut_oct = spot * (1 + R_FREE * d2e / 365.0)
-    pe_est = bs_put(spot, PE_STRIKE, max(d1e, 0) / 365.0, R_FREE, PE_IV)
 
     ann_vol = None
     if len(cl) > 21:
@@ -218,13 +206,16 @@ def build(raw):
             'target1': 5000.0, 'target2': w52h,
             'fib': fib,
         },
+        # Position legs are marked client-side (each leg carries its own expiry /
+        # strike / IV, saved in the browser), so a leg that expires is settled at
+        # that day's close instead of silently rolling to the next month.
         'fno': {
             'lot': 150,
-            'expiry1': exp[0], 'days1': d1e,
+            'r_free': R_FREE,
+            'today': today.isoformat(),
+            'expiries': exp,                       # next 4 monthly expiries
+            'expiry1': exp[0], 'days1': d1e,       # nearest expiry
             'expiry2': exp[1], 'days2': d2e,
-            'fut_est_oct': round(fut_oct, 1),
-            'pe_strike': PE_STRIKE, 'pe_iv': PE_IV * 100,
-            'pe_est': round(pe_est, 1),
         },
         'daily': rows,
         'series': {'sma20': s20[-130:], 'sma50': s50[-130:], 'sma200': s200[-130:],
