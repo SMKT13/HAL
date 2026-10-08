@@ -13,17 +13,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(HERE, 'cache.json')
 CACHE_TTL = 15 * 60
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36'
-R_FREE = 0.065          # risk-free for futures carry / BS (sent to the client, which marks the position legs)
+R_FREE = 0.065          # risk-free for futures carry / BS
+PE_IV = 0.40            # post-breakdown IV regime (fills implied ~33% Mon; crash re-priced to ~40)
+PE_STRIKE = 4500        # Oct 4500 PE (150 qty @ 57.40)
+PE2_STRIKE = 4300       # Oct 4300 PE (150 qty @ 24.10)
 FLOOR = 4616.0        # hard floor = 16-Sep-2026 swing low (old 4750 floor failed on 15/16-Sep closes)
 REDUCE = 4750.0       # reduce line = old floor / 50-DMA zone
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
 
 # ---------------- data fetch ----------------
-def fetch_yahoo():
+def fetch_yahoo(symbol='HAL.NS'):
     err = None
     for host in ('query1', 'query2'):
-        url = f'https://{host}.finance.yahoo.com/v8/finance/chart/HAL.NS?range=1y&interval=1d'
+        url = f'https://{host}.finance.yahoo.com/v8/finance/chart/{symbol}?range=1y&interval=1d'
         try:
             req = urllib.request.Request(url, headers={'User-Agent': UA})
             with urllib.request.urlopen(req, timeout=12) as resp:
@@ -31,6 +34,69 @@ def fetch_yahoo():
         except Exception as e:
             err = e
     raise err
+
+
+def nifty_context(raw_nifty, hal_closes):
+    """Market regime block: Nifty tech + HAL-beta/corr. Returns None on failure."""
+    try:
+        r = raw_nifty['chart']['result'][0]
+        m = r['meta']; q = r['indicators']['quote'][0]
+        dates, closes = [], []
+        for i in range(len(r['timestamp'])):
+            if q['close'][i] is None:
+                continue
+            if q['volume'][i] == 0 and q['open'][i] == q['close'][i] == q['high'][i] == q['low'][i]:
+                continue
+            dates.append(datetime.datetime.fromtimestamp(r['timestamp'][i], IST).strftime('%Y-%m-%d'))
+            closes.append(q['close'][i])
+        c = closes
+        if len(c) < 210:
+            return None
+        # RSI
+        g = l = 0.0
+        for i in range(1, len(c)):
+            ch_ = c[i] - c[i - 1]
+            up, dn = max(ch_, 0.0), max(-ch_, 0.0)
+            if i <= 14:
+                g += up; l += dn
+                if i == 14:
+                    g /= 14; l /= 14
+            else:
+                g = (g * 13 + up) / 14; l = (l * 13 + dn) / 14
+        rsi = 100.0 - 100.0 / (1.0 + (g / l if l else 999))
+        s200 = sum(c[-200:]) / 200
+        s20 = sum(c[-20:]) / 20
+        # beta/corr 60d vs HAL
+        hmap = {d: v for d, v in zip(dates, c)}
+        pairs = [(hv, hmap[d]) for d, hv in hal_closes if d in hmap][-60:]
+        if len(pairs) >= 40:
+            hr = [pairs[i][0] / pairs[i - 1][0] - 1 for i in range(1, len(pairs))]
+            nr = [pairs[i][1] / pairs[i - 1][1] - 1 for i in range(1, len(pairs))]
+            n = len(hr)
+            mh = sum(hr) / n; mn = sum(nr) / n
+            cov = sum((a - mh) * (b - mn) for a, b in zip(hr, nr)) / n
+            vh = sum((a - mh) ** 2 for a in hr) / n
+            vn = sum((b - mn) ** 2 for b in nr) / n
+            beta = cov / vn if vn else None
+            corr = cov / math.sqrt(vh * vn) if (vh > 0 and vn > 0) else None
+        else:
+            beta = corr = None
+        price = m['regularMarketPrice']
+        prev = c[-2] if len(c) > 1 else price
+        w52l = min(c); w52h = max(c)
+        return {
+            'price': round(price, 1), 'prev': round(prev, 1),
+            'chg_pct': round((price / prev - 1) * 100, 2),
+            'rsi14': round(rsi, 1),
+            's20': round(s20), 's200': round(s200),
+            'w52l': round(w52l), 'w52h': round(w52h),
+            'above_200dma': price > s200, 'above_20dma': price > s20,
+            'dist_52wl_pct': round((price / w52l - 1) * 100, 1),
+            'beta60': round(beta, 2) if beta is not None else None,
+            'corr60': round(corr, 2) if corr is not None else None,
+        }
+    except Exception:
+        return None
 
 
 # ---------------- indicators ----------------
@@ -100,8 +166,16 @@ def mfi_series(hi, lo, cl, vol, n=14):
     return out
 
 
+def bs_put(S, K, T, r, iv):
+    if T <= 0:
+        return max(0.0, K - S)
+    d1 = (math.log(S / K) + (r + iv * iv / 2) * T) / (iv * math.sqrt(T))
+    d2 = d1 - iv * math.sqrt(T)
+    N = lambda x: 0.5 * (1 + math.erf(x / math.sqrt(2)))
+    return K * math.exp(-r * T) * N(-d2) - S * N(-d1)
+
+
 def last_tuesday(y, m):
-    """NSE monthly F&O expiry = last Tuesday of the month (holiday shifts not modelled)."""
     wd, nd = calendar.monthrange(y, m)
     d = datetime.date(y, m, nd)
     return d - datetime.timedelta(days=(d.weekday() - 1) % 7)
@@ -121,7 +195,9 @@ def next_expiries(today, count=2):
 
 
 # ---------------- build payload ----------------
-def build(raw):
+def build(raw, raw_nifty=None, mkt=None):
+    global MKT
+    MKT = mkt
     r = raw['chart']['result'][0]
     m = r['meta']
     q = r['indicators']['quote'][0]
@@ -162,9 +238,17 @@ def build(raw):
     fib = {f: round(w52h - (w52h - w52l) * f, 1) for f in (0.236, 0.382, 0.5, 0.618)}
 
     today = datetime.datetime.now(IST).date()
-    exp = next_expiries(today, 4)
+    exp = next_expiries(today, 2)
     d1e = (datetime.date.fromisoformat(exp[0]) - today).days
     d2e = (datetime.date.fromisoformat(exp[1]) - today).days
+    # futures carry to the far month only during roll week (near expiry < 7d)
+    fut_days = d1e if d1e >= 7 else d2e
+    fut_est = spot * (1 + R_FREE * fut_days / 365.0)
+    # options track the next LIVE monthly (roll past an expiring contract)
+    opt_days = d1e if d1e >= 1 else d2e
+    opt_expiry = exp[0] if opt_days == d1e else exp[1]
+    pe_est = bs_put(spot, PE_STRIKE, max(opt_days, 0) / 365.0, R_FREE, PE_IV)
+    pe2_est = bs_put(spot, PE2_STRIKE, max(opt_days, 0) / 365.0, R_FREE, PE_IV)
 
     ann_vol = None
     if len(cl) > 21:
@@ -206,21 +290,22 @@ def build(raw):
             'target1': 5000.0, 'target2': w52h,
             'fib': fib,
         },
-        # Position legs are marked client-side (each leg carries its own expiry /
-        # strike / IV, saved in the browser), so a leg that expires is settled at
-        # that day's close instead of silently rolling to the next month.
         'fno': {
             'lot': 150,
-            'r_free': R_FREE,
-            'today': today.isoformat(),
-            'expiries': exp,                       # next 4 monthly expiries
-            'expiry1': exp[0], 'days1': d1e,       # nearest expiry
+            'expiry1': exp[0], 'days1': d1e,
             'expiry2': exp[1], 'days2': d2e,
+            'fut_expiry': exp[0] if fut_days == d1e else exp[1], 'fut_days': fut_days,
+            'opt_expiry': opt_expiry, 'opt_days': opt_days,
+            'fut_est': round(fut_est, 1),
+            'pe_strike': PE_STRIKE, 'pe2_strike': PE2_STRIKE,
+            'pe_iv': PE_IV * 100,
+            'pe_est': round(pe_est, 1), 'pe2_est': round(pe2_est, 1),
         },
         'daily': rows,
         'series': {'sma20': s20[-130:], 'sma50': s50[-130:], 'sma200': s200[-130:],
                    'rsi': rsi[-130:], 'macd': macd[-130:], 'sig': sig[-130:], 'hist': hist[-130:]},
         'week': rows[-6:],
+        'mkt': MKT,  # Nifty context (may be None)
     }
 
 
@@ -236,7 +321,23 @@ def get_data(force=False):
         cached['stale'] = False
         return cached
     try:
-        payload = build(fetch_yahoo())
+        raw = fetch_yahoo('HAL.NS')
+        try:
+            raw_n = fetch_yahoo('%5ENSEI')
+        except Exception:
+            raw_n = None
+        # compute HAL closes list from raw for beta
+        rr = raw['chart']['result'][0]; qq = rr['indicators']['quote'][0]
+        hal_closes = []
+        for i in range(len(rr['timestamp'])):
+            if qq['close'][i] is None:
+                continue
+            if qq['volume'][i] == 0 and qq['open'][i] == qq['close'][i] == qq['high'][i] == qq['low'][i]:
+                continue
+            hal_closes.append((datetime.datetime.fromtimestamp(rr['timestamp'][i], IST).strftime('%Y-%m-%d'),
+                               qq['close'][i]))
+        mkt = nifty_context(raw_n, hal_closes) if raw_n else None
+        payload = build(raw, raw_n, mkt)
         payload['_ts'] = time.time()
         payload['stale'] = False
         try:
