@@ -14,7 +14,8 @@ CACHE_FILE = os.path.join(HERE, 'cache.json')
 CACHE_TTL = 15 * 60
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36'
 R_FREE = 0.065          # risk-free for futures carry / BS
-PE_IV = 0.40            # post-breakdown IV regime (fills implied ~33% Mon; crash re-priced to ~40)
+PE_IV = 0.248           # PINNED to broker quote 09-Oct: Oct 4500PE 37.45 @ spot 4655.6, 18d
+PE2_IV = 0.287          # PINNED: Oct 4300PE 13.05 (normal put skew, +3.9 pts)
 PE_STRIKE = 4500        # Oct 4500 PE (150 qty @ 57.40)
 PE2_STRIKE = 4300       # Oct 4300 PE (150 qty @ 24.10)
 FLOOR = 4616.0        # hard floor = 16-Sep-2026 swing low (old 4750 floor failed on 15/16-Sep closes)
@@ -248,7 +249,7 @@ def build(raw, raw_nifty=None, mkt=None):
     opt_days = d1e if d1e >= 1 else d2e
     opt_expiry = exp[0] if opt_days == d1e else exp[1]
     pe_est = bs_put(spot, PE_STRIKE, max(opt_days, 0) / 365.0, R_FREE, PE_IV)
-    pe2_est = bs_put(spot, PE2_STRIKE, max(opt_days, 0) / 365.0, R_FREE, PE_IV)
+    pe2_est = bs_put(spot, PE2_STRIKE, max(opt_days, 0) / 365.0, R_FREE, PE2_IV)
 
     ann_vol = None
     if len(cl) > 21:
