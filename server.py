@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
 """HAL Dashboard — stdlib-only server.
 Serves the dashboard page and /api/data: fetches NSE data for HAL (via Yahoo
-Finance chart API, delayed ~15 min), computes technicals server-side, caches
+Finance chart API, potentially delayed), computes technicals server-side, caches
 to disk (15 min TTL) so restarts are instant and offline falls back to cache.
 Run: python3 server.py   (binds 0.0.0.0:8000)
 """
-import json, math, time, os, calendar, datetime, urllib.request
+import json, math, time, os, datetime, urllib.request
+import tempfile
+import threading
+from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(os.environ.get('PORT', 8000))
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(HERE, 'cache.json')
 CACHE_TTL = 15 * 60
+CACHE_VERSION = 2
+CACHE_LOCK = threading.Lock()
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36'
-R_FREE = 0.065          # risk-free for futures carry / BS
-PE_IV = 0.248           # PINNED to broker quote 09-Oct: Oct 4500PE 37.45 @ spot 4655.6, 18d
-PE2_IV = 0.287          # PINNED: Oct 4300PE 13.05 (normal put skew, +3.9 pts)
-PE_STRIKE = 4500        # Oct 4500 PE (150 qty @ 57.40)
-PE2_STRIKE = 4300       # Oct 4300 PE (150 qty @ 24.10)
-FLOOR = 4616.0        # hard floor = 16-Sep-2026 swing low (old 4750 floor failed on 15/16-Sep closes)
-REDUCE = 4750.0       # reduce line = old floor / 50-DMA zone
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
 
@@ -37,39 +35,72 @@ def fetch_yahoo(symbol='HAL.NS'):
     raise err
 
 
+def finite(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def history(raw):
+    """Validate complete OHLCV bars; sort and deduplicate by IST session date."""
+    chart = raw.get('chart', {})
+    if chart.get('error') or not chart.get('result'):
+        raise ValueError('Market provider returned no chart data')
+    result = chart['result'][0]
+    quote = result['indicators']['quote'][0]
+    rows = {}
+    for index, timestamp in enumerate(result.get('timestamp', [])):
+        values = [quote.get(key, [])[index] if index < len(quote.get(key, [])) else None
+                  for key in ('open', 'high', 'low', 'close', 'volume')]
+        if not finite(timestamp) or not all(finite(v) for v in values):
+            continue
+        o, h, l, c, v = values
+        if min(o, h, l, c) <= 0 or v < 0 or h < max(o, c, l) or l > min(o, c):
+            continue
+        if v == 0 and o == h == l == c:
+            continue
+        try:
+            date = datetime.datetime.fromtimestamp(timestamp, IST).date().isoformat()
+        except (OverflowError, OSError, ValueError):
+            continue
+        rows[date] = dict(d=date, o=o, h=h, l=l, c=c, v=v)
+    if len(rows) < 2:
+        raise ValueError('At least two valid daily bars are required')
+    return result.get('meta', {}), [rows[key] for key in sorted(rows)]
+
+
+def quote_time(meta):
+    timestamp = meta.get('regularMarketTime')
+    if finite(timestamp) and timestamp > 0:
+        try:
+            return datetime.datetime.fromtimestamp(timestamp, IST)
+        except (OverflowError, OSError, ValueError):
+            pass
+    return None
+
+
+def previous_close(meta, rows):
+    supplied = meta.get('regularMarketPreviousClose')
+    if finite(supplied) and supplied > 0:
+        return supplied
+    moment = quote_time(meta)
+    date = moment.date().isoformat() if moment else rows[-1]['d']
+    previous = [row for row in rows if row['d'] < date]
+    return previous[-1]['c'] if previous else rows[-2]['c']
+
+
 def nifty_context(raw_nifty, hal_closes):
     """Market regime block: Nifty tech + HAL-beta/corr. Returns None on failure."""
     try:
-        r = raw_nifty['chart']['result'][0]
-        m = r['meta']; q = r['indicators']['quote'][0]
-        dates, closes = [], []
-        for i in range(len(r['timestamp'])):
-            if q['close'][i] is None:
-                continue
-            if q['volume'][i] == 0 and q['open'][i] == q['close'][i] == q['high'][i] == q['low'][i]:
-                continue
-            dates.append(datetime.datetime.fromtimestamp(r['timestamp'][i], IST).strftime('%Y-%m-%d'))
-            closes.append(q['close'][i])
+        m, rows = history(raw_nifty)
+        dates, closes = [r['d'] for r in rows], [r['c'] for r in rows]
         c = closes
         if len(c) < 210:
             return None
-        # RSI
-        g = l = 0.0
-        for i in range(1, len(c)):
-            ch_ = c[i] - c[i - 1]
-            up, dn = max(ch_, 0.0), max(-ch_, 0.0)
-            if i <= 14:
-                g += up; l += dn
-                if i == 14:
-                    g /= 14; l /= 14
-            else:
-                g = (g * 13 + up) / 14; l = (l * 13 + dn) / 14
-        rsi = 100.0 - 100.0 / (1.0 + (g / l if l else 999))
+        rsi = rsi_series(c)[-1]
         s200 = sum(c[-200:]) / 200
         s20 = sum(c[-20:]) / 20
         # beta/corr 60d vs HAL
         hmap = {d: v for d, v in zip(dates, c)}
-        pairs = [(hv, hmap[d]) for d, hv in hal_closes if d in hmap][-60:]
+        pairs = [(hv, hmap[d]) for d, hv in hal_closes if d in hmap][-61:]
         if len(pairs) >= 40:
             hr = [pairs[i][0] / pairs[i - 1][0] - 1 for i in range(1, len(pairs))]
             nr = [pairs[i][1] / pairs[i - 1][1] - 1 for i in range(1, len(pairs))]
@@ -83,9 +114,15 @@ def nifty_context(raw_nifty, hal_closes):
         else:
             beta = corr = None
         price = m['regularMarketPrice']
-        prev = c[-2] if len(c) > 1 else price
-        w52l = min(c); w52h = max(c)
+        if not finite(price) or price <= 0:
+            return None
+        prev = previous_close(m, rows)
+        w52l = min(row['l'] for row in rows); w52h = max(row['h'] for row in rows)
+        as_of = quote_time(m)
         return {
+            'quote_as_of': as_of.isoformat() if as_of else None,
+            'last_session': rows[-1]['d'],
+            'return_observations': len(pairs) - 1,
             'price': round(price, 1), 'prev': round(prev, 1),
             'chg_pct': round((price / prev - 1) * 100, 2),
             'rsi14': round(rsi, 1),
@@ -102,12 +139,24 @@ def nifty_context(raw_nifty, hal_closes):
 
 # ---------------- indicators ----------------
 def sma_series(vals, n):
+    if n <= 0:
+        raise ValueError('SMA period must be positive')
+    if len(vals) < n:
+        return [None] * len(vals)
     out = []
     s = sum(vals[:n]); out.append(s / n)
     for i in range(n, len(vals)):
         s += vals[i] - vals[i - n]
         out.append(s / n)
     return [None] * (n - 1) + out
+
+
+def strength_index(positive, negative):
+    if positive == 0 and negative == 0:
+        return 50.0
+    if negative == 0:
+        return 100.0
+    return 100.0 - 100.0 / (1.0 + positive / negative)
 
 
 def rsi_series(closes, n=14):
@@ -120,11 +169,11 @@ def rsi_series(closes, n=14):
             g += up; l += dn
             if i == n:
                 g /= n; l /= n
-                out[i] = 100.0 - 100.0 / (1.0 + (g / l if l else 999))
+                out[i] = strength_index(g, l)
         else:
             g = (g * (n - 1) + up) / n
             l = (l * (n - 1) + dn) / n
-            out[i] = 100.0 - 100.0 / (1.0 + (g / l if l else 999))
+            out[i] = strength_index(g, l)
     return out
 
 
@@ -138,10 +187,15 @@ def ema_series(vals, n):
 
 
 def atr_series(hi, lo, cl, n=14):
-    out = [None] * len(cl); a = None
+    out = [None] * len(cl); a = None; seed = []
     for i in range(1, len(cl)):
         tr = max(hi[i] - lo[i], abs(hi[i] - cl[i - 1]), abs(lo[i] - cl[i - 1]))
-        a = tr if a is None else (a * (n - 1) + tr) / n
+        if len(seed) < n:
+            seed.append(tr)
+            if len(seed) == n:
+                a = sum(seed) / n
+        else:
+            a = (a * (n - 1) + tr) / n
         out[i] = a
     return out
 
@@ -163,56 +217,14 @@ def mfi_series(hi, lo, cl, vol, n=14):
             if tpj > tpjp: pos -= mfj
             elif tpj < tpjp: neg -= mfj
         if i >= n:
-            out[i] = 100.0 - 100.0 / (1.0 + (pos / neg if neg else 999.0))
-    return out
-
-
-def bs_put(S, K, T, r, iv):
-    if T <= 0:
-        return max(0.0, K - S)
-    d1 = (math.log(S / K) + (r + iv * iv / 2) * T) / (iv * math.sqrt(T))
-    d2 = d1 - iv * math.sqrt(T)
-    N = lambda x: 0.5 * (1 + math.erf(x / math.sqrt(2)))
-    return K * math.exp(-r * T) * N(-d2) - S * N(-d1)
-
-
-def last_tuesday(y, m):
-    wd, nd = calendar.monthrange(y, m)
-    d = datetime.date(y, m, nd)
-    return d - datetime.timedelta(days=(d.weekday() - 1) % 7)
-
-
-def next_expiries(today, count=2):
-    out = []
-    y, m = today.year, today.month
-    while len(out) < count:
-        t = last_tuesday(y, m)
-        if t >= today:
-            out.append(t.isoformat())
-        m += 1
-        if m == 13:
-            y, m = y + 1, 1
+            out[i] = strength_index(max(0.0, pos), max(0.0, neg))
     return out
 
 
 # ---------------- build payload ----------------
-def build(raw, raw_nifty=None, mkt=None):
-    global MKT
-    MKT = mkt
-    r = raw['chart']['result'][0]
-    m = r['meta']
-    q = r['indicators']['quote'][0]
-    rows = []
-    for i in range(len(r['timestamp'])):
-        if q['close'][i] is None:
-            continue
-        # drop stub/holiday artifact bars (flat OHLC, zero volume)
-        if q['volume'][i] == 0 and q['open'][i] == q['close'][i] == q['high'][i] == q['low'][i]:
-            continue
-        rows.append({
-            'd': datetime.datetime.fromtimestamp(r['timestamp'][i], IST).strftime('%Y-%m-%d'),
-            'o': q['open'][i], 'h': q['high'][i], 'l': q['low'][i],
-            'c': q['close'][i], 'v': q['volume'][i]})
+def build(raw, mkt=None, now=None):
+    now = now or datetime.datetime.now(IST)
+    m, rows = history(raw)
     cl = [x['c'] for x in rows]; hi = [x['h'] for x in rows]; lo = [x['l'] for x in rows]
 
     s20 = sma_series(cl, 20); s50 = sma_series(cl, 50)
@@ -231,127 +243,161 @@ def build(raw, raw_nifty=None, mkt=None):
 
     last = rows[-1]
     i = len(rows) - 1
-    H, L, C = last['h'], last['l'], last['c']
-    P = (H + L + C) / 3.0
-
-    spot = m['regularMarketPrice']
-    w52h, w52l = m['fiftyTwoWeekHigh'], m['fiftyTwoWeekLow']
+    # Same-day bars remain provisional until 16:00 IST. Holidays are not inferred.
+    complete = [row for row in rows if row['d'] < now.date().isoformat()
+                or (row['d'] == now.date().isoformat() and now.hour >= 16)]
+    pivot_bar = complete[-1] if complete else None
+    H, L, C = (pivot_bar[key] for key in ('h', 'l', 'c')) if pivot_bar else (None, None, None)
+    P = (H + L + C) / 3.0 if pivot_bar else None
+    spot = m.get('regularMarketPrice')
+    if not finite(spot) or spot <= 0:
+        raise ValueError('Market provider returned an invalid price')
+    w52h = m.get('fiftyTwoWeekHigh')
+    w52l = m.get('fiftyTwoWeekLow')
+    w52h = w52h if finite(w52h) and w52h > 0 else max(row['h'] for row in rows)
+    w52l = w52l if finite(w52l) and w52l > 0 else min(row['l'] for row in rows)
+    if w52h < w52l:
+        raise ValueError('Market provider returned an invalid annual range')
     fib = {f: round(w52h - (w52h - w52l) * f, 1) for f in (0.236, 0.382, 0.5, 0.618)}
-
-    today = datetime.datetime.now(IST).date()
-    exp = next_expiries(today, 2)
-    d1e = (datetime.date.fromisoformat(exp[0]) - today).days
-    d2e = (datetime.date.fromisoformat(exp[1]) - today).days
-    # futures carry to the far month only during roll week (near expiry < 7d)
-    fut_days = d1e if d1e >= 7 else d2e
-    fut_est = spot * (1 + R_FREE * fut_days / 365.0)
-    # options track the next LIVE monthly (roll past an expiring contract)
-    opt_days = d1e if d1e >= 1 else d2e
-    opt_expiry = exp[0] if opt_days == d1e else exp[1]
-    pe_est = bs_put(spot, PE_STRIKE, max(opt_days, 0) / 365.0, R_FREE, PE_IV)
-    pe2_est = bs_put(spot, PE2_STRIKE, max(opt_days, 0) / 365.0, R_FREE, PE2_IV)
+    as_of = quote_time(m)
+    spread = mfi[i] - rsi[i] if mfi[i] is not None and rsi[i] is not None else None
+    def meta_or_bar(name, key):
+        value = m.get(name)
+        if finite(value) and (value >= 0 if key == 'v' else value > 0):
+            return value
+        return last[key] if as_of and as_of.date().isoformat() == last['d'] else None
 
     ann_vol = None
-    if len(cl) > 21:
+    if len(cl) >= 21:
         rets = [math.log(cl[i] / cl[i - 1]) for i in range(len(cl) - 20, len(cl))]
         mu = sum(rets) / len(rets)
         ann_vol = math.sqrt(sum((x - mu) ** 2 for x in rets) / (len(rets) - 1)) * math.sqrt(252) * 100
 
     return {
-        'fetched_at': datetime.datetime.now(IST).strftime('%d-%b-%Y %H:%M:%S IST'),
-        'market_state': m.get('marketState', '?'),
+        'schema_version': CACHE_VERSION,
+        'fetched_at': now.strftime('%d-%b-%Y %H:%M:%S IST'),
+        'fetched_at_iso': now.isoformat(),
+        'source': 'Yahoo Finance chart API (HAL.NS)',
+        'quote_as_of': as_of.isoformat() if as_of else None,
+        'last_session': last['d'],
+        'provisional_bar': last['d'] == now.date().isoformat() and now.hour < 16,
+        'history_bars': len(rows),
+        'delay_note': 'Quotes may be delayed; provider latency is not guaranteed.',
+        'market_state': m.get('marketState', 'Unknown (provider did not specify)'),
         'currency': m.get('currency', 'INR'),
         'quote': {
             'price': spot,
-            'prev_close': cl[-2] if len(cl) > 1 else spot,
-            'open': m.get('regularMarketOpen'),
-            'day_high': m.get('regularMarketDayHigh'),
-            'day_low': m.get('regularMarketDayLow'),
-            'volume': m.get('regularMarketVolume'),
+            'prev_close': previous_close(m, rows),
+            'open': meta_or_bar('regularMarketOpen', 'o'),
+            'day_high': meta_or_bar('regularMarketDayHigh', 'h'),
+            'day_low': meta_or_bar('regularMarketDayLow', 'l'),
+            'volume': meta_or_bar('regularMarketVolume', 'v'),
             'w52h': w52h, 'w52l': w52l,
         },
         'ind': {
             'sma20': s20[i], 'sma50': s50[i], 'sma200': s200[i],
             'rsi14': rsi[i], 'macd': macd[i], 'macd_sig': sig[i], 'macd_hist': hist[i],
             'hist_prev': hist[i - 1], 'atr14': atr[i],
-            'bb_lo': mid[i] - 2 * sd[i], 'bb_mid': mid[i], 'bb_up': mid[i] + 2 * sd[i],
+            'bb_lo': mid[i] - 2 * sd[i] if sd[i] is not None else None,
+            'bb_mid': mid[i], 'bb_up': mid[i] + 2 * sd[i] if sd[i] is not None else None,
             'mfi14': mfi[i],
-            'mfi_rsi_spread': (mfi[i] - rsi[i]) if (mfi[i] is not None and rsi[i] is not None) else None,
-            'flow_signal': ('acc' if ((mfi[i] or 0) - (rsi[i] or 0)) >= 8
-                            else 'dist' if ((mfi[i] or 0) - (rsi[i] or 0)) <= -8
-                            else 'neutral'),
+            'mfi_rsi_spread': spread,
+            'flow_signal': ('unavailable' if spread is None else
+                            'acc' if spread >= 8 else 'dist' if spread <= -8 else 'neutral'),
             'ann_vol_realized': ann_vol,
         },
         'levels': {
-            'pivot': P, 'r1': 2 * P - L, 'r2': P + (H - L), 's1': 2 * P - H, 's2': P - (H - L),
-            'gate': s20[i],           # 20-DMA: recovery-confirm line
-            'reduce': REDUCE,         # old floor / 50-DMA zone: close below = cut 1 lot
-            'floor': FLOOR,           # 16-Sep-2026 swing low: close below = exit all
+            'pivot': P, 'pivot_session': pivot_bar['d'] if pivot_bar else None,
+            'r1': 2 * P - L if P is not None else None,
+            'r2': P + H - L if P is not None else None,
+            's1': 2 * P - H if P is not None else None,
+            's2': P - H + L if P is not None else None,
+            'gate': s20[i],           # descriptive trend reference
             'stop': s50[i],           # 50-DMA (dynamic, info)
-            'target1': 5000.0, 'target2': w52h,
             'fib': fib,
-        },
-        'fno': {
-            'lot': 150,
-            'expiry1': exp[0], 'days1': d1e,
-            'expiry2': exp[1], 'days2': d2e,
-            'fut_expiry': exp[0] if fut_days == d1e else exp[1], 'fut_days': fut_days,
-            'opt_expiry': opt_expiry, 'opt_days': opt_days,
-            'fut_est': round(fut_est, 1),
-            'pe_strike': PE_STRIKE, 'pe2_strike': PE2_STRIKE,
-            'pe_iv': PE_IV * 100,
-            'pe_est': round(pe_est, 1), 'pe2_est': round(pe2_est, 1),
         },
         'daily': rows,
         'series': {'sma20': s20[-130:], 'sma50': s50[-130:], 'sma200': s200[-130:],
                    'rsi': rsi[-130:], 'macd': macd[-130:], 'sig': sig[-130:], 'hist': hist[-130:]},
         'week': rows[-6:],
-        'mkt': MKT,  # Nifty context (may be None)
+        'mkt': mkt,  # Nifty context (may be None)
     }
 
 
 # ---------------- cache + http ----------------
-def get_data(force=False):
-    cached = None
-    if os.path.exists(CACHE_FILE):
-        try:
-            cached = json.load(open(CACHE_FILE))
-        except Exception:
-            cached = None
-    if cached and not force and time.time() - cached['_ts'] < CACHE_TTL:
-        cached['stale'] = False
-        return cached
+def read_cache():
     try:
-        raw = fetch_yahoo('HAL.NS')
-        try:
-            raw_n = fetch_yahoo('%5ENSEI')
-        except Exception:
-            raw_n = None
-        # compute HAL closes list from raw for beta
-        rr = raw['chart']['result'][0]; qq = rr['indicators']['quote'][0]
-        hal_closes = []
-        for i in range(len(rr['timestamp'])):
-            if qq['close'][i] is None:
-                continue
-            if qq['volume'][i] == 0 and qq['open'][i] == qq['close'][i] == qq['high'][i] == qq['low'][i]:
-                continue
-            hal_closes.append((datetime.datetime.fromtimestamp(rr['timestamp'][i], IST).strftime('%Y-%m-%d'),
-                               qq['close'][i]))
-        mkt = nifty_context(raw_n, hal_closes) if raw_n else None
-        payload = build(raw, raw_n, mkt)
-        payload['_ts'] = time.time()
-        payload['stale'] = False
-        try:
-            json.dump(payload, open(CACHE_FILE, 'w'))
-        except Exception:
-            pass
-        return payload
-    except Exception as e:
-        if cached:
-            cached['stale'] = True
-            cached['error'] = str(e)
+        with open(CACHE_FILE, encoding='utf-8') as stream:
+            cached = json.load(stream)
+        if (cached.get('schema_version') == CACHE_VERSION
+                and finite(cached.get('_ts')) and cached['_ts'] <= time.time()
+                and finite(cached.get('quote', {}).get('price'))
+                and cached['quote']['price'] > 0 and cached.get('daily')
+                and cached.get('ind') and cached.get('levels') and cached.get('series')):
+            json.dumps(cached, allow_nan=False)
             return cached
-        return {'error': str(e), 'stale': True, 'fetched_at': datetime.datetime.now(IST).strftime('%d-%b-%Y %H:%M:%S IST')}
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    return None
+
+
+def write_cache(payload):
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8',
+                                         dir=os.path.dirname(CACHE_FILE),
+                                         prefix='.hal-cache-', delete=False) as stream:
+            temporary = stream.name
+            json.dump(payload, stream, allow_nan=False)
+        os.replace(temporary, CACHE_FILE)
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def public_payload(payload, status, error=None):
+    data = dict(payload)
+    timestamp = data.pop('_ts', None)
+    data['data_status'] = status
+    data['stale'] = status == 'stale'
+    data['cache_age_seconds'] = round(max(0, time.time() - timestamp)) if timestamp else None
+    if error:
+        data['error'] = error
+    return data
+
+
+def get_data(force=False):
+    # Serialize refreshes and re-read after acquiring the lock to avoid torn writes
+    # and duplicate upstream requests from simultaneous browser refreshes.
+    with CACHE_LOCK:
+        cached = read_cache()
+        if cached:
+            age = time.time() - cached['_ts']
+            if age < (30 if force else CACHE_TTL):
+                return public_payload(cached, 'cached')
+        try:
+            raw = fetch_yahoo('HAL.NS')
+            _, rows = history(raw)
+            mkt = None
+            try:
+                raw_nifty = fetch_yahoo('%5ENSEI')
+                mkt = nifty_context(raw_nifty, [(r['d'], r['c']) for r in rows])
+            except Exception:
+                pass  # HAL remains available when the optional NIFTY feed fails.
+            payload = build(raw, mkt=mkt)
+            payload['_ts'] = time.time()
+            json.dumps(payload, allow_nan=False)
+            try:
+                write_cache(payload)
+            except OSError:
+                payload['cache_write_failed'] = True
+            return public_payload(payload, 'fresh_fetch')
+        except Exception as exc:
+            print(f'Market refresh failed: {type(exc).__name__}: {exc}', flush=True)
+            message = 'Market provider unavailable or returned invalid data.'
+            if cached:
+                return public_payload(cached, 'stale', message)
+            return {'error': message, 'data_status': 'unavailable', 'stale': True}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -364,18 +410,25 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        path = self.path.split('?')[0]
+        url = urlsplit(self.path)
+        path = url.path
         if path in ('/', '/index.html'):
             try:
-                body = open(os.path.join(HERE, 'index.html'), 'rb').read()
+                with open(os.path.join(HERE, 'index.html'), 'rb') as stream:
+                    body = stream.read()
                 self._send(200, body, 'text/html; charset=utf-8')
             except FileNotFoundError:
                 self._send(404, b'missing index.html', 'text/plain')
+        elif path in ('/portfolio.js', '/dashboard.js'):
+            with open(os.path.join(HERE, path[1:]), 'rb') as stream:
+                self._send(200, stream.read(), 'text/javascript; charset=utf-8')
+        elif path == '/health':
+            self._send(200, b'{"status":"ok"}', 'application/json')
         elif path == '/api/data':
-            force = 'force=1' in self.path
+            force = parse_qs(url.query).get('force') == ['1']
             data = get_data(force=force)
-            data.pop('_ts', None)
-            self._send(200, json.dumps(data).encode(), 'application/json')
+            self._send(200 if data.get('quote') else 503,
+                       json.dumps(data, allow_nan=False).encode(), 'application/json')
         elif path == '/favicon.ico':
             self._send(204, b'', 'text/plain')
         else:
@@ -389,3 +442,4 @@ if __name__ == '__main__':
     srv = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     print(f'HAL dashboard serving on 0.0.0.0:{PORT}', flush=True)
     srv.serve_forever()
+
