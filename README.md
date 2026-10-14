@@ -138,3 +138,74 @@ holdings/research are visible to anyone who can load the page; review them
 before exposing a deployment publicly. Educational analysis only; verify
 prices and settlement obligations with your broker.
 
+
+
+## New: Research Agent Desk
+
+Open **/agents** or tap **Agent desk** in the dashboard's mobile navigation.
+The added \`/api/agents\` endpoint analyzes the **same source and timestamps**
+as \`/api/data\` using transparent, offline, deterministic rules. It provides
+technical, bull, bear and risk panels. Fundamental, news and live NSE F&O
+panels explicitly say **data not connected** instead of inventing figures.
+This free path needs **no API keys, paid LLMs or new Python packages**.
+
+The research panels never access \`localStorage\`, saved futures/puts or broker
+data. Technical signals have no calibrated probability or trade-execution
+function. Stale feed state suppresses any directional assessment.
+
+### Optional real TauricResearch TradingAgents integration (v0.6.0)
+
+A separate Python script invokes the **actual upstream** TradingAgentsGraph
+for \`HAL.NS\`, using the selected market and news analyst agents. It does **not**
+run automatically when someone visits the public website (to prevent surprise
+inference fees, abuse or prompts hitting an unauthenticated server).
+
+Set up locally on Python 3.11+ with sufficient memory and internet:
+\`\`\`sh
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# Linux/macOS: source .venv/bin/activate
+python -m pip install "git+https://github.com/TauricResearch/TradingAgents.git@v0.6.0"
+\`\`\`
+
+**Free local LLM example**, with Ollama installed and running:
+\`\`\`sh
+ollama pull qwen3:8b
+python run_tradingagents.py --provider ollama --confirm-run
+\`\`\`
+
+For a hosted model, set the appropriate provider credentials securely in
+environment variables, plus \`TRADINGAGENTS_QUICK_THINK_LLM\` and
+\`TRADINGAGENTS_DEEP_THINK_LLM\`, then specify \`--provider PROVIDER\`.
+Hosted providers can charge money; check rates before \`--confirm-run\`.
+The upstream vendor configuration uses Yahoo/yfinance for HAL.NS; India
+coverage, headlines and filing data may be incomplete or delayed. **This runner
+does not integrate a live NSE futures/option chain or calculate hedge Greeks.**
+
+The runner saves only the stock-level report, with a strict HAL.NS ticker, to
+\`reports/hal-tradingagents-latest.json\`. It does not send your browser-saved
+positions to any AI provider. Reports are excluded from Git. To display that
+report on a trusted server, copy its file there and launch with
+\`HAL_TA_PUBLISH_REPORT=1\` (Windows PowerShell:
+\`$env:HAL_TA_PUBLISH_REPORT="1"\`). Otherwise
+\`/api/tradingagents/report\` intentionally returns HTTP 404.
+Review AI reports before publishing: they can include externally sourced text.
+
+Default \`requirements.txt\` and free Render setup stay unchanged. The optional
+full TradingAgents process is **not installed on Render**; it requires a
+separate opt-in local/VM run, model hosting and adequate resources.
+A web deployment does not automatically gain a locally generated report.
+
+### New endpoints
+
+| Path | Purpose |
+| --- | --- |
+| \`/agents\` | Responsive research agent desk |
+| \`/api/agents\` | Grounded deterministic research panels; 503 without market data |
+| \`/api/tradingagents/report\` | Read-only report, opt-in publish via \`HAL_TA_PUBLISH_REPORT=1\` |
+
+Run offline checks with:
+\`\`\`sh
+python -m unittest discover -s tests -v
+node --test tests/*.test.js
+\`\`\`

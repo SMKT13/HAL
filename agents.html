@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0c111b">
+<meta name="description" content="HAL NSE research-agent desk: source-grounded technical panels and optional TradingAgents report">
+<title>HAL — Research Agent Desk</title>
+<style>
+:root{color-scheme:dark;--bg:#0c111b;--card:#141d2b;--line:#2b3a50;--txt:#edf3ff;--mut:#adbed3;--acc:#83caff;--warn:#ffe098}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif;margin:0;padding:18px 14px 55px}
+main{max-width:1090px;margin:0 auto}
+a{color:var(--acc)}h1,h2,h3,p{margin:0 0 10px}h1{font-size:clamp(23px,5vw,32px)}h2{font-size:20px}h3{font-size:16px}
+header{display:flex;align-items:start;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:16px}
+.eyebrow{font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:var(--acc);font-weight:700}
+.muted{color:var(--mut)}.sm{font-size:13px}.small{font-size:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:14px 0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid .card{margin:0}
+.pill{border:1px solid #415d79;color:#cee6ff;border-radius:20px;display:inline-block;padding:3px 10px;font-size:12px}
+button{background:#1f344c;color:var(--acc);border:1px solid #4a7194;border-radius:9px;padding:9px 16px;cursor:pointer;font:inherit}
+button:focus-visible,a:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+.meta{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+ul{margin:10px 0;padding-left:22px}li{margin:7px 0}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101a28;border-radius:10px;padding:14px;font:13px/1.55 ui-monospace,SFMono-Regular,monospace;max-height:360px;overflow:auto}
+.notice{border-left:3px solid var(--warn);padding:9px 13px;background:#212333;color:#ffe6a5;margin:14px 0}
+[hidden]{display:none!important}
+@media(max-width:700px){.grid{grid-template-columns:1fr}.card{padding:15px}}
+</style>
+</head>
+<body><main>
+<header><div><div class="eyebrow">Research · HAL on NSE</div><h1>Agent research desk</h1><p class="muted sm">Evidence first. No automatic orders, fabricated Greeks or guaranteed live prices.</p></div><div><a href="/">← Main HAL dashboard</a> <button type="button" id="refresh">Refresh analysis</button></div></header>
+<div class="notice">The free panels below are deterministic rules applied to the HAL dashboard data — they are <strong>not LLM-generated TradingAgents outputs</strong>. The optional official TradingAgents report is displayed separately if you run and publish it explicitly.</div>
+<section class="card"><h2>Source and market status</h2><div id="market" class="meta" aria-live="polite">Fetching HAL market data…</div><p id="summary" class="muted"></p></section>
+<section class="grid" id="agent-cards" aria-label="Research analyst panels"></section>
+<section class="card"><h2>Official TradingAgents report <span class="pill">Optional</span></h2><p class="muted sm">Generated separately by TauricResearch/TradingAgents v0.6.0 using your configured model. It does not read browser-saved positions. This page never starts or pays for an AI run.</p><div id="official-status" class="notice" aria-live="polite">Checking for a published report…</div><div id="official-report" hidden><div id="official-meta" class="meta"></div><h3>Decision rating</h3><p id="official-decision"></p><div id="official-sections"></div></div><p class="sm"><a href="https://github.com/TauricResearch/TradingAgents" target="_blank" rel="noopener noreferrer">Original TradingAgents framework ↗</a></p></section>
+<p class="muted small">Trading signals are descriptive and not investment advice. Verify exchange filings, derivatives quotes, expiry dates, margins, and physical-settlement obligations with your broker.</p>
+</main><script src="/agents.js" defer></script></body></html>
