@@ -1,3 +1,7 @@
 cache.json
 __pycache__/
 *.pyc
+reports/
+.env
+.venv/
+__pycache__/

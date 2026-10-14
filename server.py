@@ -8,6 +8,7 @@ Run: python3 server.py   (binds 0.0.0.0:8000)
 import json, math, time, os, datetime, urllib.request
 import tempfile
 import threading
+import agents
 from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -422,6 +423,33 @@ class Handler(BaseHTTPRequestHandler):
         elif path in ('/portfolio.js', '/dashboard.js'):
             with open(os.path.join(HERE, path[1:]), 'rb') as stream:
                 self._send(200, stream.read(), 'text/javascript; charset=utf-8')
+        elif path in ('/agents', '/agents.html'):
+            with open(os.path.join(HERE, 'agents.html'), 'rb') as stream:
+                self._send(200, stream.read(), 'text/html; charset=utf-8')
+        elif path == '/agents.js':
+            with open(os.path.join(HERE, 'agents.js'), 'rb') as stream:
+                self._send(200, stream.read(), 'text/javascript; charset=utf-8')
+        elif path == '/api/agents':
+            data = get_data()
+            if not data.get('quote'):
+                self._send(503, b'{"error":"Market data unavailable"}', 'application/json')
+            else:
+                result = agents.analyze(data)
+                self._send(200, json.dumps(result, allow_nan=False).encode(), 'application/json')
+        elif path == '/api/tradingagents/report':
+            # Opt in deliberately: reports may contain third-party model output.
+            if os.environ.get('HAL_TA_PUBLISH_REPORT') != '1':
+                self._send(404, b'{"error":"Report not published"}', 'application/json')
+            else:
+                filename = os.path.join(HERE, 'reports', 'hal-tradingagents-latest.json')
+                try:
+                    with open(filename, encoding='utf-8') as stream:
+                        report = json.load(stream)
+                    if report.get('framework') != 'TauricResearch/TradingAgents':
+                        raise ValueError('Unrecognized report')
+                    self._send(200, json.dumps(report, ensure_ascii=False).encode(), 'application/json')
+                except (OSError, ValueError, TypeError, AttributeError):
+                    self._send(404, b'{"error":"Report not found"}', 'application/json')
         elif path == '/health':
             self._send(200, b'{"status":"ok"}', 'application/json')
         elif path == '/api/data':
