@@ -181,7 +181,7 @@ def _simplify_option(raw):
         "ltp": number(data.get("ltp")), "bid": number(data.get("bid_price")),
         "ask": number(data.get("ask_price")), "volume": number(data.get("volume")),
         "oi": number(data.get("oi")), "prev_oi": number(data.get("prev_oi")),
-        "iv": number(greeks.get("iv")), "delta": number(greeks.get("delta")),
+        "iv": number(greeks.get("iv")) if number(greeks.get("iv")) is not None else number(data.get("iv")), "delta": number(greeks.get("delta")),
         "gamma": number(greeks.get("gamma")), "theta": number(greeks.get("theta")),
         "vega": number(greeks.get("vega")),
     }
