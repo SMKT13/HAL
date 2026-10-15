@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HAL Upstox · Read-only F&O Desk</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#0c111b;color:#e8f1ff}
+*{box-sizing:border-box}body{margin:0;padding:20px}main{max-width:1150px;margin:auto}a{color:#85c9ff}
+header{display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px;align-items:center}
+h1{font-size:clamp(23px,4vw,32px);margin:10px 0}h2{font-size:18px}
+.card{border:1px solid #31435a;background:#141e2c;border-radius:14px;padding:17px;margin:14px 0}
+label{display:block;font-size:12px;color:#abc4db;margin-bottom:5px}input,select,button{font:inherit;border:1px solid #4b6884;border-radius:8px;padding:10px;background:#1c2d40;color:#fff;max-width:100%}button{cursor:pointer}
+.row{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.row>div{min-width:170px;flex:1}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:13px;white-space:nowrap}td,th{text-align:right;border-bottom:1px solid #283d52;padding:9px}th:first-child,td:first-child{text-align:left}
+.scroll{overflow-x:auto}small,.muted{color:#aec0d1}.number{font-size:28px;font-weight:700}.warn{border-left:3px solid #e9bc63;padding-left:12px}
+.error{color:#ffd8a9}code{background:#1f354b;padding:2px 5px;border-radius:4px}
+</style></head><body><main>
+<header><div><a href="/">← HAL dashboard</a><h1>HAL · Upstox F&O Desk</h1><small>Read-only market observations · no trading actions</small></div><span id="state">Not connected</span></header>
+<section class="card"><div class="row"><div><label for="key">Private viewer key (not your Upstox token)</label><input id="key" type="password" autocomplete="off" placeholder="HAL_VIEWER_KEY" aria-label="Viewer key"></div><div><label for="expiry">Option expiry</label><select id="expiry"><option value="">Front expiry</option></select></div><button id="refresh">Fetch quotes</button></div>
+<p class="muted">Viewer key is held only in this page's memory, not saved or placed in a URL. The broker token remains on the Render server.</p></section>
+<section class="card"><h2>HAL spot</h2><div class="number" id="spot">—</div><p id="spotmeta" class="muted">No quote loaded</p></section>
+<section class="card"><h2>HAL futures</h2><div class="scroll"><table><thead><tr><th>Expiry</th><th>Lot size</th><th>Last traded ₹</th><th>OI</th><th>Volume</th><th>Quote timestamp</th></tr></thead><tbody id="futures"><tr><td colspan="6">—</td></tr></tbody></table></div></section>
+<section class="card"><h2>Option chain · puts and calls</h2><p id="chainmeta" class="muted">Select a listed expiry</p>
+<div class="scroll"><table><thead><tr><th>Strike ₹</th><th>Call LTP</th><th>Call OI</th><th>Call IV</th><th>Put LTP</th><th>Put bid</th><th>Put ask</th><th>Put OI</th><th>Put IV</th><th>Put delta</th><th>Put theta</th></tr></thead><tbody id="options"><tr><td colspan="11">—</td></tr></tbody></table></div></section>
+<p class="warn muted">Futures and option prices are last-traded observations, not confirmed executable quotes. Upstox data can be delayed or stale outside trading hours. A stale quote is not a broker mark. Never infer your actual holdings from these tables. F&O settlements and margins require separate broker/exchange confirmation.</p></main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const fmt=n=>typeof n==='number'&&Number.isFinite(n)?n.toLocaleString('en-IN',{maximumFractionDigits:2}):'—';
+const date=s=>s?new Date(s).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'}):'—';
+function cell(value){let td=document.createElement('td');td.textContent=value;return td;}
+function rows(target,items,fields){const body=$(target);body.replaceChildren();for(const item of items){const tr=document.createElement('tr');for(const field of fields)tr.appendChild(cell(field(item)));body.appendChild(tr);}if(!items.length){const tr=document.createElement('tr'),td=cell('No matching data');td.colSpan=fields.length;tr.appendChild(td);body.appendChild(tr);}}
+let working=false;
+async function load(){
+ if(working)return;
+ working=true;$('refresh').disabled=true;$('state').textContent='Loading…';
+ try{
+  const response=await fetch('/api/upstox/hal'+($('expiry').value?'?expiry='+encodeURIComponent($('expiry').value):''),{
+   headers:{'X-HAL-Viewer-Key':$('key').value},cache:'no-store'});
+  const data=await response.json();
+  if(!response.ok)throw Error(data.error||'Data unavailable');
+  $('state').textContent='Source: Upstox · '+data.cache_status;
+  $('spot').textContent='₹'+fmt(data.spot?.last_price);
+  $('spotmeta').textContent='Provider quote: '+date(data.spot?.quote_as_of)+' · Last trade: '+date(data.spot?.last_trade_at)+' · Retrieved: '+date(data.fetched_at_iso);
+  const previous=$('expiry').value;
+  $('expiry').replaceChildren(new Option('Front expiry',''));
+  for(const expiry of data.available_expiries)$('expiry').add(new Option(expiry,expiry));
+  $('expiry').value=previous||data.option_expiry;
+  rows('futures',data.futures||[],[
+   a=>a.expiry,a=>fmt(a.lot_size),a=>fmt(a.quote?.last_price),
+   a=>fmt(a.quote?.open_interest),a=>fmt(a.quote?.volume),a=>date(a.quote?.quote_as_of)]);
+  $('chainmeta').textContent='Expiry '+data.option_expiry+' · '+(data.option_rows||[]).length+' strikes displayed · Retrieved '+date(data.fetched_at_iso);
+  rows('options',data.option_rows||[],[
+   a=>fmt(a.strike),a=>fmt(a.call?.ltp),a=>fmt(a.call?.oi),a=>fmt(a.call?.iv),
+   a=>fmt(a.put?.ltp),a=>fmt(a.put?.bid),a=>fmt(a.put?.ask),
+   a=>fmt(a.put?.oi),a=>fmt(a.put?.iv),a=>fmt(a.put?.delta),a=>fmt(a.put?.theta)]);
+ }catch(e){$('state').textContent='Unavailable: '+e.message;$('state').className='error';}
+ finally{working=false;$('refresh').disabled=false;}
+}
+$('refresh').addEventListener('click',load);
+$('expiry').addEventListener('change',()=>{if($('key').value)load();});
+</script></body></html>
