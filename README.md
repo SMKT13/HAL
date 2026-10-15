@@ -209,3 +209,38 @@ Run offline checks with:
 python -m unittest discover -s tests -v
 node --test tests/*.test.js
 \`\`\`
+
+
+## Upstox HAL F&O desk (read-only, opt-in)
+
+On Render set BOTH server-side environment variables:
+- \`UPSTOX_ACCESS_TOKEN\`: the actual Upstox OAuth token, set only in Render (never Git).
+- \`HAL_VIEWER_KEY\`: a **different**, long random private viewer password you choose.
+
+Open \`/upstox\` and enter only the **viewer key**. The Upstox OAuth token is
+never entered into the browser. The \`/api/upstox/hal\` endpoint rejects requests
+unless the separate viewer key is provided in \`X-HAL-Viewer-Key\`.
+Do not use the broker OAuth token as the viewer key. Treat the viewer key as a
+sensitive secret and use HTTPS. If your site is public, remember that the page
+itself is public; only the F&O API data is access-controlled. For stronger
+protection use identity-aware proxy authentication and per-user authorization.
+
+This beta uses the Upstox V2 instrument-search, full-market-quote and option-chain
+endpoints; it searches exact HAL instruments at runtime, and shows the front three
+futures, lot sizes, spot and selected option chain. Bid/ask, LTP, OI and provider
+Greeks appear when supplied; missing fields remain unavailable. It refreshes
+only when the button is clicked. Successful snapshots cache for 60 seconds.
+
+This path is **separate** from the legacy Yahoo-backed \`/api/data\`, which
+continues to work when Upstox expires or is not configured. No financial-data
+response is permanently written to Git or placed in browser storage.
+No broker holdings, orders, order placement, execution or automatic rolling.
+The real Upstox token expires according to the provider's OAuth policy; replace
+it on Render after expiry, or implement an authorized renewal workflow.
+
+Upstox market-data availability, permissions and quotas vary. Verify your own
+license/terms before using this on a publicly accessible service. For a highly
+sensitive personal account, access the service over authenticated private
+networking rather than assuming the viewer key alone provides full protection.
+
+Offline tests: \`python3 -m unittest discover -s tests -v\`.
