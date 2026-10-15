@@ -9,6 +9,7 @@ import json, math, time, os, datetime, urllib.request
 import tempfile
 import threading
 import agents
+import upstox_feed
 from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -450,6 +451,26 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(200, json.dumps(report, ensure_ascii=False).encode(), 'application/json')
                 except (OSError, ValueError, TypeError, AttributeError):
                     self._send(404, b'{"error":"Report not found"}', 'application/json')
+        elif path in ('/upstox', '/upstox.html'):
+            with open(os.path.join(HERE, 'upstox.html'), 'rb') as stream:
+                self._send(200, stream.read(), 'text/html; charset=utf-8')
+        elif path == '/api/upstox/hal':
+            # Never make broker-sourced data publicly accessible by default.
+            # A separately configured viewer key is mandatory; the OAuth token
+            # is used only in the backend for authorized read-only requests.
+            key = self.headers.get('X-HAL-Viewer-Key', '')
+            if not upstox_feed.authorized(key):
+                self._send(403, b'{"error":"Viewer access not configured or unauthorized"}', 'application/json')
+            else:
+                expiry = parse_qs(url.query).get('expiry', [None])[0]
+                try:
+                    result = upstox_feed.snapshot(expiry)
+                    self._send(200, json.dumps(result, allow_nan=False).encode(), 'application/json')
+                except upstox_feed.FeedError as exc:
+                    status = 400 if str(exc) in ('invalid_expiry', 'expiry_not_listed') else 503
+                    self._send(status, json.dumps({'error': str(exc)}).encode(), 'application/json')
+                except Exception:
+                    self._send(503, b'{"error":"market_data_unavailable"}', 'application/json')
         elif path == '/health':
             self._send(200, b'{"status":"ok"}', 'application/json')
         elif path == '/api/data':
