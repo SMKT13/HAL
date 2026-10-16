@@ -3,7 +3,7 @@
 A personal web dashboard for Hindustan Aeronautics (NSE: HAL), with delayed
 market data, technical indicators and a locally saved long futures/puts book.
 The Python server uses only the standard library. No account or API key is
-required. This repository is a browser app, not an Android APK.
+required. This repository includes a browser dashboard and the optional Android app source in `android/`.
 
 ## Run
 
@@ -255,3 +255,9 @@ The new authenticated GET `/api/upstox/research?section=candles&frame=D&type=con
 The market adapter now retains exact option-contract lot sizes and futures bid/ask, blocks redirects, invalidates its cache on token rotation and preserves quotes if a non-auth chain request fails. Docker includes the Upstox and research modules. Merge/deploy the backend change for the Android server connection's new research features; Android Direct Upstox mode does not depend on deployment.
 
 Android signing keys, credentials, APKs, test screenshots and build outputs are excluded from the repository. Keep the existing private signing backup for compatible updates.
+
+## HAL Desk 2.1 — protective-put finder
+
+The Android Positions screen now includes **Find a hedge**: budget, sampled-loss limit and end date; explained lower-cost/balanced/stronger-protection shortlists; exact whole-lot matching; bid/ask cost and sale-credit accounting; keep-versus-replace scenario tables; expiry-gap warnings and quote-quality exclusions. It is read-only and never changes the saved book when selecting a comparison. See [Android guide](android/INSTALL.md) for assumptions and limits.
+
+Authenticated GET `/api/upstox/research?section=hedges&frame=YYYY-MM-DD&type=consolidated` adds full quotes only for verified HAL put contracts, in batches of 100, preserving provider times and top quantities. The viewer-key gate and market-data-only endpoint allowlist are unchanged. Packets cache for 30 seconds without relabelling original chain timestamps. Deploy this backend update for Server mode; the Android Direct Upstox implementation works independently. CI includes the new hedge calculation and feed tests.

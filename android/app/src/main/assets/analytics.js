@@ -73,7 +73,15 @@ function closeLeg(book,index,lots,exit,fees,date){
  next.journal.push(record);if(lots===leg.lots)next.legs.splice(index,1);else next.legs[index].lots-=lots;return next;
 }
 function ledger(book,s){const journal=book.journal||[],closed=journal.filter(j=>j.kind==='close');const realized=sum(closed.map(j=>(j.exit-j.leg.entry)*j.leg.lots*j.leg.lotSize)),charges=sum(journal.filter(j=>j.kind==='fee').map(j=>j.amount))+sum(closed.map(j=>j.fees));const open=C.mtm(book.legs||[],s);return {realized,charges,open:open.total,net:open.complete||!book.legs.length?realized+(open.total||0)-charges:null,settlements:sum(journal.filter(j=>j.kind==='settlement').map(j=>j.amount)),netPutPremium:sum(closed.filter(j=>j.leg.type==='PE').map(j=>(j.leg.entry-j.exit)*j.leg.lots*j.leg.lotSize))+sum(book.legs.filter(l=>l.type==='PE').map(l=>l.entry*l.lots*l.lotSize))};}
-function emptyBook(){return {version:2,legs:[],journal:[],notes:[],bookmarks:[],funding:{margin:null,free:null,at:null},preferences:{theme:'dark',auto:true,markMode:'ltp'}};}
+function hedgePreferences(input={},required=false){
+ const p={budget:null,maxLoss:null,protectThrough:null,buyFees:0,exitFees:0,slippage:0.5,maxSpread:10,ivShift:0,rate:6,dividend:0};
+ if(!input||typeof input!=='object'||Array.isArray(input))throw Error('Invalid hedge preferences.');
+ const ranges={budget:[0,1e12],maxLoss:[0,1e12],buyFees:[0,1e9],exitFees:[0,1e9],slippage:[0,10],maxSpread:[0,50],ivShift:[-100,100],rate:[-5,50],dividend:[0,50]};
+ for(const [k,[lo,hi]]of Object.entries(ranges))if(input[k]!==undefined){if((k==='budget'||k==='maxLoss')&&input[k]===null)continue;if(!finite(input[k])||input[k]<lo||input[k]>hi)throw Error('Invalid hedge setting: '+k+' ('+lo+' to '+hi+').');p[k]=input[k];}
+ if(input.protectThrough!==undefined&&input.protectThrough!==null){if(!validDate(input.protectThrough))throw Error('Choose a valid protection date.');p.protectThrough=input.protectThrough;}
+ if(required&&(p.budget===null||p.maxLoss===null||p.protectThrough===null))throw Error('Enter a new-hedge budget, a sampled-loss limit and a protection date.');return p;
+}
+function emptyBook(){return {version:2,legs:[],journal:[],notes:[],bookmarks:[],hedge:hedgePreferences(),funding:{margin:null,free:null,at:null},preferences:{theme:'dark',auto:true,markMode:'ltp'}};}
 function validateBook(b){
  if(!b||b.version!==2||!Array.isArray(b.legs)||b.legs.length>12)throw Error('Not a HAL Desk version 2 backup.');
  if(b.legs.length)C.validate(b.legs);const clean=emptyBook();clean.legs=b.legs.map(l=>({type:l.type,expiry:l.expiry,lots:l.lots,lotSize:l.lotSize,entry:l.entry,strike:l.type==='PE'?l.strike:null,manual:l.manual??null,manualAt:typeof l.manualAt==='string'?l.manualAt:null}));
@@ -82,7 +90,7 @@ function validateBook(b){
  clean.notes=b.notes.map(n=>({id:String(n.id||'').slice(0,100),date:validDate(n.date)?n.date:istDate(),title:String(n.title||'').slice(0,200),text:String(n.text||'').slice(0,3000),url:safeURL(n.url)||'',category:['Order book','Deliveries','Guidance','Results','Other'].includes(n.category)?n.category:'Other',eventDate:validDate(n.eventDate)?n.eventDate:null}));
  clean.bookmarks=b.bookmarks.filter(n=>safeURL(n.url)).map(n=>({title:String(n.title||'').slice(0,300),url:safeURL(n.url),published:String(n.published||'').slice(0,60),source:String(n.source||'').slice(0,100)}));
  const f=b.funding||{};clean.funding={margin:finite(f.margin)&&f.margin>=0?f.margin:null,free:finite(f.free)&&f.free>=0?f.free:null,at:typeof f.at==='string'?f.at:null};
- const p=b.preferences||{};clean.preferences={theme:['dark','light','system'].includes(p.theme)?p.theme:'dark',auto:p.auto!==false,markMode:p.markMode==='bid'?'bid':'ltp'};return clean;
+ const p=b.preferences||{};clean.preferences={theme:['dark','light','system'].includes(p.theme)?p.theme:'dark',auto:p.auto!==false,markMode:p.markMode==='bid'?'bid':'ltp'};clean.hedge=hedgePreferences(b.hedge);return clean;
 }
 function topic(text){const s=text.toLowerCase();if(/\bmou\b|memorandum/.test(s))return 'MoU';if(/result|profit|revenue|earning|dividend/.test(s))return 'Results';if(/order|contract|procurement/.test(s))return 'Orders';if(/deliver|production|engine|supply|tejas/.test(s))return 'Operations';if(/government|defence|defense|policy|budget/.test(s))return 'Sector';return 'Market';}
 function newsItems(data){const out=[];for(const list of Object.values(data||{})){if(!Array.isArray(list))continue;for(const n of list){if(typeof n.heading!=='string'||!safeURL(n.article_link))continue;const t=Number(n.published_time);out.push({title:n.heading.slice(0,500),summary:String(n.summary||'').slice(0,1800),url:safeURL(n.article_link),published:finite(t)&&t>0&&t<=8640000000000000?new Date(t).toISOString():null,source:'Upstox News',official:false,topic:topic(n.heading+' '+(n.summary||''))});}}return out.sort((a,b)=>Date.parse(b.published)-Date.parse(a.published));}
@@ -100,6 +108,6 @@ function financialSummary(payload){
  const annualProfit=payload?.annual?.income_statement?.find(r=>r.category==='net_profit')?.history?.find(p=>p.period===cash?.period);
  return {revenue,profit,margin,opMargin,cash,conversion:finite(annualProfit?.value)&&annualProfit.value>0&&finite(cash?.value)?cash.value/annualProfit.value:null};
 }
-const api={istDate,expiryTime,daysLeft,safeURL,candles,completed,sma,ema,rsi,atr,technicals,optionFor,risk,cdf,putPrice,scenario,closeLeg,ledger,emptyBook,validateBook,topic,newsItems,groupNews,financialSummary};
+const api={istDate,expiryTime,daysLeft,safeURL,candles,completed,sma,ema,rsi,atr,technicals,optionFor,risk,cdf,putPrice,scenario,closeLeg,ledger,emptyBook,validateBook,hedgePreferences,topic,newsItems,groupNews,financialSummary};
 if(typeof module!=='undefined')module.exports=api;root.HALAnalytics=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

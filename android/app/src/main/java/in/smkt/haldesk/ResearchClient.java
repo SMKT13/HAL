@@ -27,9 +27,9 @@ final class ResearchClient {
         catch(Exception e){String code=error(e);if(code.equals("token_expired_or_unauthorized")||code.equals("upstox_rate_limited")||code.equals("credential_missing"))throw e;errors.put(name,code);if(code.equals("network_unavailable")&&errors.length()>1)throw e;}
     }
     JSONObject load(String mode,String token,String section,String frame,String type)throws Exception{
-        if(!section.matches("candles|news|fundamentals|filings|status|chain"))throw new MarketClient.Failure("invalid_research_request");
+        if(!section.matches("candles|news|fundamentals|filings|status|chain|hedges"))throw new MarketClient.Failure("invalid_research_request");
         if(!type.matches("consolidated|standalone"))throw new MarketClient.Failure("invalid_research_request");
-        if(section.equals("chain")){if(!frame.matches("\\d{4}-\\d{2}-\\d{2}"))throw new MarketClient.Failure("invalid_expiry");LocalDate.parse(frame);}
+        if(section.equals("chain")||section.equals("hedges")){if(!frame.matches("\\d{4}-\\d{2}-\\d{2}"))throw new MarketClient.Failure("invalid_expiry");LocalDate.parse(frame);}
         else if(!frame.matches("D|15m|1h"))throw new MarketClient.Failure("invalid_research_request");
         if(mode.equals("server"))return market.request(MarketClient.SERVER+"/api/upstox/research?section="+section+"&frame="+enc(frame)+"&type="+type,token,true);
         JSONObject out=new JSONObject(),data=new JSONObject(),errors=new JSONObject();
@@ -38,6 +38,7 @@ final class ResearchClient {
             try{JSONArray rss=feed(file);for(int i=0;i<rss.length();i++)items.put(rss.get(i));}catch(Exception e){errors.put(file,"official_feed_unavailable");}
         }data.put("items",items);data.put("coverage","Latest items retained by NSE RSS; absence of an item is not proof that no filing exists.");}
         else if(section.equals("chain")){data=market.load(mode,token,frame);}
+        else if(section.equals("hedges")){data=market.hedgeSnapshot(token,frame);}
         else if(section.equals("status")){field(data,errors,"market","/v2/market/status/NSE","",token);}
         else {
             String key=market.equity(token),isin=key.substring(key.indexOf('|')+1),base="/v2/fundamentals/"+isin+"/";
@@ -64,7 +65,7 @@ final class ResearchClient {
     private JSONArray feed(String file)throws Exception{
         URL url=new URL("https://nsearchives.nseindia.com/content/RSS/"+file);
         HttpsURLConnection c=(HttpsURLConnection)url.openConnection();String raw;
-        try{c.setRequestMethod("GET");c.setInstanceFollowRedirects(false);c.setConnectTimeout(12000);c.setReadTimeout(18000);c.setRequestProperty("Accept","application/rss+xml, application/xml, text/xml");c.setRequestProperty("User-Agent","HAL-Desk-Personal-Reader/2.0");
+        try{c.setRequestMethod("GET");c.setInstanceFollowRedirects(false);c.setConnectTimeout(12000);c.setReadTimeout(18000);c.setRequestProperty("Accept","application/rss+xml, application/xml, text/xml");c.setRequestProperty("User-Agent","HAL-Desk-Personal-Reader/2.1");
             if(c.getResponseCode()!=200)throw new Exception("feed_unavailable");ByteArrayOutputStream bytes=new ByteArrayOutputStream();
             try(InputStream in=c.getInputStream()){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1){if(bytes.size()+n>4000000)throw new Exception("feed_too_large");bytes.write(b,0,n);}}
             raw=new String(bytes.toByteArray(),StandardCharsets.UTF_8);
