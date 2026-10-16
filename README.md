@@ -244,3 +244,14 @@ sensitive personal account, access the service over authenticated private
 networking rather than assuming the viewer key alone provides full protection.
 
 Offline tests: \`python3 -m unittest discover -s tests -v\`.
+
+
+## HAL Desk 2.0 Android app — Stages 1 and 2
+
+The `android/` directory contains the Android 8+ app source: five premium-styled screens, direct encrypted Upstox connection, charts, financial research, news/disclosures, manual futures/put tracking, expiry risk, mixed-expiry model scenarios, a completed-close journal and portable backups. No trading operations or Stage 3 background alerts are added. See [Android README](android/README.md), [installation](android/INSTALL.md) and [verification](android/VERIFICATION.md).
+
+The new authenticated GET `/api/upstox/research?section=candles&frame=D&type=consolidated` supports `candles`, `news`, `fundamentals`, `filings`, `status` and `chain`. It requires the existing `X-HAL-Viewer-Key` header. Market credentials remain server-side; official NSE RSS requests do not receive broker credentials. News/fundamentals access depends on Upstox token permissions. Existing web routes remain independent.
+
+The market adapter now retains exact option-contract lot sizes and futures bid/ask, blocks redirects, invalidates its cache on token rotation and preserves quotes if a non-auth chain request fails. Docker includes the Upstox and research modules. Merge/deploy the backend change for the Android server connection's new research features; Android Direct Upstox mode does not depend on deployment.
+
+Android signing keys, credentials, APKs, test screenshots and build outputs are excluded from the repository. Keep the existing private signing backup for compatible updates.

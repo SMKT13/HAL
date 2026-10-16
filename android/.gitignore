@@ -1,0 +1,10 @@
+/signing/
+/build/
+/app/build/
+/.gradle/
+/local.properties
+/node_modules/
+/tests/.output/
+*.apk
+*.idsig
+*.jks
