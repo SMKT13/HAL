@@ -1,0 +1,7 @@
+{
+  "name": "hal-upstox-android-private",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": { "test": "node tests/core.test.js && node --test tests/analytics.test.js && node tests/ui.test.js" },
+  "devDependencies": { "playwright": "1.51.1" }
+}

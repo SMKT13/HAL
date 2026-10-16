@@ -5,6 +5,7 @@ This module never returns access tokens or upstream error bodies to clients.
 """
 import datetime as dt
 import hmac
+import hashlib
 import json
 import math
 import os
@@ -31,10 +32,15 @@ def number(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise FeedError("redirect_blocked")
+
+
 def _call(path, params, token):
     if not token:
         raise FeedError("token_missing")
-    if path not in ("/instruments/search", "/market-quote/quotes", "/option/chain"):
+    if path not in ("/instruments/search", "/market-quote/quotes", "/option/chain", "/option/contract"):
         raise FeedError("unsupported_path")
     url = BASE + path + "?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={
@@ -42,7 +48,7 @@ def _call(path, params, token):
         "User-Agent": "HAL-personal-readonly-desk/1.0",
     })
     try:
-        with urllib.request.urlopen(req, timeout=11) as response:
+        with urllib.request.build_opener(NoRedirect).open(req, timeout=11) as response:
             raw = response.read(4_000_001)
             if len(raw) > 4_000_000:
                 raise FeedError("provider_response_too_large")
@@ -155,7 +161,12 @@ def _simplify_quote(raw):
     if not isinstance(raw, dict):
         return None
     ohlc = raw.get("ohlc") if isinstance(raw.get("ohlc"), dict) else {}
+    depth = raw.get("depth") if isinstance(raw.get("depth"), dict) else {}
+    def best(side):
+        rows = depth.get(side)
+        return number(rows[0].get("price")) if isinstance(rows, list) and rows and isinstance(rows[0], dict) else None
     return {
+        "bid": best("buy"), "ask": best("sell"),
         "last_price": number(raw.get("last_price")),
         "volume": number(raw.get("volume")),
         "open_interest": number(raw.get("oi")),
@@ -178,6 +189,7 @@ def _simplify_option(raw):
     if not isinstance(greeks, dict):
         greeks = {}
     return {
+        "instrument_key": raw.get("instrument_key"),
         "ltp": number(data.get("ltp")), "bid": number(data.get("bid_price")),
         "ask": number(data.get("ask_price")), "volume": number(data.get("volume")),
         "oi": number(data.get("oi")), "prev_oi": number(data.get("prev_oi")),
@@ -197,17 +209,12 @@ def _option_rows(data, expiry, spot):
         strike = number(item.get("strike_price"))
         if strike is None or strike <= 0:
             continue
-        if abs(strike - spot) > max(1000, spot * 0.20) and strike not in (4300, 4500):
-            continue
         parsed.append({
             "strike": strike,
             "call": _simplify_option(item.get("call_options")),
             "put": _simplify_option(item.get("put_options")),
         })
-    parsed.sort(key=lambda item: (abs(item["strike"] - spot), item["strike"]))
-    retained = parsed[:36]
-    retained.sort(key=lambda item: item["strike"])
-    return retained
+    return sorted(parsed, key=lambda item: item["strike"])
 
 
 def snapshot(expiry=None):
@@ -223,14 +230,20 @@ def snapshot(expiry=None):
         except ValueError:
             raise FeedError("invalid_expiry") from None
     now = dt.datetime.now(IST)
-    cache_key = expiry or "__front__"
+    cache_key = (expiry or "__front__", hashlib.sha256(token.encode()).hexdigest())
     with LOCK:
         cached = CACHED.get(cache_key)
         if cached and time.monotonic() - cached[0] < TTL:
             return dict(cached[1], cache_status="cached")
         underlying = hal_underlying(token)
         futures = futures_contracts(token, now.date())
-        available = [c["expiry"] for c in futures]
+        metadata = _call("/option/contract", {"instrument_key": underlying}, token)
+        metadata = [c for c in metadata if isinstance(c, dict) and
+                    (c.get("underlying_key") == underlying or c.get("underlying_symbol") == "HAL") and
+                    isinstance(c.get("expiry"), str) and EXPIRY_RE.fullmatch(c["expiry"]) and c["expiry"] >= now.date().isoformat()] if isinstance(metadata, list) else []
+        available = sorted({c["expiry"] for c in metadata})
+        if not available:
+            raise FeedError("no_hal_option_contracts")
         selected = expiry or available[0]
         if selected not in available:
             raise FeedError("expiry_not_listed")
@@ -246,15 +259,30 @@ def snapshot(expiry=None):
                 "expiry": c["expiry"], "trading_symbol": c["trading_symbol"],
                 "lot_size": c["lot_size"], "quote": q,
             })
-        chain = _call("/option/chain", {"instrument_key": underlying, "expiry_date": selected}, token)
+        chain_error = ""
+        try:
+            chain = _call("/option/chain", {"instrument_key": underlying, "expiry_date": selected}, token)
+            rows = _option_rows(chain, selected, spot["last_price"])
+        except FeedError as exc:
+            if str(exc) == "token_expired_or_unauthorized":
+                raise
+            rows, chain_error = [], str(exc)
+        lots = {c.get("instrument_key"): number(c.get("lot_size")) for c in metadata if c["expiry"] == selected}
+        for row in rows:
+            for side in ("put", "call"):
+                if row[side]:
+                    row[side]["lot_size"] = lots.get(row[side].get("instrument_key"))
         result = {
             "source": "Upstox market data V2 (read-only)", "symbol": "HAL",
-            "fetched_at_iso": now.isoformat(),
+            "fetched_at_iso": dt.datetime.now(IST).isoformat(),
             "spot": spot, "futures": future_quotes,
             "available_expiries": available, "option_expiry": selected,
-            "option_rows": _option_rows(chain, selected, spot["last_price"]),
+            "option_rows": rows, "chain_error": chain_error,
             "cache_status": "fresh_fetch",
             "note": "Quote timestamps are provider times; last trades may be old. LTP is not a bid/ask or guaranteed executable price. No broker positions or orders are accessed.",
         }
+        if len(CACHED) > 32:
+            CACHED.clear()
         CACHED[cache_key] = (time.monotonic(), result)
         return result
+

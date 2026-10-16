@@ -10,6 +10,7 @@ import tempfile
 import threading
 import agents
 import upstox_feed
+import research_feed
 from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -454,6 +455,20 @@ class Handler(BaseHTTPRequestHandler):
         elif path in ('/upstox', '/upstox.html'):
             with open(os.path.join(HERE, 'upstox.html'), 'rb') as stream:
                 self._send(200, stream.read(), 'text/html; charset=utf-8')
+        elif path == '/api/upstox/research':
+            if not upstox_feed.authorized(self.headers.get('X-HAL-Viewer-Key', '')):
+                self._send(403, b'{"error":"Viewer access not configured or unauthorized"}', 'application/json')
+            else:
+                params = parse_qs(url.query)
+                try:
+                    result = research_feed.load(params.get('section', ['candles'])[0],
+                                                params.get('frame', ['D'])[0],
+                                                params.get('type', ['consolidated'])[0])
+                    self._send(200, json.dumps(result, allow_nan=False).encode(), 'application/json')
+                except upstox_feed.FeedError as exc:
+                    self._send(503, json.dumps({'error': str(exc)}).encode(), 'application/json')
+                except Exception:
+                    self._send(503, b'{"error":"research_unavailable"}', 'application/json')
         elif path == '/api/upstox/hal':
             # Never make broker-sourced data publicly accessible by default.
             # A separately configured viewer key is mandatory; the OAuth token
@@ -491,4 +506,5 @@ if __name__ == '__main__':
     srv = ThreadingHTTPServer(('0.0.0.0', PORT), Handler)
     print(f'HAL dashboard serving on 0.0.0.0:{PORT}', flush=True)
     srv.serve_forever()
+
 
