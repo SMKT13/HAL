@@ -71,6 +71,8 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"app.js")){asset="app.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"core.js")){asset="core.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"analytics.js")){asset="analytics.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"hedge.js")){asset="hedge.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"hedge-ui.js")){asset="hedge-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"charts.js")){asset="charts.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"lightweight-charts.js")){asset="lightweight-charts.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"style.css")){asset="style.css";mime="text/css";}
@@ -90,7 +92,7 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return prefs.getString("mode","direct");}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.0");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.1");}catch(Exception ignored){}
         send("connection",obj);
     }
     private void refresh(String expiry) {

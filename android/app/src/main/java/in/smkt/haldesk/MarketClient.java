@@ -71,7 +71,7 @@ final class MarketClient {
             connection.setRequestMethod("GET"); connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(20000); connection.setReadTimeout(server&&url.getPath().equals("/api/upstox/research")?90000:30000); connection.setUseCaches(false);
             connection.setRequestProperty("Accept","application/json");
-            connection.setRequestProperty("User-Agent","HAL-Desk-Android/2.0");
+            connection.setRequestProperty("User-Agent","HAL-Desk-Android/2.1");
             connection.setRequestProperty(server?"X-HAL-Viewer-Key":"Authorization",server?secret:"Bearer "+secret);
             int status=connection.getResponseCode();
             if(status==401) throw new Failure("token_expired_or_unauthorized");
@@ -159,6 +159,7 @@ final class MarketClient {
         JSONObject depth=raw.optJSONObject("depth");
         JSONArray buy=depth==null?null:depth.optJSONArray("buy"),sell=depth==null?null:depth.optJSONArray("sell");
         q.put("bid",num(buy==null?null:buy.optJSONObject(0),"price"));q.put("ask",num(sell==null?null:sell.optJSONObject(0),"price"));
+        q.put("bid_quantity",num(buy==null?null:buy.optJSONObject(0),"quantity"));q.put("ask_quantity",num(sell==null?null:sell.optJSONObject(0),"quantity"));
         q.put("quote_as_of",time(raw.opt("timestamp")));q.put("last_trade_at",time(raw.opt("last_trade_time")));return q;
     }
     private static JSONObject option(JSONObject raw) throws Exception {
@@ -216,7 +217,7 @@ final class MarketClient {
             for(String side:new String[]{"call","put"}) {
                 JSONObject o=row.optJSONObject(side);if(o==null)continue;
                 for(int j=0;j<options.length();j++) {
-                    JSONObject c=options.optJSONObject(j);if(c!=null && c.optString("instrument_key").equals(o.optString("instrument_key"))) {o.put("lot_size",num(c,"lot_size"));break;}
+                    JSONObject c=options.optJSONObject(j);if(c!=null && c.optString("instrument_key").equals(o.optString("instrument_key")) && selected.equals(date(c.opt("expiry"))) && c.optDouble("strike_price",0)==row.optDouble("strike") && (underlying.equals(c.optString("underlying_key")) || "HAL".equals(c.optString("underlying_symbol"))) && (side.equals("put")?"PE":"CE").equals(c.optString("instrument_type"))) {o.put("lot_size",num(c,"lot_size"));break;}
                 }
             }
         }
@@ -224,5 +225,24 @@ final class MarketClient {
         result.put("connection_mode","direct");result.put("fetched_at_iso",OffsetDateTime.now().toString());result.put("cache_status","fresh_fetch");
         result.put("spot",spot);result.put("futures",futures);result.put("available_expiries",new JSONArray(dates));
         result.put("option_expiry",selected);result.put("option_rows",rows);result.put("chain_error",chainError);return result;
+    }
+    JSONObject hedgeSnapshot(String token,String expiry) throws Exception {
+        JSONObject result=load("direct",token,expiry);
+        if(!result.optString("chain_error").isEmpty())throw new Failure(result.optString("chain_error"));
+        JSONArray rows=result.getJSONArray("option_rows");List<JSONObject> puts=new ArrayList<>();
+        for(int i=0;i<rows.length();i++){
+            JSONObject put=rows.getJSONObject(i).optJSONObject("put");
+            // Only keys matched to HAL PE contract metadata by load() may be quoted.
+            if(put!=null && put.optString("instrument_key").matches("NSE_FO\\|[A-Za-z0-9]+") && put.optInt("lot_size",0)>0)puts.add(put);
+        }
+        for(int start=0;start<puts.size();start+=100){
+            StringBuilder keys=new StringBuilder();int end=Math.min(start+100,puts.size());
+            for(int i=start;i<end;i++){if(keys.length()>0)keys.append(',');keys.append(puts.get(i).getString("instrument_key"));}
+            Object raw=api("/market-quote/quotes","instrument_key="+enc(keys.toString()),token);
+            if(!(raw instanceof JSONObject))throw new Failure("bad_response");
+            for(int i=start;i<end;i++)puts.get(i).put("quote",quote((JSONObject)raw,puts.get(i).getString("instrument_key")));
+        }
+        result.put("quotes_fetched_at",OffsetDateTime.now().toString());
+        result.put("source","Upstox HAL option chain + full market quotes (read-only)");return result;
     }
 }

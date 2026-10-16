@@ -1,18 +1,18 @@
-# HAL Desk 2.0 verification — 16 October 2026
+# HAL Desk 2.1 verification — 16 October 2026
 
 ## Passed
 
-- 21 original financial/contract checks: exact expiry and strike, quantity calculations, missing/zero marks, date validation, lot mismatch, quote age and shared-expiry payoff.
-- 15 new analytics/accounting checks: a known Black–Scholes put value, mixed-expiry horizon limits, missing IV and contract mismatch, signed unit-based delta/theta, expiry gaps, stale Greeks, partial-close accounting, premiums/costs/settlement separation, import sanitization, completed candles, indicator boundaries, news grouping and period-matched financial ratios.
-- Bundled UI end-to-end test in Chromium: v1 migration, five screens, chart drawing, financial-basis switching without losing news, scenarios, partial closes, settlement accounting, safe CSV, backup validation/import, bookmarks, dark/light appearance, 320/390/768 px layouts and enlarged text, offline errors, persistence and chart reset. Synthetic fixtures only.
-- 39 Python backend tests including new viewer-auth, read-only allowlist, redirects, RSS filtering/entity rejection, partial research failures, token-rotation cache and exact option lot/bid schema checks.
+- 21 original financial/contract checks and 15 existing analytics/accounting tests.
+- 20 new hedge tests: exact lots, ask-based cost, bid-based sale proceeds, no sale-credit P&L double count, entry-basis reconciliation, budget before credits, loss constraints, deterministic categories/deduplication, non-divisible lots, saved contract mismatches, stale/missing/future timestamps, old trades, crossed/wide quotes, depth/volume/OI, missing Greeks/IV, aggregated existing-put depth, mixed-expiry stopping rules, December/November gap warning, incomplete expiry feeds, futures basis at expiry, saved-setting compatibility and invalid settings.
+- 46 Python backend tests, including 7 new hedge feed tests for quote timestamps/depth, 100-key batches, HAL/PE/strike/expiry identity verification, immutable snapshot cache, absent quotes, failed feeds, validation and token-aware cache. Timestamp strings with unknown timezone are unavailable rather than treated as fresh.
 - 16 existing web JavaScript regression tests.
-- Three live official NSE RSS feeds fetched and parsed. The sampled feed window contained no matching HAL items; the announcements feed contained 706 total company items.
-- Android SDK 35 / build-tools 35.0.0 shell build; package `in.smkt.haldesk`, version code 2, min SDK 26, target SDK 35. APK alignment and v2/v3 signatures verify. Update certificate matches the earlier v1.0 delivery.
-- Reviewed phone screenshots for dark/light overview, risk, market chart and fundamentals. QA screenshots and synthetic data are not distributed in the app.
+- Chromium UI suite: earlier v1 migration, all five screens, chart/news/accounting/import flows, plus fresh hedge shortlists, exact cash explanation, scenario selection, no book mutation, per-expiry failure withholding, timer-based staleness withholding, no-match state, settings in backups, responsive 320/390/768 px layouts and enlarged text. Synthetic fixtures only.
+- Inspected dark phone screenshots for the hedge controls, shortlist and comparison. QA data and screenshots are excluded from the APK and Git.
+- Android SDK 35 / build-tools 35.0.0 shell compilation; package `in.smkt.haldesk`, version code 3 / name 2.1, minimum SDK 26, target SDK 35. APK alignment and v2/v3 signatures verify. Signing certificate matches both earlier releases.
+- Fixed read-only GET destination policy and unchanged WebView storage origin. No order endpoints, broker positions, tokens or signing keys added to repository or APK assets.
 
-## Remaining limits
+## Limits
 
-No physical Android device or emulator was available. Authenticated Upstox feeds were implemented against official API contracts and tested with offline fixtures, not a live account token. Android document-picker interaction and actual device upgrade are compiled but require a first run on the user's phone. No token is embedded in source, fixtures or APK. Backend CI also runs the Android pure calculation tests; the Playwright UI suite was run locally.
+No physical Android device or emulator was available. Authenticated Upstox full quotes are implemented against official API contracts and covered by offline fixtures; they were not fetched with the user's token here. First-device upgrade, actual token permissions, broker depth availability and Android document-picker behavior still need a phone check. The optional Gradle route was not used.
 
-Native code emits Android API deprecation warnings for compatibility methods, with no compilation errors. The optional Gradle build route was not run. The new server endpoints are supplied in a pull request, not deployed by the Android APK.
+Java compilation retains compatibility/deprecation warnings but no errors. The new server endpoint is supplied as source; the APK does not merge or deploy it. Direct mode uses the native implementation independently. Rankings are model comparisons under entered assumptions, not guaranteed fills, maximum losses or forecasts.

@@ -1,6 +1,25 @@
-# HAL Desk 2.0 — Android research and position monitor
+# HAL Desk 2.1 — Android research and position monitor
 
-Personal, read-only HAL app for Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 2. This updates the earlier HAL Upstox 1.0 app using its original signing key and storage origin.
+Personal, read-only HAL app for Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 3. This updates the earlier HAL Upstox 1.0 app using its original signing key and storage origin.
+
+## New in 2.1 — Find a hedge
+
+Positions → Find a hedge compares one new protective-put contract against the saved long-futures basket and all existing puts, without changing positions or placing orders. Enter the total new-hedge budget, the maximum acceptable **additional loss from now in sampled scenarios**, and a protection end date. Settings are included in version-2 backups; older backups receive empty/default hedge settings.
+
+- Three transparent categories: lower cost, balanced and stronger protection. A contract may win multiple categories. All winners must satisfy budget, sampled-loss, date, quote-quality and exact whole-lot quantity requirements. No qualifying contract means no shortlist.
+- All currently listed put expiries on/after the protection date are examined. Missing/failed/stale required expiry feeds pause rankings. The horizon cannot extend beyond the earliest saved futures expiry. Earlier existing puts are valued only through their own first expiry; later keep-current values are unavailable rather than invented. A protection date or candidate put ending before later futures triggers a gap warning.
+- The new `hedges` research section enriches verified HAL PE chain keys with full market quotes in batches of 100. Per-contract bid/ask, top quantities, provider quote/trade timestamps, volume and OI are retained. Source timestamps are never replaced by request times. Only fixed read-only GET endpoints are used.
+- Quotes and chain retrievals must be within 120 seconds, with no clock lead above 60 seconds. Option/futures trades must be within 15 minutes, spot trades within 2 minutes. Puts require positive volume/OI, valid IV/delta/theta, an uncrossed positive bid/ask within the user spread limit, and sufficient displayed top quantity for the whole purchase or existing-put sale. Same-contract existing legs are aggregated for depth checks. These are conservative filters, not execution guarantees.
+- New cost is ask × (1 + slippage) × matched units + entered buy charges. The budget is tested **before** existing-put credits. Existing sale proceeds are bid × (1 − slippage) × existing units. Net cash outlay adds exit charges and subtracts those proceeds. Charges are explicit total estimates, not inferred tax calculations.
+- Additional replacement P&L equals futures change from current LTP + future model value of the new puts − new hedge cost + old sale proceeds − old current bid value − exit charges. Thus asset-sale proceeds are not treated as new profit. An optional entry-based view reconciles to the original saved open entries; historical journal charges and already-closed trades are excluded.
+- Scenario grid: unchanged, −3%, −5%, −10% HAL at now, midpoint, protection date, plus intervening existing-put expiry checkpoints. The largest sampled loss is **not a guaranteed maximum loss**, VaR or probability. European Black–Scholes uses provider IV plus the editable shift; futures preserve current basis until expiry, then settle at scenario spot. Models do not infer earlier settlement from a later spot, financing, margin calls or physical-delivery funding.
+- Lower cost minimises gross new hedge cost. Stronger protection minimises largest sampled loss. Balanced minimises squared normalised cost plus squared normalised sampled loss, equally weighted within qualifying candidates. Ties use cost, spread, expiry and strike. Bid/ask, IV/Greeks, timestamps, exclusions and exact costs are available for review.
+
+Default assumptions are 0.5% slippage per side, 10% maximum spread, zero entered charges, 6% annual interest, zero dividend yield and zero IV shift. Zero charges produce an explicit exclusion notice. Change these to reflect the intended comparison; they are not fetched costs or market rates. Manual position marks are not used by this finder.
+
+Hedge quote refresh is user-initiated. Results are re-evaluated every 30 seconds while visible and rankings disappear as inputs expire. Server packets cache for 30 seconds; original chain cache times remain visible to the validator. Fresh comparisons generally require an open market. The broader quote desk can still display labelled older snapshots outside market hours.
+
+API contracts: [Upstox full market quotes](https://upstox.com/developer/api-documentation/get-full-market-quote/), [option contracts](https://upstox.com/developer/api-documentation/get-option-contracts/), [put/call option chain](https://upstox.com/developer/api-documentation/get-pc-option-chain/).
 
 ## Stage 1 and Stage 2
 
@@ -46,13 +65,13 @@ bash build.sh
 
 Restore the existing private `signing/personal.jks` and `signing/password.txt` before building an update. They are deliberately excluded from Git. The build refuses to silently create a replacement signing identity. For a separate new installation only, set `HAL_CREATE_SIGNING_KEY=1`. A different key cannot update the previously installed app.
 
-Output: `build/HAL-Desk-v2.0.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 17; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release.
+Output: `build/HAL-Desk-v2.1.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 17; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release.
 
 ## Checks
 
 ```bash
 node tests/core.test.js
-node --test tests/analytics.test.js
+node --test tests/analytics.test.js tests/hedge.test.js
 npm install
 npx playwright install chromium
 node tests/ui.test.js

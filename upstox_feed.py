@@ -4,6 +4,7 @@ No orders, broker portfolio, credentials or execution endpoints are used.
 This module never returns access tokens or upstream error bodies to clients.
 """
 import datetime as dt
+import copy
 import hmac
 import hashlib
 import json
@@ -141,11 +142,13 @@ def _quote_lookup(data, key):
 
 def _time(value):
     if isinstance(value, str):
-        if re.fullmatch(r"\d{12,16}", value):
+        if re.fullmatch(r"\d{10,16}", value):
             value = int(value)
         else:
             try:
                 parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    return None
                 return parsed.astimezone(IST).isoformat()
             except ValueError:
                 return None
@@ -162,11 +165,12 @@ def _simplify_quote(raw):
         return None
     ohlc = raw.get("ohlc") if isinstance(raw.get("ohlc"), dict) else {}
     depth = raw.get("depth") if isinstance(raw.get("depth"), dict) else {}
-    def best(side):
+    def best(side, field="price"):
         rows = depth.get(side)
-        return number(rows[0].get("price")) if isinstance(rows, list) and rows and isinstance(rows[0], dict) else None
+        return number(rows[0].get(field)) if isinstance(rows, list) and rows and isinstance(rows[0], dict) else None
     return {
         "bid": best("buy"), "ask": best("sell"),
+        "bid_quantity": best("buy", "quantity"), "ask_quantity": best("sell", "quantity"),
         "last_price": number(raw.get("last_price")),
         "volume": number(raw.get("volume")),
         "open_interest": number(raw.get("oi")),
@@ -285,4 +289,37 @@ def snapshot(expiry=None):
             CACHED.clear()
         CACHED[cache_key] = (time.monotonic(), result)
         return result
+
+
+def hedge_snapshot(expiry):
+    """Enrich HAL puts with full quote timestamps and depth; never accept client keys."""
+    result = copy.deepcopy(snapshot(expiry))
+    if result.get("chain_error"):
+        raise FeedError(result["chain_error"])
+    token = os.environ.get("UPSTOX_ACCESS_TOKEN", "").strip()
+    if not token:
+        raise FeedError("token_missing")
+    underlying = hal_underlying(token)
+    metadata = _call("/option/contract", {"instrument_key": underlying}, token)
+    valid = {c.get("instrument_key"): c for c in metadata if isinstance(c, dict) and
+             c.get("expiry") == expiry and c.get("instrument_type") == "PE" and
+             (c.get("underlying_key") == underlying or c.get("underlying_symbol") == "HAL") and
+             re.fullmatch(r"NSE_FO\|[A-Za-z0-9]+", str(c.get("instrument_key", "")))} if isinstance(metadata, list) else {}
+    puts = []
+    for row in result.get("option_rows", []):
+        put = row.get("put")
+        contract = valid.get(put.get("instrument_key")) if isinstance(put, dict) else None
+        if contract and number(contract.get("strike_price")) == row.get("strike") and number(contract.get("lot_size")):
+            put["lot_size"] = number(contract["lot_size"])
+            puts.append(put)
+    for start in range(0, len(puts), 100):
+        batch = puts[start:start + 100]
+        raw = _call("/market-quote/quotes", {"instrument_key": ",".join(p["instrument_key"] for p in batch)}, token)
+        if not isinstance(raw, dict):
+            raise FeedError("bad_response")
+        for put in batch:
+            put["quote"] = _simplify_quote(_quote_lookup(raw, put["instrument_key"]))
+    result["quotes_fetched_at"] = dt.datetime.now(IST).isoformat()
+    result["source"] = "Upstox HAL option chain + full market quotes (read-only)"
+    return result
 

@@ -17,7 +17,7 @@ import upstox_feed
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 CACHE = {}
 LOCK = threading.Lock()
-SECTIONS = {"candles", "news", "fundamentals", "filings", "status", "chain"}
+SECTIONS = {"candles", "news", "fundamentals", "filings", "status", "chain", "hedges"}
 RSS_FILES = ("Online_announcements.xml", "Board_Meetings.xml", "Financial_Results.xml")
 
 
@@ -92,8 +92,10 @@ def filings():
 def load(section="candles", frame="D", statement="consolidated"):
     if section not in SECTIONS or statement not in ("consolidated", "standalone"):
         raise upstox_feed.FeedError("invalid_research_request")
-    if section == "chain":
+    if section in ("chain", "hedges"):
         try:
+            if not isinstance(frame, str) or not upstox_feed.EXPIRY_RE.fullmatch(frame):
+                raise ValueError("Invalid expiry")
             dt.date.fromisoformat(frame)
         except (ValueError, TypeError):
             raise upstox_feed.FeedError("invalid_expiry") from None
@@ -102,7 +104,7 @@ def load(section="candles", frame="D", statement="consolidated"):
     token = os.environ.get("UPSTOX_ACCESS_TOKEN", "")
     # A token rotation invalidates cached responses without logging the credential.
     cache_key = (section, frame, statement, hashlib.sha256(token.encode()).hexdigest())
-    ttl = 21600 if section == "fundamentals" else 60 if section in ("status", "chain") else 900
+    ttl = 21600 if section == "fundamentals" else 30 if section == "hedges" else 60 if section in ("status", "chain") else 900
     with LOCK:
         old = CACHE.get(cache_key)
         if old and time.time() - old[0] < ttl:
@@ -117,6 +119,8 @@ def load(section="candles", frame="D", statement="consolidated"):
         data, errors = filings()
     elif section == "chain":
         data = upstox_feed.snapshot(frame)
+    elif section == "hedges":
+        data = upstox_feed.hedge_snapshot(frame)
     elif section == "status":
         field("market", "/v2/market/status/NSE")
     else:
