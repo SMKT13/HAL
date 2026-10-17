@@ -25,15 +25,19 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ data, position, onNa
   const changePct = quote.prev_close > 0 ? (change / quote.prev_close) * 100 : 0;
   const isPositive = change >= 0;
 
-  const session = data?.last_session || '2026-10-09';
+  const session = data?.last_session || (data as any)?.levels?.pivot_session || '2026-10-09';
   const book = markBook(position, quote.price, session);
 
   const futuresUnits = position.fq;
   const putUnits = position.p1q + position.p2q;
-  const coveragePct = futuresUnits > 0 ? Math.min(100, Math.round((putUnits / futuresUnits) * 100)) : 100;
+  const coveragePct = futuresUnits > 0 ? Math.min(100, Math.round((putUnits / futuresUnits) * 100)) : 0;
 
-  const expiries = [position.fexpiry, position.p1expiry, position.p2expiry].sort();
-  const nextExpiry = expiries[0] || '2026-10-27';
+  const activeExpiries = [
+    position.fq > 0 ? position.fexpiry : null,
+    position.p1q > 0 ? position.p1expiry : null,
+    position.p2q > 0 ? position.p2expiry : null
+  ].filter(Boolean) as string[];
+  const nextExpiry = activeExpiries.sort()[0] || position.fexpiry || '2026-10-27';
 
   // Generate SVG points for mini sparkline
   const recentBars = (data?.daily || []).slice(-16);
@@ -197,9 +201,15 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ data, position, onNa
 
           <div className="bg-[#1b283a] p-4 rounded-xl border border-[#2b3a50]">
             <span className="text-xs text-[#a8b6c9] block mb-1">Put Coverage</span>
-            <div className="text-2xl font-bold text-[#83caff]">{coveragePct}%</div>
+            <div className="text-2xl font-bold text-[#83caff]">
+              {futuresUnits > 0 ? `${coveragePct}%` : putUnits > 0 ? 'Puts only' : '0%'}
+            </div>
             <span className="text-[11px] text-[#a8b6c9] block mt-1">
-              {putUnits} put units / {futuresUnits} fut
+              {futuresUnits > 0
+                ? `${putUnits} put units / ${futuresUnits} fut`
+                : putUnits > 0
+                ? `${putUnits} put units (no futures)`
+                : 'No open futures to hedge'}
             </span>
           </div>
 

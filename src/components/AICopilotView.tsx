@@ -22,6 +22,7 @@ interface AICopilotViewProps {
   position: PositionState;
   onAddNote: (note: BusinessNote) => void;
   onNavigateToPositions: () => void;
+  initialSubMode?: 'deliberation' | 'copilot' | 'research';
 }
 
 interface DeliberationData {
@@ -86,19 +87,26 @@ export const AICopilotView: React.FC<AICopilotViewProps> = ({
   data,
   position,
   onAddNote,
-  onNavigateToPositions
+  onNavigateToPositions,
+  initialSubMode
 }) => {
-  const [subMode, setSubMode] = useState<'deliberation' | 'copilot' | 'research'>('deliberation');
+  const [subMode, setSubMode] = useState<'deliberation' | 'copilot' | 'research'>(initialSubMode || 'deliberation');
+
+  useEffect(() => {
+    if (initialSubMode) {
+      setSubMode(initialSubMode);
+    }
+  }, [initialSubMode]);
 
   const spot = Number(data?.quote?.price ?? 4655.6);
-  const session = data?.last_session || '2026-10-09';
+  const session = data?.last_session || (data as any)?.levels?.pivot_session || '2026-10-09';
   const book = markBook(position, spot, session);
 
   const futuresUnits = position.fq;
   const p1Units = position.p1q;
   const p2Units = position.p2q;
   const putUnits = p1Units + p2Units;
-  const coveragePct = futuresUnits > 0 ? Math.min(100, Math.round((putUnits / futuresUnits) * 100)) : 100;
+  const coveragePct = futuresUnits > 0 ? Math.min(100, Math.round((putUnits / futuresUnits) * 100)) : 0;
 
   const p1Delta = p1Units > 0 ? computePutDelta(spot, position.p1strike, position.p1expiry, session, position.rate, position.p1iv, position.dividend) : 0;
   const p2Delta = p2Units > 0 ? computePutDelta(spot, position.p2strike, position.p2expiry, session, position.rate, position.p2iv, position.dividend) : 0;
@@ -115,28 +123,35 @@ export const AICopilotView: React.FC<AICopilotViewProps> = ({
   const createInitialGreeting = () => {
     const parts: string[] = [];
     if (position.fq > 0) {
-      parts.push(`${position.fq} long futures units @ Avg ₹${position.fa.toLocaleString('en-IN')}`);
+      parts.push(`${position.fq} long futures units (~${(position.fq / position.lot).toFixed(1)} lots) @ entry ₹${position.fa.toLocaleString('en-IN')}`);
     } else {
-      parts.push('0 long futures units');
+      parts.push('0 long futures units (No open futures)');
     }
 
     const putParts: string[] = [];
-    if (position.p1q > 0) putParts.push(`${position.p1q}x ₹${position.p1strike} PE`);
-    if (position.p2q > 0) putParts.push(`${position.p2q}x ₹${position.p2strike} PE`);
+    if (position.p1q > 0) putParts.push(`${position.p1q}x ₹${position.p1strike} PE (Avg ₹${position.p1a})`);
+    if (position.p2q > 0) putParts.push(`${position.p2q}x ₹${position.p2strike} PE (Avg ₹${position.p2a})`);
 
     if (putParts.length > 0) {
-      parts.push(`hedged with ${putUnits} put units (${putParts.join(' + ')}) [${coveragePct}% coverage]`);
+      if (position.fq > 0) {
+        parts.push(`hedged with ${putUnits} put units (${putParts.join(' + ')}) [${coveragePct}% coverage]`);
+      } else {
+        parts.push(`holding ${putUnits} standalone put units (${putParts.join(' + ')})`);
+      }
     } else if (position.fq > 0) {
       parts.push('currently unhedged (0 put options)');
+    } else {
+      parts.push('0 put options');
     }
 
     const pnlStr = book.total !== null ? `${book.total >= 0 ? '+₹' : '−₹'}${Math.abs(Math.round(book.total)).toLocaleString('en-IN')}` : '—';
+    const openPnlStr = book.open !== null ? `${book.open >= 0 ? '+₹' : '−₹'}${Math.abs(Math.round(book.open)).toLocaleString('en-IN')}` : '—';
 
     return `Welcome to the HAL Desk AI Strategy Copilot.
 
 I have synchronized your active position book:
 • **Open Strategy**: ${parts.join(', ')}
-• **Spot Mark**: ₹${spot.toLocaleString('en-IN')} | **Net Delta**: ${netDelta.toFixed(1)} | **Indicative P&L**: ${pnlStr}
+• **Spot Mark**: ₹${spot.toLocaleString('en-IN')} | **Net Delta**: ${netDelta >= 0 ? '+' : ''}${netDelta.toFixed(1)} | **Indicative P&L**: ${pnlStr} (Open: ${openPnlStr})
 • **Next Expiry**: ${nextExpiry} (${daysToExpiry} days remaining)
 
 How can I help you evaluate downside scenarios, option Greeks, or put rollover timing?`;
@@ -157,6 +172,23 @@ How can I help you evaluate downside scenarios, option Greeks, or put rollover t
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [sendingChat, setSendingChat] = useState(false);
+
+  // Synchronize greeting message if book updates before user conversation begins
+  useEffect(() => {
+    setChatMessages((prev) => {
+      if (prev.length <= 1) {
+        return [
+          {
+            id: 'msg-init-' + Date.now(),
+            role: 'assistant',
+            content: createInitialGreeting(),
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ];
+      }
+      return prev;
+    });
+  }, [position.fq, position.fa, position.p1q, position.p1strike, position.p1a, position.p2q, position.p2strike, position.p2a, spot]);
 
   // Research synthesis state
   const [researchTopic, setResearchTopic] = useState('HAL order book and latest Tejas Mk1A deliveries');
@@ -502,10 +534,10 @@ How can I help you evaluate downside scenarios, option Greeks, or put rollover t
                 </strong>
               </span>
               <span className="px-1.5 py-0.5 rounded bg-[#1b283a] text-[#a8b6c9] text-[10px] font-mono">
-                Net Δ: <strong className="text-white">{netDelta.toFixed(1)}</strong>
+                Net Δ: <strong className="text-white">{netDelta >= 0 ? '+' : ''}{netDelta.toFixed(1)}</strong>
               </span>
               <span className="px-1.5 py-0.5 rounded bg-[#1b283a] text-[#a8b6c9] text-[10px] font-mono">
-                Coverage: <strong className="text-white">{coveragePct}%</strong>
+                Coverage: <strong className="text-white">{futuresUnits > 0 ? `${coveragePct}%` : putUnits > 0 ? 'Puts only' : '0%'}</strong>
               </span>
             </div>
 
@@ -545,11 +577,13 @@ How can I help you evaluate downside scenarios, option Greeks, or put rollover t
                 ? `Stress test my ${position.fq} futures against -5% drop`
                 : `What is the optimal protective put structure for 1 lot (150 units) HAL?`,
               position.p1q > 0
-                ? `Should I roll my ${position.p1strike} PE to next month?`
+                ? `Should I roll my ₹${position.p1strike} PE to next month?`
                 : position.p2q > 0
-                ? `Should I roll my ${position.p2strike} PE to next month?`
+                ? `Should I roll my ₹${position.p2strike} PE to next month?`
                 : `Recommend optimal protective puts for HAL at ₹${Math.round(spot)}`,
-              `What is my maximum downside risk with ${coveragePct}% put coverage?`,
+              position.fq > 0
+                ? `What is my maximum downside risk with ${coveragePct}% put coverage?`
+                : `Recommend entry levels and initial protective collar for HAL`,
               `Explain theta decay impact into ${nextExpiry} expiry (${daysToExpiry}d left)`
             ].map((chip) => (
               <button

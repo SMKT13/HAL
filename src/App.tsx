@@ -90,6 +90,7 @@ const INITIAL_NOTES: BusinessNote[] = [
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('overview');
+  const [aiSubMode, setAiSubMode] = useState<'deliberation' | 'copilot' | 'research'>('deliberation');
   const [data, setData] = useState<MarketPayload | null>(HAL_SNAPSHOT as any);
   const [loading, setLoading] = useState<boolean>(false);
   const [theme, setTheme] = useState<string>('dark');
@@ -282,7 +283,14 @@ export const App: React.FC = () => {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 pb-20">
         {activeTab === 'overview' && (
-          <OverviewView data={data} position={position} onNavigate={setActiveTab} />
+          <OverviewView
+            data={data}
+            position={position}
+            onNavigate={(tab) => {
+              if (tab === 'ai') setAiSubMode('copilot');
+              setActiveTab(tab);
+            }}
+          />
         )}
         {activeTab === 'positions' && (
           <PositionsView
@@ -293,7 +301,10 @@ export const App: React.FC = () => {
             onUpdateFunding={handleUpdateFunding}
             journal={journal}
             onAddJournal={handleAddJournal}
-            onNavigateToAI={() => setActiveTab('ai')}
+            onNavigateToAI={(mode) => {
+              setAiSubMode(mode || 'copilot');
+              setActiveTab('ai');
+            }}
           />
         )}
         {activeTab === 'markets' && <MarketsView data={data} />}
@@ -302,7 +313,10 @@ export const App: React.FC = () => {
             data={data}
             notes={notes}
             onAddNote={handleAddNote}
-            onNavigateToAI={() => setActiveTab('ai')}
+            onNavigateToAI={(mode) => {
+              setAiSubMode(mode || 'deliberation');
+              setActiveTab('ai');
+            }}
           />
         )}
         {activeTab === 'news' && (
@@ -316,6 +330,7 @@ export const App: React.FC = () => {
           <AICopilotView
             data={data}
             position={position}
+            initialSubMode={aiSubMode}
             onAddNote={handleAddNote}
             onNavigateToPositions={() => setActiveTab('positions')}
           />

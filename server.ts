@@ -12,16 +12,18 @@ const __dirname = path.dirname(__filename);
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const isProd = process.env.NODE_ENV === 'production';
 
-const ai = process.env.GEMINI_API_KEY
-  ? new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
-        }
+function getAiClient(): GoogleGenAI | null {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey.trim() === '') return null;
+  return new GoogleGenAI({
+    apiKey: apiKey.trim(),
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build'
       }
-    })
-  : null;
+    }
+  });
+}
 
 const app = express();
 app.use(express.json());
@@ -318,6 +320,7 @@ async function getMarketData(force = false) {
     // Return embedded HAL_SNAPSHOT
     return {
       ...HAL_SNAPSHOT,
+      last_session: (HAL_SNAPSHOT as any).levels?.pivot_session || '2026-10-09',
       stale: true,
       snapshot_mode: true,
       data_status: 'snapshot'
@@ -601,7 +604,8 @@ app.post('/api/ai/deliberate', async (req: Request, res: Response) => {
   const p1q = Number(positionData?.p1q ?? 0);
   const p2q = Number(positionData?.p2q ?? 0);
   const putUnits = p1q + p2q;
-  const coveragePct = futuresUnits > 0 ? Math.round((putUnits / futuresUnits) * 100) : 100;
+  const coveragePct = futuresUnits > 0 ? Math.round((putUnits / futuresUnits) * 100) : 0;
+  const ai = getAiClient();
 
   if (ai) {
     try {
@@ -609,7 +613,7 @@ app.post('/api/ai/deliberate', async (req: Request, res: Response) => {
 Current Market & Strategy State:
 - Spot Price: ₹${spot.toLocaleString('en-IN')}
 - Indicators: SMA20 ₹${sma20}, SMA50 ₹${sma50}, SMA200 ₹${sma200}, Wilder RSI(14): ${rsi}, ATR(14): ₹${atr}, MACD Hist: ${macdHist}
-- Open Strategy Book: ${futuresUnits > 0 ? `${futuresUnits} long futures units` : '0 futures units (No open futures)'}, ${putUnits > 0 ? `${putUnits} protective put units (${coveragePct}% coverage)` : '0 protective put units (Unhedged)'}.
+- Open Strategy Book: ${futuresUnits > 0 ? `${futuresUnits} long futures units` : '0 futures units (No open futures)'}, ${putUnits > 0 ? (futuresUnits > 0 ? `${putUnits} protective put units (${coveragePct}% coverage)` : `${putUnits} standalone put units (no futures)`) : '0 protective put units (Unhedged)'}.
 - Order Book: ₹2.54 L Cr (~8x revenue).
 
 Perform a structured multi-agent deliberation:
@@ -678,16 +682,18 @@ Return strict JSON matching the schema with:
       const parsed = JSON.parse(response.text || '{}');
       return res.json({ success: true, source: 'gemini-3.8-flash', ...parsed });
     } catch (err: any) {
-      console.warn('Gemini deliberation error, using fallback deliberation:', err);
+      console.warn('Gemini deliberation error, using fallback deliberation:', err?.message || err);
     }
   }
 
   // Fallback deliberation based on deterministic data
+  const isAbove20Dma = spot > sma20;
+  const isAbove200Dma = spot > sma200;
   return res.json({
     success: true,
     source: 'deterministic-fallback',
-    consensus: 'Cautious Neutral',
-    consensusSummary: `HAL trades at ₹${spot}, consolidating between the 200-DMA (₹${Math.round(sma200)}) and the 20-DMA (₹${Math.round(sma20)}). Strong defence backlog anchors downside, while short-term moving average resistance caps rapid expansion.`,
+    consensus: isAbove20Dma ? 'Constructive Bullish Tilt' : isAbove200Dma ? 'Cautious Neutral' : 'Defensive Bearish',
+    consensusSummary: `HAL trades at ₹${spot.toLocaleString('en-IN')}, ${isAbove20Dma ? `holding above its 20-DMA (₹${Math.round(sma20)}) and 200-DMA (₹${Math.round(sma200)})` : `consolidating between the 200-DMA (₹${Math.round(sma200)}) and the 20-DMA (₹${Math.round(sma20)})`}. Sovereign order backlog of ₹2.54 L Cr anchors downside, while ${isAbove20Dma ? 'resistance sits near recent swing highs' : 'short-term moving average resistance caps rapid expansion'}.`,
     disagreementIndex: 6,
     keyLevels: {
       support: `₹${marketData?.levels?.floor || 4616} (Demand shelf) / ₹${Math.round(sma200)} (200-DMA)`,
@@ -699,12 +705,14 @@ Return strict JSON matching the schema with:
         id: 'technical',
         name: 'Technical Analyst',
         role: 'Trend & Structure',
-        stance: spot > sma20 ? 'Bullish' : 'Neutral / Rangebound',
+        stance: isAbove20Dma ? 'Bullish Short-Term' : 'Consolidating / Rangebound',
         confidence: 72,
         keyPoints: [
-          `Spot ₹${spot} is below 20-DMA (₹${Math.round(sma20)}) but safely holding above 200-DMA (₹${Math.round(sma200)}).`,
-          `RSI at ${rsi.toFixed(1)} sits in neutral momentum territory; MACD histogram at ${macdHist.toFixed(2)} shows reduced selling pressure.`,
-          'Pivot S1 at ₹4,598 offers tactical intraday support.'
+          isAbove20Dma
+            ? `Spot ₹${spot.toLocaleString('en-IN')} is holding above 20-DMA (₹${Math.round(sma20)}) and well above 200-DMA (₹${Math.round(sma200)}).`
+            : `Spot ₹${spot.toLocaleString('en-IN')} trades below 20-DMA (₹${Math.round(sma20)}) while safely holding above 200-DMA (₹${Math.round(sma200)}).`,
+          `RSI at ${rsi.toFixed(1)} sits in neutral momentum territory; MACD histogram at ${macdHist.toFixed(2)} shows stabilized selling pressure.`,
+          `Pivot S1 at ₹${marketData?.levels?.s1 ? Math.round(marketData.levels.s1) : 4598} offers tactical intraday support.`
         ]
       },
       {
@@ -735,14 +743,24 @@ Return strict JSON matching the schema with:
         id: 'risk',
         name: 'Risk Manager',
         role: 'Exposure & Margin Governance',
-        stance: futuresUnits === 0 ? 'No Futures Exposure' : coveragePct >= 100 ? 'Hedge Maintained' : 'Hedge Deficit',
+        stance: futuresUnits === 0
+          ? (putUnits > 0 ? 'Long Put Inventory (No Futures)' : 'Book Flat (0 Open Exposure)')
+          : coveragePct >= 100
+          ? 'Fully Hedged Book'
+          : coveragePct > 0
+          ? `Partially Hedged (${coveragePct}%)`
+          : 'Completely Unhedged',
         confidence: 90,
         keyPoints: [
           futuresUnits > 0
-            ? `Current basket holds ${futuresUnits} futures units against ${putUnits} put units (${coveragePct}% coverage).`
-            : 'No active futures units currently open in the strategy book.',
-          'Roll spread to next month is positive (+₹25); plan futures rollover before the final week to avoid liquidity crunches.',
-          'Physical settlement obligations apply on stock F&O expiry—maintain adequate cash margin.'
+            ? `Current strategy basket holds ${futuresUnits} futures units against ${putUnits} put units (${coveragePct}% coverage).`
+            : putUnits > 0
+            ? `Basket holds ${putUnits} put units with zero underlying futures obligations.`
+            : 'No active futures or put contracts currently open in the strategy book.',
+          futuresUnits > 0
+            ? `Roll spread to next month is positive (+₹25); plan futures rollover before the final week to avoid liquidity crunches.`
+            : 'No futures roll obligations pending.',
+          'Physical settlement obligations apply on stock F&O expiry—maintain adequate cash margin or close before delivery settlement.'
         ]
       },
       {
@@ -759,8 +777,12 @@ Return strict JSON matching the schema with:
       }
     ],
     recommendations: [
-      'Maintain existing put protection through monthly expiry; roll puts only if spot closes decisively below ₹4,500.',
-      'If spot rallies into the 20-DMA (₹4,748–4,750), consider trimming unhedged long futures into resistance.',
+      futuresUnits > 0 && coveragePct < 100
+        ? `Consider acquiring ${futuresUnits - putUnits} additional put units to achieve 100% hedge coverage before monthly expiry.`
+        : futuresUnits > 0
+        ? 'Maintain existing put protection through monthly expiry; roll puts only if spot closes decisively below ₹4,500.'
+        : `Strategy book has 0 open futures. Evaluate staged long entries near the 200-DMA support (₹${Math.round(sma200)}).`,
+      `Watch 20-DMA at ₹${Math.round(sma20)} as first tactical resistance shelf.`,
       'Monitor GE engine delivery disclosures as the primary operational catalyst for Q3.'
     ]
   });
@@ -797,7 +819,7 @@ app.post('/api/ai/copilot', async (req: Request, res: Response) => {
   const lot = Number(pos.lot ?? 150);
 
   const putUnits = p1q + p2q;
-  const coveragePct = metrics.coveragePct ?? (fq > 0 ? Math.min(100, Math.round((putUnits / fq) * 100)) : 100);
+  const coveragePct = metrics.coveragePct !== undefined ? Number(metrics.coveragePct) : (fq > 0 ? Math.min(100, Math.round((putUnits / fq) * 100)) : 0);
   const netDelta = Number(metrics.netDelta ?? (fq - putUnits * 0.35));
   const openPnl = book.openPnl !== undefined ? book.openPnl : null;
   const totalPnl = book.totalPnl !== undefined ? book.totalPnl : (openPnl !== null ? openPnl + realized - costs : null);
@@ -835,6 +857,7 @@ app.post('/api/ai/copilot', async (req: Request, res: Response) => {
   const openPnlStr = openPnl !== null ? `${openPnl >= 0 ? '+₹' : '−₹'}${Math.abs(Math.round(openPnl)).toLocaleString('en-IN')}` : 'Calculating';
   const totalPnlStr = totalPnl !== null ? `${totalPnl >= 0 ? '+₹' : '−₹'}${Math.abs(Math.round(totalPnl)).toLocaleString('en-IN')}` : 'Calculating';
 
+  const ai = getAiClient();
   if (ai) {
     try {
       const prompt = `You are HAL Desk AI Strategy Copilot, an elite quantitative equity derivatives and risk specialist advising an experienced Indian market trader managing Hindustan Aeronautics Limited (NSE: HAL).
@@ -871,45 +894,89 @@ CRITICAL RULES:
         source: 'gemini-3.8-flash'
       });
     } catch (err: any) {
-      console.warn('Gemini copilot error, using contextual fallback:', err);
+      console.warn('Gemini copilot error, using contextual fallback:', err?.message || err);
     }
   }
 
   // Dynamic contextual fallback response strictly based on actual values:
+  const lowerMsg = (message || '').toLowerCase();
   let exposureDiag = '';
   if (fq === 0 && putUnits === 0) {
     exposureDiag = 'You currently have no open futures or put positions in your HAL book (0 units). Your market directional risk is zero.';
   } else if (fq === 0 && putUnits > 0) {
-    exposureDiag = `You hold ${putUnits} long put units with no underlying futures (net delta ${netDelta.toFixed(1)}). You have outright downside protection / short exposure.`;
+    exposureDiag = `You hold ${putUnits} long put units with no underlying futures (net delta ${netDelta.toFixed(1)}). You have outright downside protection / short delta exposure.`;
   } else if (putUnits === 0) {
     exposureDiag = `You hold ${fq} futures units (~${(fq / lot).toFixed(1)} lots) with ZERO put protection (0% coverage). You have full 1.0 delta exposure of ₹${Math.round(fq * spot).toLocaleString('en-IN')} to any market decline.`;
   } else {
     exposureDiag = `You hold ${fq} futures units (~${(fq / lot).toFixed(1)} lots) hedged with ${putUnits} put units across ${[p1q > 0 ? `${p1q}x ₹${p1strike} PE` : '', p2q > 0 ? `${p2q}x ₹${p2strike} PE` : ''].filter(Boolean).join(' and ')}. Your hedge coverage is ${coveragePct}%, with a net delta of ${netDelta.toFixed(1)} (₹${Math.round(netDelta * spot).toLocaleString('en-IN')} net exposure).`;
   }
 
-  let downsideDesc = '';
+  // Compute exact downside shock values
+  const shockPrice5 = Math.round(spot * 0.95);
+  const shockPrice10 = Math.round(spot * 0.90);
+  let shock5Analysis = '';
   if (fq > 0) {
-    const shockPrice = Math.round(spot * 0.95);
-    const unhedgedLoss = fq * (spot - shockPrice);
-    let putRecovery = 0;
-    if (p1q > 0 && shockPrice < p1strike) putRecovery += p1q * (p1strike - shockPrice);
-    if (p2q > 0 && shockPrice < p2strike) putRecovery += p2q * (p2strike - shockPrice);
-    const netShockPnl = putRecovery - unhedgedLoss;
-    downsideDesc = `If HAL spot (₹${spot.toLocaleString('en-IN')}) falls 5% to ~₹${shockPrice.toLocaleString('en-IN')}, gross futures decline is ~₹${unhedgedLoss.toLocaleString('en-IN')}. ${putRecovery > 0 ? `Your puts gain ~₹${putRecovery.toLocaleString('en-IN')}, cushioning net shock to ~₹${Math.abs(Math.round(netShockPnl)).toLocaleString('en-IN')}.` : 'With no in-the-money puts at that level, the entire decline hits your P&L directly.'}`;
+    const unhedgedLoss5 = fq * (spot - shockPrice5);
+    let putRecovery5 = 0;
+    if (p1q > 0 && shockPrice5 < p1strike) putRecovery5 += p1q * (p1strike - shockPrice5);
+    if (p2q > 0 && shockPrice5 < p2strike) putRecovery5 += p2q * (p2strike - shockPrice5);
+    const netShock5 = putRecovery5 - unhedgedLoss5;
+    shock5Analysis = `At -5% drop (₹${shockPrice5.toLocaleString('en-IN')}), futures loss is ₹${unhedgedLoss5.toLocaleString('en-IN')}. ${putRecovery5 > 0 ? `Puts generate +₹${putRecovery5.toLocaleString('en-IN')} intrinsic payoff, cushioning net drawdown to ${netShock5 >= 0 ? '+' : '−'}₹${Math.abs(Math.round(netShock5)).toLocaleString('en-IN')}.` : 'With puts still out-of-the-money at that level, the entire decline is unbuffered.'}`;
   } else {
-    downsideDesc = `With 0 open futures, a 5% spot decline incurs no downside loss on your capital.`;
+    shock5Analysis = 'With 0 open futures, a 5% spot drop incurs no capital decline on your account.';
+  }
+
+  // Dynamic response tailored to user question
+  let replyText = '';
+  if (lowerMsg.includes('stress') || lowerMsg.includes('drop') || lowerMsg.includes('downside') || lowerMsg.includes('-5%') || lowerMsg.includes('risk')) {
+    replyText = `### Downside Stress-Test & Payoff Mechanics (HAL Spot ₹${spot.toLocaleString('en-IN')})
+
+• **Strategy Context**: ${exposureDiag}
+• **Immediate 5% Drop (₹${shockPrice5.toLocaleString('en-IN')})**: ${shock5Analysis}
+• **Severe 10% Drop (₹${shockPrice10.toLocaleString('en-IN')})**: ${
+      fq > 0
+        ? `Futures loss expands to ₹${(fq * (spot - shockPrice10)).toLocaleString('en-IN')}. ${
+            p1q + p2q > 0
+              ? `Both puts activate deep in-the-money (${p1q > 0 ? `₹${p1strike} PE: +₹${p1q * (p1strike - shockPrice10)}` : ''}${p2q > 0 ? `, ₹${p2strike} PE: +₹${p2q * (p2strike - shockPrice10)}` : ''}), locking the terminal hard floor.`
+              : 'Unhedged book bears the full downside.'
+          }`
+        : 'Zero futures exposure—no downside risk.'
+    }
+• **Physical Delivery Mandate**: NSE physical settlement requires closing or rolling futures before expiry day to avoid share delivery funding obligations.`;
+  } else if (lowerMsg.includes('roll') || lowerMsg.includes('theta') || lowerMsg.includes('expiry') || lowerMsg.includes('decay')) {
+    replyText = `### Expiry & Options Greeks Analysis (Next Expiry: ${nextExpiry})
+
+• **Time Remaining**: ${daysToExpiry} trading days to contract expiry.
+• **Theta Decay ($\Theta$)**: Put options suffer accelerating daily time value decay inside the final 10 days. If spot consolidates between ₹4,600 and ₹4,750, extrinsic premium erodes rapidly.
+• **Futures Rollover**: Front-to-next month roll spread is currently +₹25/unit. Recommended execution window: 4 to 6 sessions prior to expiry to bypass liquidity crunches and delivery margin jumps.
+• **Current Delta**: Net book delta stands at ${netDelta >= 0 ? '+' : ''}${netDelta.toFixed(1)} (~₹${Math.round(netDelta * spot).toLocaleString('en-IN')} INR exposure).`;
+  } else if (lowerMsg.includes('hedge') || lowerMsg.includes('protect') || lowerMsg.includes('recommend') || lowerMsg.includes('structure')) {
+    replyText = `### Institutional Protective Hedge Assessment
+
+• **Current State**: ${exposureDiag}
+• **Hedging Recommendation**: ${
+      fq > 0 && coveragePct < 100
+        ? `You have an unhedged gap of ${fq - putUnits} units. Consider acquiring ${Math.ceil((fq - putUnits) / lot)} lot (${fq - putUnits} units) of the ₹4,500 PE (near 25 delta) to lock in 100% coverage before expiry week.`
+        : fq > 0
+        ? `Your position is 100% covered by ${putUnits} put options. Hold current puts as catastrophe insurance, and look to roll into the November series once spot tests the 20-DMA (₹4,748).`
+        : `With 0 open futures, you can consider entering 1 lot HAL futures near the 200-DMA support (₹4,418–4,500) paired with a synthetic collar (Long 4500 PE + Short 4900 CE).`
+    }
+• **Indicative P&L**: Open ${openPnlStr} | Realized ${realized >= 0 ? '+₹' : '−₹'}${Math.abs(Math.round(realized)).toLocaleString('en-IN')} | All-in ${totalPnlStr}`;
+  } else {
+    replyText = `### HAL Desk Strategy Copilot Diagnostic
+
+• **Book Overview**: ${exposureDiag}
+• **Indicative P&L**: All-in ${totalPnlStr} | Open ${openPnlStr} | Realized ${realized >= 0 ? '+₹' : '−₹'}${Math.abs(Math.round(realized)).toLocaleString('en-IN')} (Costs: ₹${costs.toLocaleString('en-IN')})
+• **Net Delta**: ${netDelta >= 0 ? '+' : ''}${netDelta.toFixed(1)} (Total delta exposure ₹${Math.round(netDelta * spot).toLocaleString('en-IN')})
+• **Downside Projection (-5%)**: ${shock5Analysis}
+• **Key Horizon Level**: Immediate pivot support is ₹4,598; 20-DMA resistance is ₹4,748.
+• **Actionable Next Step**: ${fq > 0 && coveragePct < 100 ? `Add ${fq - putUnits} puts to reach full lot parity.` : fq > 0 ? 'Maintain puts; prepare futures rollover 4–5 days prior to monthly expiry.' : 'Desk is neutral; monitor for pullback entries near the 200-DMA.'}`;
   }
 
   return res.json({
     success: true,
     source: 'contextual-fallback',
-    reply: `Based on your exact active HAL strategy desk:
-
-• **Exposure Diagnosis**: ${exposureDiag}
-• **Indicative P&L**: All-in ${totalPnlStr} | Open ${openPnlStr} | Realized ${realized >= 0 ? '+₹' : '−₹'}${Math.abs(Math.round(realized)).toLocaleString('en-IN')}
-• **Downside Scenario (-5%)**: ${downsideDesc}
-• **Time Decay (Theta)**: With earliest expiry on ${nextExpiry} (~${daysToExpiry} days left), daily option theta decay will accelerate into expiry week.
-• **Actionable Takeaway**: ${fq > 0 && coveragePct < 100 ? `Consider adding ${fq - putUnits} put units to reach 100% lot coverage before expiry.` : fq > 0 ? `Maintain your hedge; if HAL spot holds support above ₹4,600, monitor front-month rollover into next monthly series.` : 'Ready to evaluate new HAL futures entries and protective put collar structures.'}`
+    reply: replyText
   });
 });
 
@@ -917,6 +984,7 @@ CRITICAL RULES:
 app.post('/api/ai/research', async (req: Request, res: Response) => {
   const { topic = 'HAL order book and latest Tejas Mk1A deliveries' } = req.body || {};
 
+  const ai = getAiClient();
   if (ai) {
     try {
       const prompt = `Research and summarize the latest verified facts for Hindustan Aeronautics Limited (NSE: HAL) regarding: "${topic}".
@@ -953,7 +1021,7 @@ Include:
         date: new Date().toISOString().slice(0, 10)
       });
     } catch (err: any) {
-      console.warn('Gemini research error, using fallback research synthesis:', err);
+      console.warn('Gemini research error, using fallback research synthesis:', err?.message || err);
     }
   }
 

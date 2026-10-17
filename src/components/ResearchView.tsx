@@ -7,7 +7,7 @@ interface ResearchViewProps {
   data: MarketPayload | null;
   notes: BusinessNote[];
   onAddNote: (note: BusinessNote) => void;
-  onNavigateToAI?: () => void;
+  onNavigateToAI?: (subMode?: 'deliberation' | 'copilot' | 'research') => void;
 }
 
 export const ResearchView: React.FC<ResearchViewProps> = ({ data, notes, onAddNote, onNavigateToAI }) => {
@@ -125,7 +125,7 @@ export const ResearchView: React.FC<ResearchViewProps> = ({ data, notes, onAddNo
             <div className="flex items-center gap-2 shrink-0">
               {onNavigateToAI && (
                 <button
-                  onClick={onNavigateToAI}
+                  onClick={() => onNavigateToAI('deliberation')}
                   className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-400/40 text-[#83caff] hover:bg-blue-500/30 font-semibold"
                 >
                   <Sparkles className="w-3.5 h-3.5" />

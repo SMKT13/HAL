@@ -13,7 +13,7 @@ interface PositionsViewProps {
   onUpdateFunding: (newFunding: FundingState) => void;
   journal: JournalRecord[];
   onAddJournal: (record: JournalRecord) => void;
-  onNavigateToAI?: () => void;
+  onNavigateToAI?: (subMode?: 'deliberation' | 'copilot' | 'research') => void;
 }
 
 export const PositionsView: React.FC<PositionsViewProps> = ({
@@ -62,7 +62,7 @@ export const PositionsView: React.FC<PositionsViewProps> = ({
 
   const futuresUnits = position.fq;
   const putUnits = position.p1q + position.p2q;
-  const coveragePct = futuresUnits > 0 ? (putUnits / futuresUnits) * 100 : 100;
+  const coveragePct = futuresUnits > 0 ? (putUnits / futuresUnits) * 100 : 0;
 
   // Hedge comparisons mock options pool
   const mockOptions: OptionQuoteItem[] = [
@@ -73,7 +73,7 @@ export const PositionsView: React.FC<PositionsViewProps> = ({
     { strike: 4500, expiry: '2026-11-26', ltp: 88.0, bid: 86.0, ask: 90.0, oi: 135000, volume: 46000, iv: 26.0, delta: -0.41, theta: -6.8, lotSize: 150 },
   ];
 
-  const hedgeResult = compareHedges(futuresUnits || 300, spot, mockOptions, hedgeSettings);
+  const hedgeResult = compareHedges(futuresUnits > 0 ? futuresUnits : 150, spot, mockOptions, hedgeSettings);
 
   const handleSaveBook = (e: React.FormEvent) => {
     e.preventDefault();
@@ -672,12 +672,16 @@ export const PositionsView: React.FC<PositionsViewProps> = ({
             </div>
             <div className="bg-[#141d2b] border border-[#2b3a50] rounded-xl p-4">
               <span className="text-xs text-[#a8b6c9] block mb-1">Quantity Coverage</span>
-              <span className="text-xl font-bold text-[#83caff]">{coveragePct.toFixed(0)}%</span>
+              <span className="text-xl font-bold text-[#83caff]">
+                {futuresUnits > 0 ? `${coveragePct.toFixed(0)}%` : putUnits > 0 ? 'Puts only' : '0%'}
+              </span>
             </div>
             <div className="bg-[#141d2b] border border-[#2b3a50] rounded-xl p-4">
               <span className="text-xs text-[#a8b6c9] block mb-1">Estimated Net Delta</span>
               <span className="text-xl font-bold text-[#80dfb0]">
-                +{(futuresUnits - putUnits * 0.35).toFixed(0)}
+                {futuresUnits === 0 && putUnits === 0
+                  ? '0'
+                  : `${(futuresUnits - putUnits * 0.35) >= 0 ? '+' : ''}${(futuresUnits - putUnits * 0.35).toFixed(0)}`}
               </span>
             </div>
           </div>
@@ -890,7 +894,7 @@ export const PositionsView: React.FC<PositionsViewProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={onNavigateToAI}
+                  onClick={() => onNavigateToAI && onNavigateToAI('copilot')}
                   className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-400/40 text-[#83caff] hover:bg-blue-500/30 text-xs font-semibold flex items-center gap-1.5 shrink-0"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
@@ -919,7 +923,7 @@ export const PositionsView: React.FC<PositionsViewProps> = ({
               {onNavigateToAI && (
                 <button
                   type="button"
-                  onClick={onNavigateToAI}
+                  onClick={() => onNavigateToAI && onNavigateToAI('copilot')}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1f344c] border border-[#4a7194] text-[#83caff] hover:bg-[#284363] text-xs font-semibold shrink-0"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
