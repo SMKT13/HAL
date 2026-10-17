@@ -1,7 +1,11 @@
 #!/bin/sh
-# HAL Dashboard - Mac/Linux launcher
+set -eu
 cd "$(dirname "$0")"
-command -v python3 >/dev/null || { echo "python3 not found"; exit 1; }
-echo "Starting HAL Dashboard... http://localhost:8000"
-echo "Press Ctrl+C to stop."
-exec python3 server.py
+command -v node >/dev/null || { echo "Install Node 22.10+ and retry."; exit 1; }
+command -v npm >/dev/null || { echo "npm was not found. Install Node with npm and retry."; exit 1; }
+if [ ! -d node_modules ]; then
+  npm ci
+fi
+echo "Starting HAL Desk (default http://localhost:3000). Configure .env from .env.example first."
+exec npm run dev
+

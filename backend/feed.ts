@@ -3,19 +3,25 @@ import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 export type Feed = (path: string) => Promise<{ status: number; data: any }>;
-export async function startFeed() {
+export async function startFeed({
+  env: source = process.env,
+}: { env?: NodeJS.ProcessEnv } = {}) {
   const key = randomBytes(32).toString("hex");
   const env: NodeJS.ProcessEnv = {
-    ...process.env,
+    ...source,
     HAL_VIEWER_KEY: key,
     PYTHONUNBUFFERED: "1",
   };
   delete env.GEMINI_API_KEY;
-  const child = spawn(process.env.PYTHON || "python3", ["feed_service.py"], {
-    cwd: fileURLToPath(new URL("../", import.meta.url)),
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const child = spawn(
+    source.PYTHON || (process.platform === "win32" ? "python" : "python3"),
+    ["feed_service.py"],
+    {
+      cwd: fileURLToPath(new URL("../", import.meta.url)),
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
   let exited = false;
   child.once("exit", () => {
     exited = true;

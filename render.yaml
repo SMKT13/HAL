@@ -1,7 +1,21 @@
 services:
   - type: web
     name: hal-dashboard
-    runtime: python
+    runtime: docker
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python server.py
+    healthCheckPath: /health
+    envVars:
+      - key: HAL_VIEWER_KEY
+        sync: false
+      - key: UPSTOX_ACCESS_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+      - key: HAL_AI_SEARCH
+        value: "0"
+      - key: HAL_AI_HOURLY_LIMIT
+        value: "20"
+      - key: HAL_PUBLIC_ORIGIN
+        sync: false

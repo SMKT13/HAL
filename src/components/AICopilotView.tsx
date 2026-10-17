@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { api, when } from "../utils/api";
 import { Panel, Notice, Tabs, Field, Link } from "./UI";
 export function AICopilotView({ book, initialMode = "deliberate" }: any) {
@@ -9,16 +9,25 @@ export function AICopilotView({ book, initialMode = "deliberate" }: any) {
     [error, setError] = useState(""),
     [result, setResult] = useState<any>(null),
     [config, setConfig] = useState<any>(null);
+  const requestRevision = useRef(0);
   useEffect(() => {
     api("/api/config")
       .then(setConfig)
       .catch((e: any) => setError(e.message));
   }, []);
   useEffect(() => {
+    // Results belong to the mode and book that were submitted. Invalidate
+    // pending responses when either changes, and when the view unmounts.
+    requestRevision.current++;
     setResult(null);
     setError("");
-  }, [mode]);
+    setBusy(false);
+    return () => {
+      requestRevision.current++;
+    };
+  }, [mode, JSON.stringify(book)]);
   const run = async () => {
+    const revision = ++requestRevision.current;
     setBusy(true);
     setError("");
     setResult(null);
@@ -30,11 +39,11 @@ export function AICopilotView({ book, initialMode = "deliberate" }: any) {
           ? { book: { ...book, notes: [], bookmarks: [] } }
           : {}),
       });
-      setResult(r);
+      if (revision === requestRevision.current) setResult(r);
     } catch (e: any) {
-      setError(e.message);
+      if (revision === requestRevision.current) setError(e.message);
     } finally {
-      setBusy(false);
+      if (revision === requestRevision.current) setBusy(false);
     }
   };
   return (

@@ -132,7 +132,8 @@ const book = {
 };
 const errors = [];
 let aiCalls = 0,
-  requested = [];
+  requested = [],
+  delayedCopilot = null;
 server.stdout.on("data", (d) => console.log("server:", d.toString().trim()));
 server.stderr.on("data", (d) =>
   console.log("server error:", d.toString().trim()),
@@ -178,7 +179,17 @@ try {
       data = { aiEnabled: true, model: "qa-gemini", searchEnabled: true };
     else if (u.pathname.startsWith("/api/ai/")) {
       aiCalls++;
-      if (u.pathname.endsWith("/research"))
+      if (u.pathname.endsWith("/copilot") && delayedCopilot) {
+        delayedCopilot.started();
+        await delayedCopilot.gate;
+        data = {
+          source: "qa-gemini",
+          grounded: false,
+          generatedAt: stamp,
+          reply: "Late response for an earlier Copilot request.",
+          sources: [],
+        };
+      } else if (u.pathname.endsWith("/research"))
         data = {
           source: "qa-gemini",
           grounded: false,
@@ -347,6 +358,50 @@ try {
     .getByRole("button", { name: "Research with search", exact: true })
     .click();
   await page.getByText("No live search grounding", { exact: true }).waitFor();
+  // A late Copilot response must never render as a six-perspective result.
+  let releaseCopilot, markCopilotStarted;
+  const copilotStarted = new Promise((resolve) => {
+    markCopilotStarted = resolve;
+  });
+  delayedCopilot = {
+    started: markCopilotStarted,
+    gate: new Promise((resolve) => {
+      releaseCopilot = resolve;
+    }),
+  };
+  await page
+    .getByRole("button", { name: "Position Copilot", exact: true })
+    .click();
+  await page.getByLabel("Your question").fill("Review the recorded hedge");
+  await page.getByRole("button", { name: "Ask Copilot", exact: true }).click();
+  await copilotStarted;
+  await page
+    .getByRole("button", { name: "Six perspectives", exact: true })
+    .click();
+  const lateResponse = page.waitForResponse("**/api/ai/copilot");
+  releaseCopilot();
+  await (await lateResponse).finished();
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      ),
+  );
+  assert.deepEqual(
+    errors,
+    [],
+    "Switching AI modes while a request is pending must not crash the desk",
+  );
+  assert.equal(
+    await page
+      .getByText("Late response for an earlier Copilot request.")
+      .count(),
+    0,
+  );
+  await page
+    .getByRole("button", { name: "Run six-perspective review", exact: true })
+    .waitFor();
+  delayedCopilot = null;
   await page
     .getByRole("button", { name: "Desk settings", exact: true })
     .click();
@@ -370,13 +425,11 @@ try {
       note: "Imported charge",
     },
   ];
-  await page
-    .getByLabel("Import backup", { exact: true })
-    .setInputFiles({
-      name: "backup.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify({ book: imported })),
-    });
+  await page.getByLabel("Import backup", { exact: true }).setInputFiles({
+    name: "backup.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ book: imported })),
+  });
   await page
     .getByRole("button", { name: "Replace with reviewed backup" })
     .click();
@@ -399,13 +452,11 @@ try {
   await page
     .getByRole("button", { name: "Desk settings", exact: true })
     .click();
-  await page
-    .getByLabel("Import backup", { exact: true })
-    .setInputFiles({
-      name: "bad.json",
-      mimeType: "application/json",
-      buffer: Buffer.from('{"position":{"fq":-1}}'),
-    });
+  await page.getByLabel("Import backup", { exact: true }).setInputFiles({
+    name: "bad.json",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"position":{"fq":-1}}'),
+  });
   await page.getByText(/Import rejected:/).waitFor();
   assert.equal(
     JSON.parse(await page.evaluate(() => localStorage.getItem("hal_desk_v2")))
@@ -425,7 +476,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "PASS React desktop/mobile: six screens, exact marks, hedge immutability, chart remount, timeframe/expiry feeds, bookmarks, consent, AI errors/provenance, 12-leg import, reload persistence, recovery, invalid-import rejection, themes.",
+    "PASS React desktop/mobile: six screens, exact marks, hedge immutability, chart remount, timeframe/expiry feeds, bookmarks, consent, AI errors/provenance, AI mode-switch race, 12-leg import, reload persistence, recovery, invalid-import rejection, themes.",
   );
 } finally {
   await browser?.close();
