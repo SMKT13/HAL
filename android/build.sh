@@ -19,6 +19,10 @@ fi
 "$bt/d8" --lib "$platform" --min-api 26 --output build/dex build/classes.jar
 (cd build/dex && zip -q ../unsigned.apk classes*.dex)
 "$bt/zipalign" -f 4 build/unsigned.apk build/aligned.apk
+if [ "${HAL_UNSIGNED_ONLY:-0}" = "1" ]; then
+ echo "Unsigned validation build: android/build/aligned.apk"
+ exit 0
+fi
 if [ ! -f signing/personal.jks ]; then
  if [ "${HAL_CREATE_SIGNING_KEY:-0}" != "1" ]; then
   echo "Restore your existing private signing files to signing/ for compatible updates. For a separate new installation only, set HAL_CREATE_SIGNING_KEY=1." >&2

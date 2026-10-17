@@ -41,16 +41,23 @@ export interface Levels {
   target1?: number;
   target2?: number;
   fib: {
-    '0.236': number;
-    '0.382': number;
-    '0.5': number;
-    '0.618': number;
+    "0.236": number;
+    "0.382": number;
+    "0.5": number;
+    "0.618": number;
   };
 }
 
 export interface MarketPayload {
   quote: MarketQuote;
-  daily: Array<{ d: string; o: number; h: number; l: number; c: number; v: number }>;
+  daily: Array<{
+    d: string;
+    o: number;
+    h: number;
+    l: number;
+    c: number;
+    v: number;
+  }>;
   ind: Indicators;
   levels: Levels;
   series: {
@@ -62,7 +69,14 @@ export interface MarketPayload {
     sig: (number | null)[];
     hist: (number | null)[];
   };
-  week: Array<{ d: string; o: number; h: number; l: number; c: number; v: number }>;
+  week: Array<{
+    d: string;
+    o: number;
+    h: number;
+    l: number;
+    c: number;
+    v: number;
+  }>;
   mkt?: {
     price: number;
     prev: number;
@@ -86,7 +100,7 @@ export interface MarketPayload {
   last_session?: string;
   stale?: boolean;
   snapshot_mode?: boolean;
-  data_status?: 'live' | 'cached' | 'stale' | 'snapshot';
+  data_status?: "live" | "cached" | "stale" | "snapshot";
   market_state?: string;
 }
 
@@ -105,7 +119,7 @@ export interface NewsItem {
   published: string;
   source: string;
   official: boolean;
-  category: 'Orders' | 'Results' | 'Operations' | 'Official' | 'General';
+  category: "Orders" | "Results" | "Operations" | "Official" | "General";
   bookmarked?: boolean;
 }
 
@@ -114,7 +128,13 @@ export interface BusinessNote {
   date: string;
   title: string;
   text: string;
-  category: 'Order book' | 'Deliveries' | 'Guidance' | 'Results' | 'Operations' | 'Other';
+  category:
+    | "Order book"
+    | "Deliveries"
+    | "Guidance"
+    | "Results"
+    | "Operations"
+    | "Other";
   url?: string;
 }
 

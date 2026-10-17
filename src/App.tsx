@@ -1,362 +1,256 @@
-import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header';
-import { OverviewView } from './components/OverviewView';
-import { PositionsView } from './components/PositionsView';
-import { MarketsView } from './components/MarketsView';
-import { ResearchView } from './components/ResearchView';
-import { NewsView } from './components/NewsView';
-import { AICopilotView } from './components/AICopilotView';
-import { SettingsModal } from './components/SettingsModal';
-import { MarketPayload, FundingState, NewsItem, BusinessNote } from './types';
-import { PositionState, defaultPosition, normalize, validate } from './utils/portfolio';
-import { JournalRecord } from './utils/analytics';
-import { HAL_SNAPSHOT } from './data/halSnapshot';
+import React, { useState, useEffect, useRef } from "react";
+import { Header } from "./components/Header";
+import { OverviewView } from "./components/OverviewView";
+import { PositionsView } from "./components/PositionsView";
+import { MarketsView } from "./components/MarketsView";
+import { ResearchView } from "./components/ResearchView";
+import { NewsView } from "./components/NewsView";
+import { AICopilotView } from "./components/AICopilotView";
+import { SettingsModal } from "./components/SettingsModal";
+import { Notice } from "./components/UI";
+import { A, C } from "./utils/engine";
+import { loadBook, saveBook } from "./utils/book";
+import { api, viewerKey, when } from "./utils/api";
 
-const POS_STORAGE_KEY = 'halpos3';
-const FUNDING_STORAGE_KEY = 'halfunding';
-const JOURNAL_STORAGE_KEY = 'haljournal';
-const NOTES_STORAGE_KEY = 'halnotes';
-
-const INITIAL_NEWS: NewsItem[] = [
-  {
-    id: 'n-1',
-    title: 'Hindustan Aeronautics: Tejas Mk1A engine deliveries progress with GE Aerospace',
-    summary: 'GE Aerospace delivers additional F404-IN20 engines for the Tejas Mk1A fighter jet program, easing supply bottleneck expectations.',
-    url: 'https://hal-india.co.in/investor',
-    published: '09-Oct-2026',
-    source: 'NSE / HAL Investor Updates',
-    official: true,
-    category: 'Operations',
-    bookmarked: false
-  },
-  {
-    id: 'n-2',
-    title: 'HAL signs joint venture contract with Safran for Aravalli helicopter engines',
-    summary: 'The joint venture focuses on indigenous design, development, and production of helicopter engines for medium-lift platforms.',
-    url: 'https://hal-india.co.in/investor',
-    published: '05-Oct-2026',
-    source: 'Company Announcement',
-    official: true,
-    category: 'Orders',
-    bookmarked: true
-  },
-  {
-    id: 'n-3',
-    title: 'HAL order book crosses ₹2.54 L Cr; ₹90,000 Cr pipeline under evaluation',
-    summary: 'Robust defence procurement visibility spanning fighter aircraft, helicopters, avionics, and aero-engine overhauls.',
-    url: 'https://hal-india.co.in/investors/financial-results',
-    published: '29-Sep-2026',
-    source: 'Official Corporate Release',
-    official: true,
-    category: 'Orders',
-    bookmarked: false
-  },
-  {
-    id: 'n-4',
-    title: 'Board of Directors Meeting intimation for Q2 Financial Results',
-    summary: 'Meeting scheduled in November 2026 to review Q2 FY27 standalone and consolidated results.',
-    url: 'https://hal-india.co.in/investors/financial-results',
-    published: '24-Sep-2026',
-    source: 'NSE Corporate Filing',
-    official: true,
-    category: 'Results',
-    bookmarked: false
-  }
-];
-
-const INITIAL_NOTES: BusinessNote[] = [
-  {
-    id: 'note-1',
-    date: '2026-10-09',
-    title: 'Tejas Mk1A Engine Deliveries & Timeline',
-    category: 'Deliveries',
-    text: 'GE delivered 3 F404 engines in August. Rate expected to accelerate into FY27 to sustain delivery schedule of 16 aircraft annually.'
-  },
-  {
-    id: 'note-2',
-    date: '2026-10-05',
-    title: 'Order Book Depth & Margin Quality',
-    category: 'Order book',
-    text: 'Order book stands at ₹2.54 L Cr (~8x annual revenue). Management guiding 30-31% EBITDA margins due to high-margin spares and maintenance.'
-  },
-  {
-    id: 'note-3',
-    date: '2026-09-28',
-    title: 'Safran Helicopter Engine JV',
-    category: 'Operations',
-    text: 'Contract finalized for Aravalli engine JV to power future Indian Multi-Role Helicopter (IMRH) fleet.'
-  }
-];
-
-export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<string>('overview');
-  const [aiSubMode, setAiSubMode] = useState<'deliberation' | 'copilot' | 'research'>('deliberation');
-  const [data, setData] = useState<MarketPayload | null>(HAL_SNAPSHOT as any);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [theme, setTheme] = useState<string>('dark');
-  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-
-  // Position book state
-  const [position, setPosition] = useState<PositionState>(() => {
+export function App() {
+  const [initial] = useState(() => loadBook(localStorage));
+  const [book, setBook] = useState(initial.book),
+    [notice, setNotice] = useState(initial.notice);
+  const [tab, setTab] = useState("overview"),
+    [aiMode, setAiMode] = useState("deliberate"),
+    [settings, setSettings] = useState(false);
+  const [market, setMarket] = useState<any>(null),
+    [snapshot, setSnapshot] = useState<any>(null),
+    [loading, setLoading] = useState(false),
+    [feedError, setFeedError] = useState("");
+  const [research, setResearch] = useState<any>({});
+  const current = useRef(book);
+  current.current = book;
+  const busy = useRef(false),
+    generation = useRef(0);
+  const updateBook = (next: any) => {
     try {
-      const saved = localStorage.getItem(POS_STORAGE_KEY) || localStorage.getItem('halpos2');
-      return normalize(saved ? JSON.parse(saved) : {});
-    } catch {
-      return defaultPosition;
+      if (initial.blocked && !localStorage.getItem("hal_recovery_ack"))
+        throw Error(
+          "Recover or import the saved book in Settings before editing.",
+        );
+      const clean = saveBook(localStorage, next);
+      setBook(clean);
+      setNotice("Saved on this device.");
+    } catch (e: any) {
+      setNotice(e.message);
     }
-  });
-
-  // Funding state
-  const [funding, setFunding] = useState<FundingState>(() => {
+  };
+  const fetchResearch = async (
+    section: string,
+    frame = "D",
+    type = "consolidated",
+  ) => {
+    const key = section + ":" + frame + ":" + type;
     try {
-      const saved = localStorage.getItem(FUNDING_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : { margin: null, free: null, savedAt: null };
-    } catch {
-      return { margin: null, free: null, savedAt: null };
+      const data = await api(
+        `/api/upstox/research?section=${section}&frame=${encodeURIComponent(frame)}&type=${type}`,
+      );
+      setResearch((old: any) => ({ ...old, [key]: data }));
+      return data;
+    } catch (e: any) {
+      setResearch((old: any) => ({ ...old, [key]: { error: e.message } }));
+      throw e;
     }
-  });
-
-  // Journal state
-  const [journal, setJournal] = useState<JournalRecord[]>(() => {
-    try {
-      const saved = localStorage.getItem(JOURNAL_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
+  };
+  const refresh = async (force = false) => {
+    if (busy.current && !force) return;
+    if (!viewerKey()) {
+      setFeedError(
+        "Connect your viewer key in Desk Settings to load market data.",
+      );
+      return;
     }
-  });
-
-  // Notes state
-  const [notes, setNotes] = useState<BusinessNote[]>(() => {
-    try {
-      const saved = localStorage.getItem(NOTES_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : INITIAL_NOTES;
-    } catch {
-      return INITIAL_NOTES;
-    }
-  });
-
-  // News state
-  const [news, setNews] = useState<NewsItem[]>(INITIAL_NEWS);
-
-  // Fetch market data
-  const fetchData = async (force = false) => {
+    busy.current = true;
     setLoading(true);
-    try {
-      const res = await fetch('/api/data' + (force ? '?force=1' : ''), { cache: 'no-store' });
-      if (res.ok) {
-        const json = await res.json();
-        if (json && json.quote) {
-          setData(json);
-        }
-      }
-    } catch (err) {
-      console.warn('Market fetch error, retaining cache/snapshot:', err);
-    } finally {
+    const revision = ++generation.current;
+    const results = await Promise.allSettled([
+      api("/api/data"),
+      api("/api/upstox/hal"),
+    ]);
+    if (revision !== generation.current) return;
+    const messages: string[] = [];
+    if (results[0].status === "fulfilled") setMarket(results[0].value);
+    else {
+      setMarket((old: any) =>
+        old ? { ...old, stale: true, data_status: "stale" } : null,
+      );
+      messages.push("Daily feed: " + results[0].reason.message);
+    }
+    if (results[1].status === "fulfilled") {
+      const snap = results[1].value,
+        chains: any = {},
+        failed: string[] = [];
+      const expiries = [
+        ...new Set<string>(
+          current.current.legs
+            .filter((l: any) => l.type === "PE")
+            .map((l: any) => l.expiry),
+        ),
+      ];
+      await Promise.all(
+        expiries.map(async (expiry) => {
+          try {
+            const r = await api(
+              "/api/upstox/research?section=hedges&frame=" + expiry,
+            );
+            chains[expiry] = r.data;
+          } catch {
+            failed.push(expiry);
+          }
+        }),
+      );
+      if (revision === generation.current)
+        setSnapshot({
+          ...snap,
+          ...chains[snap.option_expiry],
+          chains,
+          failedExpiries: failed,
+          researchUnavailable: false,
+        });
+      if (failed.length)
+        messages.push("Some saved put expiry quotes could not be refreshed.");
+    } else {
+      setSnapshot((old: any) =>
+        old ? { ...old, researchUnavailable: true } : null,
+      );
+      messages.push("Broker feed: " + results[1].reason.message);
+    }
+    if (revision === generation.current) setFeedError(messages.join(" "));
+    if (revision === generation.current) {
+      busy.current = false;
       setLoading(false);
     }
   };
-
   useEffect(() => {
-    fetchData();
+    refresh();
   }, []);
-
-  // Theme application
   useEffect(() => {
-    if (theme === 'light') {
-      document.documentElement.classList.remove('dark');
-    } else if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    }
-  }, [theme]);
-
-  // Periodic auto-refresh
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const interval = setInterval(() => {
-      fetchData(false);
+    if (!book.preferences.auto) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
     }, 60000);
-    return () => clearInterval(interval);
-  }, [autoRefresh]);
-
-  // Persist position
-  const handleUpdatePosition = (newPos: PositionState) => {
-    setPosition(newPos);
-    try {
-      localStorage.setItem(POS_STORAGE_KEY, JSON.stringify(newPos));
-    } catch (err) {
-      console.warn('Failed to save position to localStorage:', err);
-    }
+    return () => clearInterval(timer);
+  }, [book.preferences.auto]);
+  useEffect(() => {
+    const media = matchMedia("(prefers-color-scheme: dark)");
+    const apply = () =>
+      document.documentElement.classList.toggle(
+        "dark",
+        book.preferences.theme === "dark" ||
+          (book.preferences.theme === "system" && media.matches),
+      );
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [book.preferences.theme]);
+  const effective = snapshot
+    ? { ...snapshot, markMode: book.preferences.markMode }
+    : null;
+  const goAI = (mode = "deliberate") => {
+    setAiMode(mode);
+    setTab("ai");
   };
-
-  // Persist funding
-  const handleUpdateFunding = (newFunding: FundingState) => {
-    setFunding(newFunding);
-    try {
-      localStorage.setItem(FUNDING_STORAGE_KEY, JSON.stringify(newFunding));
-    } catch (err) {
-      console.warn('Failed to save funding to localStorage:', err);
-    }
-  };
-
-  // Persist journal
-  const handleAddJournal = (record: JournalRecord) => {
-    const updated = [record, ...journal];
-    setJournal(updated);
-    try {
-      localStorage.setItem(JOURNAL_STORAGE_KEY, JSON.stringify(updated));
-    } catch (err) {
-      console.warn('Failed to save journal to localStorage:', err);
-    }
-  };
-
-  // Persist notes
-  const handleAddNote = (newNote: BusinessNote) => {
-    const updated = [newNote, ...notes];
-    setNotes(updated);
-    try {
-      localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(updated));
-    } catch (err) {
-      console.warn('Failed to save notes to localStorage:', err);
-    }
-  };
-
-  const handleToggleBookmark = (id: string) => {
-    setNews(news.map(item => item.id === id ? { ...item, bookmarked: !item.bookmarked } : item));
-  };
-
-  const handleExportBackup = () => {
-    const backup = {
-      version: 3,
-      exportedAt: new Date().toISOString(),
-      position,
-      funding,
-      journal,
-      notes
-    };
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `hal-desk-full-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const doc = JSON.parse(evt.target?.result as string);
-        if (doc.position) handleUpdatePosition(doc.position);
-        if (doc.funding) handleUpdateFunding(doc.funding);
-        if (Array.isArray(doc.journal)) setJournal(doc.journal);
-        if (Array.isArray(doc.notes)) setNotes(doc.notes);
-      } catch (err: any) {
-        console.warn('Import failed:', err);
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
   return (
-    <div className="min-h-screen bg-[#0b1020] text-[#edf3ff] flex flex-col font-sans">
+    <>
       <Header
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onRefresh={() => fetchData(true)}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        activeTab={tab}
+        onTabChange={setTab}
+        onRefresh={() => refresh()}
+        onOpenSettings={() => setSettings(true)}
         loading={loading}
-        dataStatus={data?.data_status}
-        lastSession={data?.last_session}
+        dataStatus={
+          snapshot && !snapshot.researchUnavailable
+            ? C.freshness(snapshot) === "Recent market quote"
+              ? "live"
+              : "stale"
+            : market?.data_status || "unavailable"
+        }
+        lastSession={market?.last_session}
       />
-
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 pb-20">
-        {activeTab === 'overview' && (
+      <main className="desk-shell">
+        <div className="desk-caption">
+          <span>PERSONAL RESEARCH TERMINAL</span>
+          <span>HAL · INDIA / NSE</span>
+        </div>
+        <Notice>{feedError}</Notice>
+        <Notice>{notice}</Notice>
+        {tab === "overview" && (
           <OverviewView
-            data={data}
-            position={position}
-            onNavigate={(tab) => {
-              if (tab === 'ai') setAiSubMode('copilot');
-              setActiveTab(tab);
-            }}
+            market={market}
+            snapshot={effective}
+            book={book}
+            goAI={goAI}
+            navigate={setTab}
           />
         )}
-        {activeTab === 'positions' && (
+        {tab === "positions" && (
           <PositionsView
-            data={data}
-            position={position}
-            onUpdatePosition={handleUpdatePosition}
-            funding={funding}
-            onUpdateFunding={handleUpdateFunding}
-            journal={journal}
-            onAddJournal={handleAddJournal}
-            onNavigateToAI={(mode) => {
-              setAiSubMode(mode || 'copilot');
-              setActiveTab('ai');
-            }}
+            book={book}
+            updateBook={updateBook}
+            snapshot={effective}
+            fetchResearch={fetchResearch}
+            goAI={goAI}
           />
         )}
-        {activeTab === 'markets' && <MarketsView data={data} />}
-        {activeTab === 'research' && (
+        {tab === "markets" && (
+          <MarketsView
+            market={market}
+            snapshot={effective}
+            fetchResearch={fetchResearch}
+            research={research}
+          />
+        )}
+        {tab === "research" && (
           <ResearchView
-            data={data}
-            notes={notes}
-            onAddNote={handleAddNote}
-            onNavigateToAI={(mode) => {
-              setAiSubMode(mode || 'deliberation');
-              setActiveTab('ai');
-            }}
+            book={book}
+            updateBook={updateBook}
+            fetchResearch={fetchResearch}
+            research={research}
+            goAI={goAI}
           />
         )}
-        {activeTab === 'news' && (
+        {tab === "news" && (
           <NewsView
-            news={news}
-            onToggleBookmark={handleToggleBookmark}
-            onRefreshNews={() => fetchData(true)}
+            book={book}
+            updateBook={updateBook}
+            fetchResearch={fetchResearch}
+            research={research}
           />
         )}
-        {activeTab === 'ai' && (
-          <AICopilotView
-            data={data}
-            position={position}
-            initialSubMode={aiSubMode}
-            onAddNote={handleAddNote}
-            onNavigateToPositions={() => setActiveTab('positions')}
-          />
-        )}
+        {tab === "ai" && <AICopilotView book={book} initialMode={aiMode} />}
+        <footer>
+          Monitoring only · Quotes may be delayed · Provider time:{" "}
+          {when(snapshot?.spot?.quote_as_of || market?.quote_as_of)} · No order
+          execution
+        </footer>
       </main>
-
-      <footer className="border-t border-[#1b283a] py-6 text-center text-xs text-[#a8b6c9] bg-[#0c111b]/80">
-        <p>
-          HAL Desk 2.1 · Hindustan Aeronautics (NSE: HAL) · Personal Research &amp; Risk Dashboard
-        </p>
-        <p className="mt-1 text-[11px] text-[#a8b6c9]/70">
-          Delayed market data. Model estimates and scenarios are educational; confirm executable prices, margins, expiry, and delivery obligations with your broker.
-        </p>
-      </footer>
-
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        theme={theme}
-        onChangeTheme={setTheme}
-        autoRefresh={autoRefresh}
-        onToggleAutoRefresh={setAutoRefresh}
-        data={data}
-        onExportBackup={handleExportBackup}
-        onImportBackup={handleImportBackup}
-      />
-    </div>
+      {settings && (
+        <SettingsModal
+          book={book}
+          updateBook={updateBook}
+          onImport={(next: any) => {
+            initial.blocked = false;
+            setBook(next);
+            setNotice(
+              "Backup imported and saved. Previous data is retained as a recovery copy.",
+            );
+          }}
+          onConnect={() => {
+            setResearch({});
+            setSnapshot(null);
+            setMarket(null);
+            setSettings(false);
+            refresh(true);
+          }}
+          onClose={() => setSettings(false)}
+        />
+      )}
+    </>
   );
-};
+}
