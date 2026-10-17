@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+node_modules
+dist
+**/__pycache__
+android/build
+android/signing
+*.apk
+cache.json
+test-results

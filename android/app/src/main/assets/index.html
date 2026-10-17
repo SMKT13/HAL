@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0b1020"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>HAL Desk</title><link rel="stylesheet" href="style.css"></head><body>
+<svg class="icon-defs" aria-hidden="true"><defs><symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10h-6v-7H9v7H3Z"/></symbol><symbol id="i-stack" viewBox="0 0 24 24"><path d="m3 7 9-4 9 4-9 4Zm0 5 9 4 9-4M3 17l9 4 9-4"/></symbol><symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 3v18h17M7 15l4-5 4 2 6-7"/></symbol><symbol id="i-research" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M7 11l2-3 3 2"/></symbol><symbol id="i-news" viewBox="0 0 24 24"><path d="M4 3h13v18H4ZM17 8h4v11a2 2 0 0 1-4 0M7 7h7M7 11h7M7 15h4"/></symbol><symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 10a8 8 0 1 0-1 7M20 4v6h-6"/></symbol><symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol><symbol id="i-expand" viewBox="0 0 24 24"><path d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6"/></symbol></defs></svg>
+<header class="app-header"><div class="brand"><div class="monogram">H<span></span></div><div><b>HAL<span class="brand-light"> Desk</span></b><small>RESEARCH &amp; RISK</small></div></div><div class="header-actions"><span class="read-only">READ ONLY</span><button class="icon-button" id="settings" aria-label="Settings"><svg><use href="#i-settings"/></svg></button></div></header>
+<main><div class="status-line"><span><i id="connection-dot"></i><span id="connection-label">Connect your data</span></span><span id="market-status">NSE · HAL</span></div><div id="notice" class="notice hidden" role="status" aria-live="polite"></div>
+<section id="view-overview" class="view active">
+<div class="hero"><div class="eyebrow">HINDUSTAN AERONAUTICS <span>NSE: HAL</span></div><div class="quote-row"><h1 id="spot">₹—</h1><button class="icon-button" id="refresh" aria-label="Refresh market data"><svg><use href="#i-refresh"/></svg></button></div><div id="change" class="price-change">Your market. Your perspective.</div><div id="overview-chart" class="mini-chart"><div class="chart-empty">Your HAL price history will appear here.</div></div><div class="hero-footer"><span id="quote-age">Awaiting market data</span><button class="text-button" data-go="markets">Explore market ↗</button></div></div>
+<div id="welcome" class="connect-card"><span class="eyebrow">WELCOME TO YOUR DESK</span><h2>A clearer view of every position.</h2><p>Connect Upstox for HAL market data, research and your hedge overview.</p><button id="connect" class="primary">Connect Upstox <svg><use href="#i-arrow"/></svg></button><span class="fine">Your credential stays encrypted on this phone.</span></div>
+<div class="section-heading"><h2>Your position</h2><button class="text-button" data-go="positions">View basket ↗</button></div><div class="basket-overview card"><div class="metric-label">OPEN POSITION P&amp;L · INDICATIVE</div><div class="big-value" id="home-pnl">₹—</div><div id="home-pnl-note" class="small muted">Add your current futures and protective puts.</div><div class="metric-grid three"><div><small>FUTURES UNITS</small><b id="home-units">—</b></div><div><small>PUT COVERAGE</small><b id="home-coverage">—</b></div><div><small>NEXT EXPIRY</small><b id="home-expiry">—</b></div></div></div>
+<div class="section-heading"><h2>On your radar</h2><span class="pill">POSITION INSIGHTS</span></div><div id="home-insights" class="stack"></div><div class="section-heading"><h2>Since your last visit</h2></div><div id="since-visit" class="card muted">Your first snapshot establishes a comparison point.</div><div class="section-heading"><h2>Latest developments</h2><button class="text-button" data-go="news">All news ↗</button></div><div id="home-news" class="stack"></div><div class="section-heading"><h2>Upcoming events</h2></div><div id="home-events" class="card"></div>
+</section>
+<section id="view-positions" class="view"><div class="page-heading"><span class="eyebrow">YOUR HAL STRATEGY</span><h1>Position desk</h1><p>Understand your exposure. Keep the longer view.</p></div><div class="pnl-hero card"><div class="metric-label">OPEN POSITION P&amp;L</div><strong id="basket-pnl" class="big-value">₹—</strong><p id="pnl-note" class="small muted"></p><label class="inline-label">Mark basis<select id="mark-mode"><option value="ltp">Last traded price</option><option value="bid">Indicative bid</option></select></label></div><div class="segmented" id="position-tabs"><button data-panel="book" class="selected">Book</button><button data-panel="risk">Risk</button><button data-panel="scenario">Scenarios</button><button data-panel="hedge">Find a hedge</button><button data-panel="journal">Journal</button></div>
+<div id="position-book" class="subpanel active"><div id="position-results" class="stack"></div><details id="position-editor" class="card editor"><summary>Edit your open positions</summary><p class="small muted">Manual records. Check current contracts and quantities against your broker.</p><button id="saved-plan" class="text-button">Load earlier October template</button><div id="position-form" class="stack"></div><div class="button-row"><button id="add-leg" class="secondary">+ Add leg</button><button id="fill-lots" class="secondary">Use listed lot sizes</button></div><button id="save-positions" class="primary full">Save open book</button><p id="form-message" role="status" class="small"></p></details><div class="section-heading"><h2>Funding snapshot</h2><span class="pill">MANUAL</span></div><div class="card"><div class="form-grid"><label>Margin used (₹)<input id="funding-margin" type="number" min="0" inputmode="decimal"></label><label>Free funds (₹)<input id="funding-free" type="number" min="0" inputmode="decimal"></label></div><button id="save-funding" class="secondary">Save funding snapshot</button><p id="funding-note" class="small muted">Funds and margin are separate from strategy P&amp;L.</p></div></div>
+<div id="position-risk" class="subpanel"><div id="risk-metrics" class="metric-grid two"></div><p class="footnote">Provider Greeks are indicative and may be stale. Delta assumes futures sensitivity of one per unit; theta is estimated rupees per calendar day. Quantity coverage is not a maximum-loss guarantee.</p><div id="risk-insights" class="stack"></div><div class="section-heading"><h2>Expiry timeline</h2></div><div id="expiry-timeline" class="card"></div><div class="section-heading"><h2>Futures rollover comparison</h2></div><div class="card"><div class="form-grid"><label>Current contract<select id="roll-from"></select></label><label>Later contract<select id="roll-to"></select></label></div><div class="metric-label">LATER MINUS CURRENT · PER UNIT</div><div id="roll-spread" class="medium-value">₹—</div><p id="roll-note" class="small muted"></p></div></div>
+<div id="position-scenario" class="subpanel"><div class="card"><span class="eyebrow">HYPOTHETICAL · MODEL ESTIMATE</span><h2>Explore the possibilities</h2><p class="small muted">Model price, time and volatility together, up to the first expiry in your basket.</p><div class="form-grid"><label>HAL scenario price (₹)<input id="scenario-price" type="number" min="1" inputmode="decimal"></label><label>Days from now<input id="scenario-days" type="number" min="0" step="1" value="0" inputmode="numeric"></label><label>IV change (percentage points)<input id="scenario-iv" type="number" value="0" step="1" inputmode="decimal"></label><label>IV if unavailable (%)<input id="scenario-fallback" type="number" min="0" placeholder="Explicit assumption" inputmode="decimal"></label></div><div class="chips" id="scenario-shocks"><button data-shock="-5">−5%</button><button data-shock="-3">−3%</button><button data-shock="-1">−1%</button><button data-shock="0">Current</button><button data-shock="3">+3%</button><button data-shock="5">+5%</button></div><details><summary>Model assumptions</summary><div class="form-grid"><label>Risk-free rate (% / year)<input id="scenario-rate" type="number" value="6" inputmode="decimal"></label><label>Dividend yield (% / year)<input id="scenario-dividend" type="number" value="0" inputmode="decimal"></label></div><p class="small muted">6% interest and 0% dividend are editable assumptions. Puts use European Black–Scholes; futures keep their quoted basis before expiry. No price path, margin or execution prediction. Model values can differ from current marks even with no price change.</p></details><div class="scenario-output"><small>MODEL BASKET P&amp;L · BEFORE COSTS</small><strong id="scenario-pnl">₹—</strong><p id="scenario-note" class="small muted"></p></div><div id="scenario-rows"></div></div><div class="card"><h3>At a shared expiry</h3><p class="small muted">Exact intrinsic-value payoff is available when every leg has the same expiry.</p><div id="expiry-payoff" class="medium-value">₹—</div><p id="expiry-payoff-note" class="small muted"></p></div></div>
+<div id="position-hedge" class="subpanel">
+<div class="card hedge-intro"><span class="eyebrow">PROTECTION, WITH PERSPECTIVE</span><h2>Find a hedge</h2><p class="small muted">Compare puts against your saved long HAL futures. Explore the cost of protection and how your current hedge measures up.</p><div id="hedge-controls"><div class="form-grid">
+<label>New-hedge budget (₹)<input id="hedge-budget" type="number" min="0" inputmode="decimal" placeholder="Your premium budget"></label>
+<label>Sampled-loss limit (₹)<input id="hedge-maxLoss" type="number" min="0" inputmode="decimal" placeholder="Additional loss from now"></label>
+<label class="hedge-date">Protect through<input id="hedge-protectThrough" type="date"></label></div>
+<p class="fine">Budget is before selling existing puts. The loss limit applies to modelled scenarios, not every possible outcome. Protection runs through 15:30 IST on the chosen date.</p>
+<details><summary>Costs, liquidity &amp; model assumptions</summary><div class="form-grid">
+<label>New-put total charges (₹)<input id="hedge-buyFees" type="number" min="0" inputmode="decimal"></label>
+<label>Existing-put total exit charges (₹)<input id="hedge-exitFees" type="number" min="0" inputmode="decimal"></label>
+<label>Slippage each side (%)<input id="hedge-slippage" type="number" min="0" max="10" step="0.1" inputmode="decimal"></label>
+<label>Maximum bid/ask spread (%)<input id="hedge-maxSpread" type="number" min="0" max="50" step="0.5" inputmode="decimal"></label>
+<label>IV change (percentage points)<input id="hedge-ivShift" type="number" min="-100" max="100" inputmode="decimal"></label>
+<label>Interest rate (% / year)<input id="hedge-rate" type="number" min="-5" max="50" inputmode="decimal"></label>
+<label>Dividend yield (% / year)<input id="hedge-dividend" type="number" min="0" max="50" inputmode="decimal"></label></div>
+<p class="fine">Defaults: 0.5% slippage per side, 10% spread limit, 6% interest and 0% dividend. These are editable assumptions. Quotes must be within 2 minutes, option/futures trades within 15 minutes, spot trade within 2 minutes, volume and OI positive, and top-of-book quantity sufficient for all units. Whole put lots must match futures units exactly.</p></details></div>
+<button id="hedge-refresh" class="primary full">Save settings &amp; refresh comparisons</button><p id="hedge-status" class="small muted" role="status" aria-live="polite"></p></div>
+<div id="hedge-results"></div><details class="card"><summary>How the shortlist is calculated</summary><p class="small muted">Lower cost uses the lowest total new-hedge cost. Stronger protection uses the smallest largest loss across the sampled scenarios. Balanced gives equal weight to cost and sampled loss after scaling each from 0 to 1 among qualifying puts, then minimises the sum of their squares. The same contract can win several categories. This is a transparent comparison, not a forecast or a probability score.</p><p class="small muted">European Black–Scholes estimates put values using provider IV plus your change. Futures keep their current basis before expiry and settle at the scenario spot at expiry. Prices can differ from model values even when HAL is unchanged. Scenarios do not predict the price path, future volatility surface, fills, margin calls or physical settlement funding. Keep-current comparisons stop at the first existing put expiry. Review actual broker settlement obligations separately.</p></details>
+</div>
+<div id="position-journal" class="subpanel"><div id="journal-metrics" class="metric-grid two"></div><p class="footnote">Net option premiums are already reflected in position P&amp;L; they are not deducted again. Settlement cash entries are tracked separately and do not change strategy P&amp;L.</p><div class="button-row"><button id="add-journal" class="secondary">+ Cash / cost entry</button><button id="export-csv" class="secondary">Export CSV</button></div><div id="journal-list" class="stack"></div><div class="section-heading"><h2>Recorded snapshots</h2></div><div id="history-list" class="card"></div></div></section>
+<section id="view-markets" class="view"><div class="page-heading"><span class="eyebrow">NSE · CASH &amp; DERIVATIVES</span><h1>Market view</h1><p>Price, participation and the cost of protection.</p></div><div class="chart-card card" id="market-chart-card"><div class="chart-toolbar"><div class="segmented compact timeframe"><button data-frame="D" class="selected">Daily</button><button data-frame="15m">15 min</button><button data-frame="1h">1 hour</button></div><button class="icon-button" id="expand-chart" aria-label="Expand chart"><svg><use href="#i-expand"/></svg></button></div><div id="chart-legend" class="small muted">HAL · candlesticks · SMA 20 / 50</div><div id="market-chart" class="price-chart"><div class="chart-empty">Connect to load historical candles.</div></div><div class="chart-credit">Charts by <button class="text-button source-link" data-url="https://www.tradingview.com/">TradingView Lightweight Charts ↗</button></div><div id="candle-status" class="small muted"></div></div><div class="metric-grid four" id="market-ohlc"></div><div class="segmented" id="market-tabs"><button class="selected" data-panel="futures">Futures</button><button data-panel="options">Option chain</button></div><div id="market-futures" class="subpanel active"><div id="futures" class="stack"></div></div><div id="market-options" class="subpanel"><div class="form-grid"><label>Expiry<select id="expiry"><option value="">Connect to load</option></select></label><label>Strike search<input id="strike-filter" type="number" placeholder="Search strike" inputmode="numeric"></label></div><div class="segmented compact" id="chain-mode"><button data-mode="puts" class="selected">Puts</button><button data-mode="calls">Calls</button><button data-mode="greeks">Put Greeks</button></div><p id="chain-summary" class="small muted"></p><div class="table-wrap"><table><thead id="chain-head"></thead><tbody id="chain-body"></tbody></table></div><p class="footnote">The chain has no per-contract timestamp. Retrieval time does not verify when each option last traded. LTP and displayed bids are indicative.</p></div></section>
+<section id="view-research" class="view"><div class="page-heading"><span class="eyebrow">EVIDENCE BEFORE OPINION</span><h1>HAL research</h1><p>Business performance. Market structure. Context.</p></div><div class="segmented" id="research-tabs"><button data-panel="technical" class="selected">Technical</button><button data-panel="fundamental">Fundamental</button><button data-panel="business">Business</button></div><div id="research-technical" class="subpanel active"><div class="section-heading"><h2>Completed-bar analysis</h2><button id="refresh-technical" class="text-button">Refresh ↻</button></div><div class="segmented compact timeframe"><button data-frame="D" class="selected">Daily</button><button data-frame="15m">15 min</button><button data-frame="1h">1 hour</button></div><div id="technical-summary" class="card"></div><div id="technical-metrics" class="metric-grid two"></div><div class="section-heading"><h2>Evidence &amp; levels</h2></div><div id="technical-evidence" class="card"></div><div id="technical-scenarios" class="stack"></div></div><div id="research-fundamental" class="subpanel"><div class="form-grid"><label>Statement basis<select id="statement-type"><option value="consolidated">Consolidated</option><option value="standalone">Standalone</option></select></label><button id="refresh-fundamentals" class="secondary align-bottom">Refresh financials</button></div><div id="fundamental-status" class="small muted"></div><div id="fundamental-summary" class="card"></div><div id="financials"></div><div class="section-heading"><h2>Valuation &amp; returns</h2></div><div id="ratios" class="card"></div><div class="section-heading"><h2>Cash flow &amp; balance sheet</h2></div><div id="balance-cash" class="stack"></div><div class="section-heading"><h2>Shareholding</h2></div><div id="shareholding" class="card"></div><div class="section-heading"><h2>Sector context</h2></div><div id="peer-context" class="card"></div></div><div id="research-business" class="subpanel"><div class="card accent-card"><span class="eyebrow">HAL BUSINESS JOURNAL</span><h2>Keep the thesis accountable.</h2><p>Save sourced notes on order book, deliveries, guidance and results. Distinguish reported facts from your interpretation.</p><button id="add-note" class="primary">+ Add sourced note</button></div><div id="business-notes" class="stack"></div><div class="section-heading"><h2>Official disclosures</h2><button id="refresh-filings" class="text-button">Refresh ↻</button></div><div id="filing-status" class="small muted"></div><div id="filings" class="stack"></div><div class="button-row"><button class="secondary source-link" data-url="https://hal-india.co.in/investor">HAL investor relations ↗</button><button class="secondary source-link" data-url="https://www.nseindia.com/companies-listing/corporate-filings-announcements">NSE filings ↗</button></div></div></section>
+<section id="view-news" class="view"><div class="page-heading"><span class="eyebrow">THE DEVELOPMENTS THAT MATTER</span><div class="title-row"><h1>Newsroom</h1><button id="refresh-news" class="icon-button" aria-label="Refresh news"><svg><use href="#i-refresh"/></svg></button></div><p>HAL headlines and official company disclosures.</p></div><div class="chips" id="news-filters"><button data-filter="all" class="selected">All</button><button data-filter="official">Official</button><button data-filter="Orders">Orders</button><button data-filter="Results">Results</button><button data-filter="Operations">Operations</button><button data-filter="saved">Saved</button></div><p id="news-status" class="small muted"></p><div id="news-list" class="stack"></div></section>
+<footer class="page-footer">Personal research · Market data may be delayed<br><span>HAL Desk 2.1 · Unofficial personal app</span></footer></main>
+<nav class="bottom-nav" aria-label="Main navigation"><button data-tab="overview" class="selected"><svg><use href="#i-home"/></svg><span>Overview</span></button><button data-tab="positions"><svg><use href="#i-stack"/></svg><span>Positions</span></button><button data-tab="markets"><svg><use href="#i-chart"/></svg><span>Markets</span></button><button data-tab="research"><svg><use href="#i-research"/></svg><span>Research</span></button><button data-tab="news"><svg><use href="#i-news"/></svg><span>News</span></button></nav>
+<dialog id="settings-dialog"><div class="dialog-heading"><h2>Your desk</h2><button data-close="settings-dialog" class="icon-button" aria-label="Close settings">×</button></div><div class="dialog-content"><label>Appearance<select id="theme"><option value="dark">Graphite dark</option><option value="light">Paper light</option><option value="system">Follow device</option></select></label><label class="check-label"><input id="auto" type="checkbox" checked> Refresh market quotes every 60 seconds while open</label><div class="settings-block"><h3>Connection</h3><p id="connection-type" class="small muted">Direct Upstox</p><button id="manage-connection" class="primary full">Manage secure connection</button><button id="token-page" class="text-button">Upstox Developer Apps ↗</button></div><div class="settings-block"><h3>Backup &amp; portability</h3><p class="small muted">Back up positions, journal, notes and bookmarks. Tokens are excluded. Keep your financial backup private.</p><div class="button-row"><button id="export-backup" class="secondary">Save backup</button><button id="import-backup" class="secondary">Import backup</button></div><button id="restore-backup" class="text-button">Review previous import recovery copy</button><button id="settings-export-csv" class="text-button">Export journal CSV</button></div><div class="settings-block"><h3>Data health</h3><div id="data-health"></div><p class="small muted">Cached snapshots are available offline. Research refreshes separately from market quotes.</p></div><div class="settings-block"><details><summary>Open source notices</summary><p class="small">TradingView Lightweight Charts™
+Copyright (с) 2025 TradingView, Inc. https://www.tradingview.com/
+</p><pre style="white-space:pre-wrap;font-size:11px;max-height:280px;overflow:auto">                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      &quot;License&quot; shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      &quot;Licensor&quot; shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      &quot;Legal Entity&quot; shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      &quot;control&quot; means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      &quot;You&quot; (or &quot;Your&quot;) shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      &quot;Source&quot; form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      &quot;Object&quot; form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      &quot;Work&quot; shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      &quot;Derivative Works&quot; shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      &quot;Contribution&quot; shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, &quot;submitted&quot;
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as &quot;Not a Contribution.&quot;
+
+      &quot;Contributor&quot; shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a &quot;NOTICE&quot; text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an &quot;AS IS&quot; BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets &quot;[]&quot;
+      replaced with your own identifying information. (Don&#x27;t include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same &quot;printed page&quot; as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright 2023 TradingView, Inc.
+
+   Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+</pre></details></div><div class="settings-block"><button id="research-web" class="text-button">Open your web dashboard ↗</button><p class="fine">No order operations, analytics or advertisements. Manual records stay on this phone. Uninstalling removes them; export a backup first.</p></div></div></dialog>
+<dialog id="action-dialog"><div class="dialog-heading"><h2 id="action-title"></h2><button data-close="action-dialog" class="icon-button" aria-label="Close form">×</button></div><div id="action-body" class="dialog-content"></div><div class="dialog-actions"><p id="action-error" class="small negative" role="status"></p><button id="action-save" class="primary full">Save</button></div></dialog><div id="toast" role="status" aria-live="polite"></div>
+<script src="core.js"></script><script src="analytics.js"></script><script src="hedge.js"></script><script src="hedge-ui.js"></script><script src="lightweight-charts.js"></script><script src="charts.js"></script><script src="app.js"></script></body></html>

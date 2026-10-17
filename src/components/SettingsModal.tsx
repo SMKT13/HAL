@@ -1,148 +1,177 @@
-import React from 'react';
-import { MarketPayload } from '../types';
-import { X, ShieldCheck, Download, Upload, FileText, CheckCircle2 } from 'lucide-react';
-
-interface SettingsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  theme: string;
-  onChangeTheme: (theme: string) => void;
-  autoRefresh: boolean;
-  onToggleAutoRefresh: (val: boolean) => void;
-  data: MarketPayload | null;
-  onExportBackup: () => void;
-  onImportBackup: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}
-
-export const SettingsModal: React.FC<SettingsModalProps> = ({
-  isOpen,
+import React, { useState } from "react";
+import { viewerKey, setViewerKey } from "../utils/api";
+import { importBook, replaceBook, download, RECOVERY_KEY } from "../utils/book";
+import { Notice, Field } from "./UI";
+export function SettingsModal({
+  book,
+  updateBook,
+  onImport,
+  onConnect,
   onClose,
-  theme,
-  onChangeTheme,
-  autoRefresh,
-  onToggleAutoRefresh,
-  data,
-  onExportBackup,
-  onImportBackup
-}) => {
-  if (!isOpen) return null;
-
+}: any) {
+  const [key, setKey] = useState(viewerKey()),
+    [message, setMessage] = useState(""),
+    [pending, setPending] = useState<any>(null);
+  const preview = async (file?: File) => {
+    if (!file) return;
+    try {
+      if (file.size > 2000000) throw Error("Backup exceeds 2 MB.");
+      setPending(importBook(JSON.parse(await file.text())));
+      setMessage(
+        "Backup validated. Review the counts before replacing the local book.",
+      );
+    } catch (e: any) {
+      setPending(null);
+      setMessage("Import rejected: " + e.message);
+    }
+  };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#141d2b] border border-[#2b3a50] rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[#1b283a] pb-4">
-          <div>
-            <h2 className="text-lg font-bold text-white">Your desk settings</h2>
-            <p className="text-xs text-[#a8b6c9]">HAL Desk configuration and data management.</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-[#a8b6c9] hover:text-white hover:bg-[#1b283a]"
-          >
-            <X className="w-5 h-5" />
-          </button>
+    <div className="modal-backdrop" onClick={onClose}>
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="Desk settings"
+        className="modal panel"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="panel-head">
+          <h2>Desk settings & backup</h2>
+          <button onClick={onClose}>Close</button>
         </div>
-
-        {/* Appearance & Refresh */}
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-white block mb-1.5">Appearance</label>
+        <h3>Connection</h3>
+        <p className="muted small">
+          Use the server’s HAL viewer key. Upstox and Gemini keys stay on the
+          server. The viewer key is kept only for this browser session and
+          excluded from backups.
+        </p>
+        <Field label="Viewer key">
+          <input
+            type="password"
+            autoComplete="off"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+          />
+        </Field>
+        <button
+          className="primary"
+          onClick={() => {
+            setViewerKey(key);
+            onConnect();
+          }}
+        >
+          Connect & refresh
+        </button>
+        <h3>Appearance & refresh</h3>
+        <div className="form-grid">
+          <Field label="Theme">
             <select
-              value={theme}
-              onChange={(e) => onChangeTheme(e.target.value)}
-              className="w-full bg-[#1b283a] border border-[#2b3a50] rounded-lg px-3 py-2 text-xs text-white"
+              aria-label="Theme"
+              value={book.preferences.theme}
+              onChange={(e) =>
+                updateBook({
+                  ...book,
+                  preferences: { ...book.preferences, theme: e.target.value },
+                })
+              }
             >
-              <option value="dark">Graphite dark (Default)</option>
-              <option value="light">Paper light</option>
-              <option value="system">Follow device</option>
+              <option value="dark">Midnight</option>
+              <option value="light">Light</option>
+              <option value="system">System</option>
             </select>
-          </div>
-
-          <label className="flex items-center gap-2.5 text-xs text-[#a8b6c9] cursor-pointer">
+          </Field>
+          <label className="consent">
             <input
               type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => onToggleAutoRefresh(e.target.checked)}
-              className="rounded bg-[#1b283a] border-[#2b3a50] text-[#83caff] focus:ring-0"
-            >
-            </input>
-            <span>Auto-refresh market quotes every 60 seconds while open</span>
+              checked={book.preferences.auto}
+              onChange={(e) =>
+                updateBook({
+                  ...book,
+                  preferences: { ...book.preferences, auto: e.target.checked },
+                })
+              }
+            />
+            Refresh every minute while visible
           </label>
         </div>
-
-        {/* Connection */}
-        <div className="p-4 rounded-xl bg-[#1b283a] border border-[#2b3a50] space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-              Connection Architecture
-            </h3>
-            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
-              Active / Fallback Ready
-            </span>
-          </div>
-          <p className="text-xs text-[#a8b6c9]">
-            Read-only market data via Yahoo Finance chart proxy with local fallback to the verified 09-Oct-2026 snapshot.
-          </p>
+        <h3>Local book & backups</h3>
+        <p className="muted small">
+          Positions, journal, notes, bookmarks, hedge settings and preferences
+          stay in this browser. They are shared with Gemini only when you
+          explicitly run an AI request. Browser storage can be cleared; export a
+          backup regularly.
+        </p>
+        <div className="actions">
+          <button
+            onClick={() =>
+              download("hal-desk-backup.json", {
+                app: "HAL Desk",
+                schema: 2,
+                exportedAt: new Date().toISOString(),
+                book,
+              })
+            }
+          >
+            Export full backup
+          </button>
+          <label className="button">
+            Import backup
+            <input
+              aria-label="Import backup"
+              type="file"
+              accept=".json,application/json"
+              onChange={(e) => {
+                preview(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <button
+            onClick={() => {
+              try {
+                const raw = localStorage.getItem(RECOVERY_KEY);
+                if (!raw) throw Error("No recovery copy available.");
+                setPending(importBook(JSON.parse(raw)));
+                setMessage("Recovery copy loaded for review.");
+              } catch (e: any) {
+                setMessage(e.message);
+              }
+            }}
+          >
+            Review recovery copy
+          </button>
         </div>
-
-        {/* Backup & Portability */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-            Backup &amp; Portability
-          </h3>
-          <p className="text-xs text-[#a8b6c9]">
-            Back up positions, journal, and notes. Financial data is kept strictly inside your browser local storage.
-          </p>
-
-          <div className="flex gap-3">
+        <Notice>{message}</Notice>
+        {pending && (
+          <div className="import-review">
+            <h3>Review replacement</h3>
+            <p>
+              {pending.legs.length} open legs · {pending.journal.length} journal
+              entries · {pending.notes.length} notes ·{" "}
+              {pending.bookmarks.length} bookmarks
+              {pending.legacy ? " · Legacy reconciliation retained" : ""}
+            </p>
+            <p className="muted small">
+              The current saved book will be retained as a recovery copy.
+            </p>
             <button
-              onClick={onExportBackup}
-              className="flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg bg-[#1f344c] border border-[#4a7194] text-[#83caff] hover:bg-[#284363]"
+              className="primary"
+              onClick={() => {
+                try {
+                  const clean = replaceBook(localStorage, book, pending);
+                  onImport(clean);
+                  setPending(null);
+                  setMessage("Imported and saved.");
+                } catch (e: any) {
+                  setMessage(e.message);
+                }
+              }}
             >
-              <Download className="w-4 h-4" />
-              Save Backup
+              Replace with reviewed backup
             </button>
-            <label className="flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg bg-[#1f344c] border border-[#4a7194] text-[#83caff] hover:bg-[#284363] cursor-pointer">
-              <Upload className="w-4 h-4" />
-              Import Backup
-              <input type="file" accept=".json,application/json" onChange={onImportBackup} className="hidden" />
-            </label>
+            <button onClick={() => setPending(null)}>Cancel</button>
           </div>
-        </div>
-
-        {/* Data Health */}
-        <div className="p-4 rounded-xl bg-[#1b283a] border border-[#2b3a50] space-y-2 text-xs">
-          <h3 className="font-bold text-white uppercase tracking-wider text-[11px]">
-            Data Health &amp; Diagnostics
-          </h3>
-          <div className="grid grid-cols-2 gap-2 text-[#a8b6c9]">
-            <div>
-              <span>Feed Status:</span> <strong className="text-white">{data?.data_status || 'snapshot'}</strong>
-            </div>
-            <div>
-              <span>Quote Time:</span> <strong className="text-white">{data?.quote_as_of ? new Date(data.quote_as_of).toLocaleTimeString('en-IN') : 'Cached'}</strong>
-            </div>
-            <div>
-              <span>Daily Session:</span> <strong className="text-white">{data?.last_session || '2026-10-09'}</strong>
-            </div>
-            <div>
-              <span>Stale Flag:</span> <strong className="text-white">{data?.stale ? 'Yes' : 'No'}</strong>
-            </div>
-          </div>
-        </div>
-
-        {/* Notices */}
-        <details className="text-xs text-[#a8b6c9] border-t border-[#1b283a] pt-3">
-          <summary className="cursor-pointer text-[#83caff] font-semibold">
-            Open Source Notices &amp; Attributions
-          </summary>
-          <div className="mt-2 p-3 bg-[#0c111b] rounded-lg border border-[#2b3a50] space-y-1 font-mono text-[10px]">
-            <p className="text-white font-bold">TradingView Lightweight Charts™</p>
-            <p>Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/</p>
-            <p>Licensed under the Apache License, Version 2.0.</p>
-          </div>
-        </details>
-      </div>
+        )}
+      </section>
     </div>
   );
-};
+}
