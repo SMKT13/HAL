@@ -17,7 +17,7 @@ npm run dev
 
 Open `http://localhost:3000`. Enter `HAL_VIEWER_KEY` in **Desk settings**. This is a separate random password, never your Upstox token. It is required for every data and AI API route and is stored in browser session storage, excluded from backups.
 
-After configuring `.env`, `bash run.sh` (Mac/Linux) or `run.bat` (Windows) starts the same integrated desk and installs npm dependencies on first use. The gateway uses `python` on Windows and `python3` elsewhere unless `PYTHON` is set.
+After configuring `.env`, `bash run.sh` (Mac/Linux) or `run.bat` (Windows) starts the same integrated desk and installs npm dependencies on first use. The gateway resolves `PYTHON` after loading `.env`; it defaults to `python` on Windows and `python3` elsewhere.
 
 For production:
 

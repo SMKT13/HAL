@@ -3,7 +3,6 @@ set -eu
 cd "$(dirname "$0")"
 command -v node >/dev/null || { echo "Install Node 22.10+ and retry."; exit 1; }
 command -v npm >/dev/null || { echo "npm was not found. Install Node with npm and retry."; exit 1; }
-command -v "${PYTHON:-python3}" >/dev/null || { echo "Install Python 3.11+ or set PYTHON to its executable."; exit 1; }
 if [ ! -d node_modules ]; then
   npm ci
 fi
