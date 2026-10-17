@@ -9,8 +9,9 @@ const funds={income:{type:'consolidated',income_statement:[{category:'revenue',h
  fs.mkdirSync('tests/.output',{recursive:true});const http=require('node:http');
  const server=http.createServer((req,res)=>{const name=req.url.split('?')[0].slice(1);if(!['index.html','style.css','core.js','analytics.js','hedge.js','hedge-ui.js','charts.js','lightweight-charts.js','app.js'].includes(name)){res.writeHead(404).end();return;}res.setHeader('Content-Type',name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync('app/src/main/assets/'+name));});
  await new Promise(r=>server.listen(8765,'127.0.0.1',r));
- const browser=await playwright.launch({executablePath:process.env.HAL_CHROMIUM_PATH||undefined,args:['--no-sandbox'],headless:true});
+ let browser;
  try{
+ browser=await playwright.launch({executablePath:process.env.HAL_CHROMIUM_PATH||undefined,args:['--no-sandbox'],headless:true});
  const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1});const page=await context.newPage();let errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.clock.install({time:new Date('2026-10-16T05:00:00Z')});
  await page.addInitScript(old=>{
@@ -66,5 +67,5 @@ const funds={income:{type:'consolidated',income_statement:[{category:'revenue',h
  await page.reload();assert.equal(await page.evaluate(()=>JSON.parse(localStorage.hal_desk_v2).journal.length),2);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.hal_positions_v1).legs[0].lots),2,'Original v1 data retained');
  await page.evaluate(()=>HALApp.receive('reset',{}));assert.equal(await page.locator('#overview-chart canvas').count(),0,'Reset clears cached chart');assert.deepEqual(errors,[]);
  console.log('PASS: v1 migration; five screens; charts; statement basis independence; scenarios; partial close; settlement accounting; CSV escaping; backup validation/import; bookmarks; dark/light; 320/390/768px layouts; enlarged text; offline failure; persistence; reset. Hedge shortlist, bid/ask cost accounting, failure/staleness withholding, scenarios, settings backup and responsive layouts. Synthetic data only.');
- }finally{await browser.close();server.close();}
+ }finally{await browser?.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});

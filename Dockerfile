@@ -1,9 +1,15 @@
-# For platforms that prefer Docker (Koyeb, Fly.io, Cloud Run)
-FROM python:3.13-slim
+FROM node:22-bookworm-slim AS build
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY server.py index.html ./
-EXPOSE 8000
-ENV PORT=8000
-CMD ["python", "server.py"]
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run lint && npm run build && npm prune --omit=dev
+
+FROM node:22-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends python3 ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=build --chown=node:node /app /app
+ENV NODE_ENV=production PORT=3000
+USER node
+EXPOSE 3000
+CMD ["npm", "start"]
