@@ -73,7 +73,7 @@ Historical valuation multiples, automatic extraction of order-book figures from 
 
 ## Build and signing
 
-Verified build route: Android SDK platform 35, build-tools 35.0.0, Java 8 source level and a JDK (or Java runtime plus Eclipse ECJ 3.39.0). From this directory:
+Verified build route: Android SDK platform 35, build-tools 35.0.0, Java 8 source level and JDK 21 (or Java 17 runtime plus Eclipse ECJ 3.39.0). From this directory:
 
 ```bash
 export ANDROID_SDK_ROOT=/path/to/android-sdk
@@ -82,7 +82,7 @@ bash build.sh
 
 Restore the existing private `signing/personal.jks` and `signing/password.txt` before building an update. They are deliberately excluded from Git. The build refuses to silently create a replacement signing identity. For a separate new installation only, set `HAL_CREATE_SIGNING_KEY=1`. A different key cannot update the previously installed app.
 
-Output: `build/HAL-Desk-v2.3.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 17; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release. `prepare-runtime.py` downloads hash-pinned runtime dependencies; `package-runtime.py` includes JNI libraries, Kotlin class-loader resources and service metadata. D8/R8 9.1.56 is pinned for Kotlin 2.4 compatibility. Runtime artifacts are excluded from Git. The first build requires internet for these public build dependencies; installed AI inference does not.
+Output: `build/HAL-Desk-v2.3.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 21; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release. `prepare-runtime.py` downloads hash-pinned runtime dependencies; `package-runtime.py` includes JNI libraries, Kotlin class-loader resources and service metadata. D8/R8 9.1.56 is pinned for Kotlin 2.4 compatibility. Runtime artifacts are excluded from Git. The first build requires internet for these public build dependencies; installed AI inference does not.
 
 ## Checks
 

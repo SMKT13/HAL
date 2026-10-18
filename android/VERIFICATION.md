@@ -7,7 +7,7 @@
 - APK package remains `in.smkt.haldesk`, version code 5/name 2.3, with the original asset origin. The build uses the existing private signing identity for upgrade compatibility.
 - The optional default-model download is pinned to a public Qwen3 CPU model revision (344,671,744 bytes). Its Hugging Face metadata, SHA-256 and initial LiteRT-LM header were verified independently. This check did not download the complete model or run it.
 
-Limits: no Android device/emulator was available, and actual local inference, model download/import through Android's UI, memory usage, speed and installation have not been exercised on a phone. Browser tests use a synthetic native bridge; they do not establish real model quality or device compatibility. Native classes compile against the actual runtime, but a successful build is not an inference benchmark. Normal Java deprecation warnings remain. Live Upstox feeds were not tested with the user's token.
+Limits: no Android device/emulator was available, and actual local inference, model download/import through Android's UI, memory usage, speed and installation have not been exercised on a phone. Browser tests use a synthetic native bridge; they do not establish real model quality or device compatibility. Native classes compile against the actual runtime using ECJ 3.39.0 locally; CI uses JDK 21 because the SDK jar contains Java 21 class files. but a successful build is not an inference benchmark. Normal Java deprecation warnings remain. Live Upstox feeds were not tested with the user's token.
 
 ## Earlier 2.1 verification — 16 October 2026
 
