@@ -1,23 +1,22 @@
-# HAL Desk 2.3 — Android research and position monitor
+# HAL Desk 2.4 — Android research and position monitor
 
-Personal, read-only HAL app for 64-bit Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 5. Preserve the original signing key and storage origin to update an existing installation without losing its saved book.
+Personal, read-only HAL app for Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 6. Preserve the original signing key and storage origin to update an existing installation without losing its saved book.
 
-## New in 2.3 — fully on-device AI
+## New in 2.4 — direct Gemini API
 
-The **AI** tab runs a local model in the Android process through LiteRT-LM 0.18.0. There is no AI server URL, API key, account, remote generation or cloud fallback. The separate web interface keeps its existing Gemini integration.
+The sixth **AI** tab calls Google's Gemini API directly from Android over HTTPS. No HAL backend, website or downloaded model is needed. The React/web interface keeps its existing server-side Gemini integration.
 
-Open **Set up local AI** and either:
+1. Install the signed APK over the existing app. Keep the original signing key and app data.
+2. Open **AI → Gemini settings**. Paste your own Gemini API key in the masked native dialog, and choose a Gemini text model. The default is `gemini-3.8-flash`; model access is controlled by Google.
+3. Refresh the market/research data you want to review, choose a mode and question, check the evidence-sharing checkbox, then press **Ask** or **Run**.
 
-- Download the approximately 345 MB Qwen3 0.6B CPU int4 model in the native app. Download is explicitly initiated, pinned to a model revision, bounded to its expected size and verified against SHA-256. Redirects are restricted to Hugging Face and its model CDN hosts. Questions and financial records are never part of this request.
-- Import a trusted CPU `.litertlm` model through Android's document picker. The app streams it to private storage, checks the container header and a 1 MB–1.5 GB size limit, then atomically replaces the active model. Failed or cancelled transfers keep the previous model. Import does not establish inference compatibility; the runtime checks the model when a review starts.
+**Position Copilot** explains the shared engine's calculated marks, ledger, risk and hedge limitations. **Six perspectives** asks one model for six views: technicals, business, news, derivatives, risk and synthesis. **App research** shares fetched research and the question without the position book or ledger. AI has no web-search tools; refresh Research/News for newer app evidence. Missing or stale inputs remain labelled, and app calculations remain authoritative.
 
-A 64-bit Android device and enough RAM/free storage are required. The default download needs about 550 MB free to preserve working space. Larger imported models need more. The APK bundles arm64-v8a and x86_64 CPU runtime libraries, not model weights. Performance and model quality depend on the device and selected model; no physical-device speed is claimed here.
+The request lists the selected evidence before sharing. For position reviews this includes open legs, calculated P&L/charges, funding, hedge settings, risk and fetched research. Private notes, bookmarks, free-text journal entries and broker credentials are excluded. Only the key entered in the native dialog is used for authentication; it is never exposed to JavaScript, exports or source control. It is encrypted with Android Keystore, sent only in Google's `x-goog-api-key` HTTPS header, and can be removed independently of market credentials. The provider host is fixed and redirects are rejected. Reading saved settings does not contact Google or validate the key; the first explicit generation verifies access. Internet and Google API quota/billing are required.
 
-**Position Copilot** explains the shared engine's calculated position marks, ledger and risk. **Six perspectives** asks one local model for a review across technicals, business, saved news, derivatives, risk and synthesis. **Saved research** uses cached research only; it cannot search the web. Missing/stale inputs and source timestamps are preserved. App calculations remain authoritative; the generated interpretation can still be wrong. Sources shown under an answer come from saved app evidence, not invented model citations. Notes, bookmarks and free-text journal entries are excluded from prompts. Evidence/replies are transient and never exported or cached by the AI UI.
+AI replies and evidence are transient, never cached/exported by the app. Provider processing is subject to your Google API account's terms. Stop disconnects the request and suppresses a late answer; it cannot undo data already sent or guarantee that Google stops processing/billing. Errors for rejected keys, missing models, quota, network timeout and incomplete answers are explicit. Earlier replies are discarded if the question, mode, API settings or saved financial book changes. The feature has no trading tools or order endpoints.
 
-Generation starts only when you press Ask/Review. Stop and timeout controls cancel local decoding. The runtime closes conversations and engines after a response to release memory. Replies for an earlier question, mode or saved book are discarded. Market quotes/news continue using the existing connection; local inference can use saved data with networking disabled. No trading or order endpoints are added.
-
-Official runtime guide: https://developers.google.com/edge/litert-lm/android . Model source and license: https://huggingface.co/litert-community/Qwen3-0.6B (Apache-2.0). Model revision, size and digest are pinned in `ModelPolicy.java`.
+Official REST reference: https://ai.google.dev/api/generate-content . Current models: https://ai.google.dev/gemini-api/docs/models . No Google SDK, model weights, native inference library or third-party runtime is added to the APK.
 
 ## New in 2.1 — Find a hedge
 
@@ -40,7 +39,7 @@ API contracts: [Upstox full market quotes](https://upstox.com/developer/api-docu
 
 ## Stage 1 and Stage 2
 
-- Five screens: Overview, Positions, Markets, Research and News. Graphite dark, paper light and device theme; responsive phone layouts, accessible controls and source timestamps.
+- Six screens: Overview, Positions, Markets, Research, News and AI. Graphite dark, paper light and device theme; responsive phone layouts, accessible controls and source timestamps.
 - Direct Upstox connection using Android Keystore encrypted credentials, or the existing authenticated Render service. No credentials enter JavaScript, backups or source control. Fixed HTTPS GET destinations; authenticated redirects are rejected.
 - Spot and futures quotes, exact contract lot sizes, option chain with bid/ask, OI, IV and available provider Greeks. Optional foreground refresh every 60 seconds.
 - Bundled TradingView Lightweight Charts 5.0.8: daily, 15-minute and hourly candles, volume, SMA 20/50 and position levels. No external chart script requests.
@@ -53,7 +52,7 @@ API contracts: [Upstox full market quotes](https://upstox.com/developer/api-docu
 - Local completed-close journal with partial closes, charges, separate settlement cash and strategy net P&L. Manual funding snapshots are separate. Sparse P&L observations accumulate while the app is open.
 - Android document-picker JSON backup/import with validation, review before replacement, previous-import recovery, and journal CSV. Credentials are excluded. Open positions are manual records, not imported broker holdings.
 
-No trading, orders, automatic rollovers, background workers, Stage 3 notifications or paid AI service are included.
+No trading, orders, automatic rollovers, background workers or Stage 3 notifications are included. Gemini API usage may incur provider charges.
 
 ## Data and refresh
 
@@ -82,7 +81,7 @@ bash build.sh
 
 Restore the existing private `signing/personal.jks` and `signing/password.txt` before building an update. They are deliberately excluded from Git. The build refuses to silently create a replacement signing identity. For a separate new installation only, set `HAL_CREATE_SIGNING_KEY=1`. A different key cannot update the previously installed app.
 
-Output: `build/HAL-Desk-v2.3.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 21; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release. `prepare-runtime.py` downloads hash-pinned runtime dependencies; `package-runtime.py` includes JNI libraries, Kotlin class-loader resources and service metadata. D8/R8 9.1.56 is pinned for Kotlin 2.4 compatibility. Runtime artifacts are excluded from Git. The first build requires internet for these public build dependencies; installed AI inference does not.
+Output: `build/HAL-Desk-v2.4.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 21; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release. It uses the installed Android SDK tools and standard platform APIs only; no AI dependency or model downloads are performed by the build.
 
 ## Checks
 
@@ -93,12 +92,13 @@ npm install
 npx playwright install chromium
 node tests/ui.test.js
 node tests/ai-ui.test.js
+bash tests/test-native-ai.sh
 ```
 
-An existing Chromium may be selected with `HAL_CHROMIUM_PATH`. UI tests run from this directory; fixtures use synthetic prices and 100-unit lots, never actual contract specifications. They are excluded from the APK. See `VERIFICATION.md` for results and device/feed limitations.
+An existing Chromium may be selected with `HAL_CHROMIUM_PATH`. UI tests run from this directory; fixtures use synthetic prices and 100-unit lots, never actual contract specifications. Native REST tests mock HTTPS and use a checksum-pinned, test-only org.json jar; it is never packaged into the APK. Set `HAL_JSON_JAR` to a predownloaded copy and `ECJ_JAR` if javac is unavailable. Tests are excluded from the APK. See `VERIFICATION.md` for results and device/feed limitations.
 
 ## License and privacy
 
-Lightweight Charts 5.0.8 is bundled under Apache-2.0 with its copyright notice, full license and TradingView attribution. See `licenses/` and Settings → Open source notices. The application has no ads, telemetry, external JavaScript, or order API allowlist. Financial records stay in the app sandbox with AI inference performed locally as described above. Android automatic cloud backup and screenshots are disabled. Exported backups are ordinary private files under the user's control, not encrypted by the app. Uninstalling deletes the app's records and credentials.
+Lightweight Charts 5.0.8 is bundled under Apache-2.0 with its copyright notice, full license and TradingView attribution. See `licenses/` and Settings → Open source notices. The application has no ads, telemetry, external JavaScript, or order API allowlist. Saved financial records stay in the app sandbox; selected evidence is sent directly to Google only for user-initiated AI requests as described above. Android automatic cloud backup and screenshots are disabled. Exported backups are ordinary private files under the user's control, not encrypted by the app. Uninstalling deletes the app's records and credentials.
 
 This is an unofficial personal app, unaffiliated with HAL, NSE or Upstox.
