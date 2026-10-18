@@ -21,7 +21,7 @@ function mark(leg,snapshot){
   const c=(snapshot?.futures||[]).find(x=>x.expiry===leg.expiry);contract=c?.quote;quote=c?.quote?.last_price;lot=c?.lot_size;stamp=c?.quote?.quote_as_of;
  }else {
   const chain=snapshot?.option_expiry===leg.expiry?snapshot:snapshot?.chains?.[leg.expiry];
-  const c=(chain?.option_rows||[]).find(x=>x.strike===leg.strike)?.put;contract=c?.quote||c;quote=c?.quote?c.quote.last_price:c?.ltp;lot=c?.lot_size;stamp=c?.quote?c.quote.quote_as_of:chain?.fetched_at_iso;
+  const c=(chain?.option_rows||[]).find(x=>x.strike===leg.strike)?.put;contract=c?.quote||c;quote=c?.quote?c.quote.last_price:c?.ltp;lot=c?.lot_size;stamp=c?.quote?.quote_as_of??null;
  }
  if(finite(lot)&&lot!==leg.lotSize)return {price:null,source:'Lot size differs from the listed contract',mismatch:true};
  if(finite(leg.manual))return {price:leg.manual,source:'Manual mark',stamp:leg.manualAt||null,contract};

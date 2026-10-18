@@ -62,8 +62,12 @@ function compare(legs,snapshot,chains,settings,now=Date.now(),unavailable=[]){
  if(oldUnits<futureUnits)warnings.push((futureUnits-oldUnits)+' futures units currently have no matching put units.');
  if(oldUnits>futureUnits)warnings.push('The existing put quantity exceeds futures units; replacement candidates cover the futures quantity exactly.');
  if(s.buyFees===0||(puts.length&&s.exitFees===0))warnings.push('Zero charges entered: relevant brokerage, taxes and settlement charges are excluded unless you enter an estimate.');
- const out={settings:s,errors:[...new Set(errors)],warnings,candidates,excluded,shortlist:[],eligible:[],futureUnits,oldUnits,required,grid:grid(legs,s.protectThrough,now),firstPut,keep:[],now,spot:S0};
+ const out={settings:s,errors:[...new Set(errors)],warnings,candidates,excluded,shortlist:[],eligible:[],futureUnits,oldUnits,required,grid:grid(legs,s.protectThrough,now),firstPut,keep:[],now,spot:S0,validUntil:null};
  if(errors.length)return out;
+ // Retained comparisons expire with their oldest required input, not two minutes after the button click.
+ const quoteDeadlines=(q,tradeAge=900000)=>[Date.parse(q.quote_as_of)+120000,Date.parse(q.last_trade_at)+tradeAge];
+ const chainDeadlines=chain=>[Date.parse(chain.fetched_at_iso)+120000,Date.parse(chain.quotes_fetched_at)+120000];
+ const deadlines=[end,...legs.map(l=>A.expiryTime(l.expiry)),...quoteDeadlines(snapshot.spot,120000),...futureRows.flatMap(r=>quoteDeadlines(r.contract.quote)),...required.flatMap(d=>chainDeadlines(chains[d])),...oldRows.flatMap(r=>[...quoteDeadlines(r.option.quote),...chainDeadlines(r.chain)])];
  const baseline=sum(oldRows.map(r=>r.option.quote.bid*units(r.leg))),slip=s.slippage/100;
  const sale=baseline*(1-slip),exitFees=puts.length?s.exitFees:0;
  const futureChange=(S,t)=>sum(futureRows.map(r=>(futureValue(r.leg,r.contract.quote,S,S0,t)-r.contract.quote.last_price)*units(r.leg)));
@@ -81,8 +85,10 @@ function compare(legs,snapshot,chains,settings,now=Date.now(),unavailable=[]){
   if(!C.finite(grossCost)||!scenarios.every(g=>g.values.every(v=>C.finite(v.pnl)&&C.finite(v.entryPnl)))){excluded.push({expiry,strike:row.strike,reasons:['Model cannot produce finite values for these inputs']});continue;}
   const stressLoss=Math.max(0,-Math.min(...scenarios.flatMap(g=>g.values.map(v=>v.pnl))));
   const limits=[];if(grossCost>s.budget)limits.push('Above new-hedge budget');if(stressLoss>s.maxLoss)limits.push('Above loss limit in sampled scenarios');
+  deadlines.push(...quoteDeadlines(o.quote));
   candidates.push({id:expiry+':'+row.strike,expiry,strike:row.strike,lots:futureUnits/lot,lotSize:lot,units:futureUnits,grossCost,premium,netOutlay:grossCost+exitFees-sale,exitFees,stressLoss,scenarios,limits,expiryGap:expiry<futures.map(l=>l.expiry).sort().at(-1),quote:o.quote,iv:o.iv,delta:o.delta,theta:o.theta,spread:(o.quote.ask-o.quote.bid)/((o.quote.ask+o.quote.bid)/2)*100,badges:[]});
  }}
+ out.validUntil=Math.min(...deadlines);
  const tie=(a,b)=>a.grossCost-b.grossCost||a.spread-b.spread||a.expiry.localeCompare(b.expiry)||a.strike-b.strike;
  out.candidates.sort(tie);out.eligible=out.candidates.filter(c=>!c.limits.length);
  if(out.eligible.length){

@@ -189,10 +189,14 @@ export function ResearchView({
                   return setError("Enter a title and note.");
                 if (note.url && !A.safeURL(note.url))
                   return setError("Use a public HTTPS source URL.");
-                updateBook({
+                const saved = updateBook({
                   ...book,
                   notes: [{ ...note, id: crypto.randomUUID() }, ...book.notes],
                 });
+                if (!saved)
+                  return setError(
+                    "Note was not saved. Your draft has been retained; retry saving or copy it before leaving this screen.",
+                  );
                 setNote({ ...note, title: "", text: "", url: "" });
                 setError("");
               }}

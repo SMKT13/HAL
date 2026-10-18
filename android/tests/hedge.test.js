@@ -27,3 +27,27 @@ test('missing listed expiry, failed refresh or stale chain blocks complete short
 test('futures before expiry preserve basis and settle to spot at expiry',()=>{const f=fixture();f.snapshot.futures[0].quote.last_price=5050;const c=run(f).candidates.find(c=>c.strike===5000);near(c.scenarios.at(-1).values.at(-1).pnl,-40400);});
 test('old v2 backups gain defaults; preferences round-trip without changing positions',()=>{const b=A.emptyBook();b.legs=[{...fut}];delete b.hedge;const old=A.validateBook(b);assert.equal(old.hedge.budget,null);old.hedge={...settings};const clean=A.validateBook(JSON.parse(JSON.stringify(old)));assert.equal(clean.hedge.budget,100000);assert.deepEqual(clean.legs,old.legs);assert.throws(()=>A.validateBook({...b,hedge:{slippage:-1}}),/Invalid hedge setting/);});
 test('strict settings need explicit budget, loss limit, and date',()=>{assert.throws(()=>H.compare([fut],{}, {},{},now),/Enter a new-hedge budget/);assert.throws(()=>run(fixture(),{maxLoss:NaN}),/Invalid hedge setting/);assert.equal(run(fixture(),{ivShift:-100}).candidates.length,0);});
+
+test('retained comparisons expire with the oldest candidate quote, not the button click',()=>{
+ const f=fixture();f.chains[expiry].option_rows[0].put.quote.quote_as_of=new Date(now-110000).toISOString();
+ const r=run(f);assert.equal(r.candidates.length,3);assert.equal(r.validUntil,now+10000);
+ const later=H.compare(f.legs,f.snapshot,f.chains,settings,now+10001);
+ assert.ok(!later.candidates.some(c=>c.strike===4300));
+});
+test('comparison lifetime includes retrieval times and the stricter spot trade clock',()=>{
+ const f=fixture();f.chains[expiry].quotes_fetched_at=new Date(now-30000).toISOString();
+ assert.equal(run(f).validUntil,now+90000);
+ f.snapshot.spot.last_trade_at=new Date(now-115000).toISOString();
+ assert.equal(run(f).validUntil,now+5000);
+});
+test('existing put and futures trade ages also limit retained comparison lifetime',()=>{
+ for(const oldPut of [false,true]){
+  const f=fixture();let q=f.snapshot.futures[0].quote;
+  if(oldPut){f.legs.push({type:'PE',expiry,strike:4300,lots:1,lotSize:100,entry:20,manual:null});q=f.chains[expiry].option_rows[0].put.quote;}
+  q.last_trade_at=new Date(now-899000).toISOString();assert.equal(run(f).validUntil,now+1000);
+ }
+});
+test('failed freshness checks never give a comparison a valid lifetime',()=>{
+ const f=fixture();f.snapshot.spot.quote_as_of=null;
+ const r=run(f);assert.ok(r.errors.length);assert.equal(r.validUntil,null);assert.deepEqual(r.shortlist,[]);
+});

@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { A, C, H } from "../utils/engine";
 import { api, money, number, when } from "../utils/api";
 import { download, csvCell } from "../utils/book";
 import { Panel, Metric, Notice, Tabs, Field } from "./UI";
+import { useFreshnessClock } from "../utils/useFreshnessClock";
 export function PositionsView({ book, updateBook, snapshot, goAI }: any) {
   const [tab, setTab] = useState("book"),
     [draft, setDraft] = useState(() => structuredClone(book.legs)),
     [message, setMessage] = useState("");
   const [funding, setFunding] = useState(book.funding),
     [settings, setSettings] = useState(book.hedge);
-  const [hedge, setHedge] = useState<any>(null),
+  const [comparison, setHedge] = useState<any>(null),
     [selected, setSelected] = useState(""),
     [busy, setBusy] = useState(false);
   const [scenario, setScenario] = useState({
@@ -41,6 +42,32 @@ export function PositionsView({ book, updateBook, snapshot, goAI }: any) {
   }, [JSON.stringify(book.legs)]);
   const latestBook = useRef(book);
   latestBook.current = book;
+  const comparisonContext = useMemo(
+    () => JSON.stringify([book.legs, settings, snapshot]),
+    [book.legs, settings, snapshot],
+  );
+  const currentContext = useRef(comparisonContext),
+    requestRevision = useRef(0),
+    mounted = useRef(true);
+  if (currentContext.current !== comparisonContext) {
+    currentContext.current = comparisonContext;
+    requestRevision.current++;
+  }
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      requestRevision.current++;
+    };
+  }, []);
+  const now = useFreshnessClock(!!snapshot || !!comparison);
+  const inputsChanged =
+    comparison && comparison.revision !== requestRevision.current;
+  const expired =
+    comparison &&
+    !comparison.errors.length &&
+    Math.max(now, Date.now()) > comparison.validUntil;
+  const hedge = inputsChanged || expired ? null : comparison;
   useEffect(() => {
     setFunding(book.funding);
   }, [JSON.stringify(book.funding)]);
@@ -48,7 +75,7 @@ export function PositionsView({ book, updateBook, snapshot, goAI }: any) {
     setSettings(book.hedge);
   }, [JSON.stringify(book.hedge)]);
   const marked = C.mtm(book.legs, snapshot),
-    risk = A.risk(book.legs, snapshot),
+    risk = A.risk(book.legs, snapshot, now),
     ledger = A.ledger(book, snapshot);
   const updateLeg = (index: number, key: string, value: any) =>
     setDraft((old: any[]) =>
@@ -84,7 +111,10 @@ export function PositionsView({ book, updateBook, snapshot, goAI }: any) {
     try {
       if (draft.length) C.validate(draft);
       const b = A.validateBook({ ...book, legs: draft });
-      updateBook(b);
+      if (!updateBook(b))
+        return setMessage(
+          "Open book was not saved. Your edits have been retained; retry saving.",
+        );
       setMessage(
         "Open book saved. Contract lot sizes are checked against available quotes.",
       );
@@ -93,7 +123,8 @@ export function PositionsView({ book, updateBook, snapshot, goAI }: any) {
     }
   };
   const compare = async () => {
-    const comparedLegs = JSON.stringify(book.legs);
+    const revision = ++requestRevision.current;
+    const stillCurrent = () => revision === requestRevision.current;
     setBusy(true);
     setHedge(null);
     setMessage("");
@@ -124,10 +155,12 @@ export function PositionsView({ book, updateBook, snapshot, goAI }: any) {
           }
         }),
       );
-      if (JSON.stringify(latestBook.current.legs) !== comparedLegs) {
-        throw Error(
-          "The open book changed during refresh. Run the comparison again.",
-        );
+      if (!stillCurrent()) {
+        if (mounted.current)
+          setMessage(
+            "Comparison inputs changed during refresh. Refresh and compare puts again.",
+          );
+        return;
       }
       const result = H.compare(
         book.legs,
@@ -137,13 +170,16 @@ export function PositionsView({ book, updateBook, snapshot, goAI }: any) {
         Date.now(),
         failed,
       );
-      setHedge(result);
+      if (!updateBook({ ...latestBook.current, hedge: settings }))
+        throw Error(
+          "Hedge settings were not saved. Retry the comparison after resolving the save error.",
+        );
+      setHedge({ ...result, revision });
       setSelected(result.shortlist[0]?.id || "");
-      updateBook({ ...latestBook.current, hedge: settings });
     } catch (e: any) {
-      setMessage(e.message);
+      if (stillCurrent()) setMessage(e.message);
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   };
   const candidate = hedge?.candidates.find((c: any) => c.id === selected);
@@ -168,6 +204,17 @@ export function PositionsView({ book, updateBook, snapshot, goAI }: any) {
         ]}
       />
       <Notice>{message}</Notice>
+      <Notice>
+        {inputsChanged
+          ? "Comparison inputs changed. Refresh and compare puts again."
+          : expired
+            ? "Comparison quotes have expired. Refresh and compare puts again."
+            : null}
+      </Notice>
+      <Notice>
+        {busy &&
+          "Refreshing comparison. Changes to inputs will discard this response."}
+      </Notice>
       <div className="metrics">
         <Metric label="Open P&L" value={money(ledger.open)} />
         <Metric label="Realized" value={money(ledger.realized)} />
@@ -242,9 +289,9 @@ export function PositionsView({ book, updateBook, snapshot, goAI }: any) {
               </div>
             )}
             <p className="muted small">
-              {C.freshness(snapshot)}. Manual marks override quotes. Missing
-              marks stay unavailable; theoretical values appear only under
-              Scenarios.
+              {C.freshness(snapshot, now)}. Manual marks override quotes.
+              Missing marks stay unavailable; theoretical values appear only
+              under Scenarios.
             </p>
           </Panel>
           <Panel
@@ -702,7 +749,7 @@ export function PositionsView({ book, updateBook, snapshot, goAI }: any) {
             <button
               onClick={() => {
                 try {
-                  updateBook(
+                  const saved = updateBook(
                     A.closeLeg(
                       book,
                       close.index,
@@ -712,6 +759,10 @@ export function PositionsView({ book, updateBook, snapshot, goAI }: any) {
                       close.date,
                     ),
                   );
+                  if (!saved)
+                    return setMessage(
+                      "Actual close was not saved. Your inputs have been retained; retry saving.",
+                    );
                   setMessage("Actual close recorded.");
                 } catch (e: any) {
                   setMessage(e.message);

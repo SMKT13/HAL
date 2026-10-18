@@ -176,3 +176,25 @@ test("full option quotes retain their own provider price and timestamp", () => {
   assert.equal(result.stamp, "2026-10-17T04:01:00Z");
   assert.equal(C.mark(l, { ...s, markMode: "bid" }).price, 99);
 });
+
+test("option marks never substitute retrieval time for an unknown provider time", () => {
+  const l = { ...leg(), type: "PE", strike: 4900 };
+  for (const quote of [undefined, null, { last_price: 100, bid: 99 }]) {
+    const chain = {
+      option_expiry: l.expiry,
+      fetched_at_iso: "2026-10-17T04:03:00Z",
+      quotes_fetched_at: "2026-10-17T04:03:00Z",
+      option_rows: [
+        { strike: l.strike, put: { lot_size: 150, ltp: 90, bid: 89, quote } },
+      ],
+    };
+    for (const snapshot of [chain, { chains: { [l.expiry]: chain } }]) {
+      const result = C.mark(l, snapshot);
+      assert.equal(result.price, quote ? 100 : 90);
+      assert.equal(result.stamp, null);
+      const bid = C.mark(l, { ...snapshot, markMode: "bid" });
+      assert.equal(bid.price, quote ? 99 : 89);
+      assert.equal(bid.stamp, null);
+    }
+  }
+});
