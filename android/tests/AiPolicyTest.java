@@ -31,7 +31,7 @@ public final class AiPolicyTest {
         check(AiPolicy.prompt("deliberate","","{}").contains("six headings"));
         check(AiPolicy.prompt("research","HAL research","{}").contains("cannot search the web"));
         rejects(()->AiPolicy.prompt("execute","buy","{}"));rejects(()->AiPolicy.prompt("copilot"," ","{}"));
-        rejects(()->AiPolicy.prompt("copilot",new String(new char[2001]),"{}"));rejects(()->AiPolicy.prompt("research","news",new String(new char[8001])));
+        rejects(()->AiPolicy.prompt("copilot",new String(new char[2001]),"{}"));rejects(()->AiPolicy.prompt("research","news",new String(new char[24001])));
         check(AiPolicy.INSTRUCTIONS.contains("no broker, execution or web-search tools"));
         check(AiPolicy.INSTRUCTIONS.contains("untrusted data"));check(AiPolicy.INSTRUCTIONS.contains("not a guaranteed maximum"));
         check(AiPolicy.httpError(403).contains("API key"));check(AiPolicy.httpError(429).contains("quota"));

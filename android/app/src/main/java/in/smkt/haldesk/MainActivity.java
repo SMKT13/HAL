@@ -77,6 +77,8 @@ public final class MainActivity extends Activity {
                 String url=request.getUrl().toString();String asset="";String mime="text/plain";
                 if(url.equals(ORIGIN+"index.html")){asset="index.html";mime="text/html";}
                 if(url.equals(ORIGIN+"app.js")){asset="app.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"intelligence.js")){asset="intelligence.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"intelligence-ui.js")){asset="intelligence-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"ai-ui.js")){asset="ai-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"core.js")){asset="core.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"analytics.js")){asset="analytics.js";mime="application/javascript";}
@@ -101,7 +103,7 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return prefs.getString("mode","direct");}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.4.1");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.5");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
@@ -111,7 +113,7 @@ public final class MainActivity extends Activity {
         send("ai_connection",data);
     }
     private void aiRequest(String request,boolean config) {
-        if(request==null||request.length()>16000)return;
+        if(request==null||request.length()>65536)return;
         final JSONObject args;try{args=new JSONObject(request);}catch(Exception error){return;}
         final String id=args.optString("id");if(!id.matches("[A-Za-z0-9_-]{1,80}"))return;
         try {

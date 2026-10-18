@@ -17,7 +17,7 @@ import upstox_feed
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 CACHE = {}
 LOCK = threading.Lock()
-SECTIONS = {"candles", "news", "fundamentals", "filings", "status", "chain", "hedges"}
+SECTIONS = {"candles", "patterns", "news", "fundamentals", "filings", "status", "chain", "hedges"}
 RSS_FILES = ("Online_announcements.xml", "Board_Meetings.xml", "Financial_Results.xml")
 
 
@@ -101,6 +101,8 @@ def load(section="candles", frame="D", statement="consolidated"):
             raise upstox_feed.FeedError("invalid_expiry") from None
     elif frame not in ("D", "15m", "1h"):
         raise upstox_feed.FeedError("invalid_research_request")
+    if section == "patterns" and frame != "D":
+        raise upstox_feed.FeedError("invalid_research_request")
     token = os.environ.get("UPSTOX_ACCESS_TOKEN", "")
     # A token rotation invalidates cached responses without logging the credential.
     cache_key = (section, frame, statement, hashlib.sha256(token.encode()).hexdigest())
@@ -139,12 +141,15 @@ def load(section="candles", frame="D", statement="consolidated"):
             # Three concurrent read-only requests bound the nine-feed response time.
             with ThreadPoolExecutor(max_workers=3) as pool:
                 list(pool.map(lambda job: field(job[0], base + job[1], job[2]), jobs))
-        elif section == "candles":
+        elif section in ("candles", "patterns"):
             today = dt.datetime.now(IST).date()
             unit, interval, days = {"D": ("days", 1, 450), "15m": ("minutes", 15, 25), "1h": ("hours", 1, 80)}[frame]
+            if section == "patterns":
+                days = 1827
             encoded = urllib.parse.quote(key, safe="")
             field("history", f"/v3/historical-candle/{encoded}/{unit}/{interval}/{today-dt.timedelta(days=1)}/{today-dt.timedelta(days=days)}")
-            field("intraday", f"/v3/historical-candle/intraday/{encoded}/{unit}/{interval}")
+            if section != "patterns":
+                field("intraday", f"/v3/historical-candle/intraday/{encoded}/{unit}/{interval}")
     result = {"section": section, "frame": frame, "type": statement, "data": data, "errors": errors,
               "source": "NSE corporate RSS" if section == "filings" else "Upstox official API",
               "fetched_at_iso": dt.datetime.now(IST).isoformat()}

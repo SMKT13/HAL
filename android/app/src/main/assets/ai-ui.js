@@ -14,21 +14,27 @@ function invalidateAIForBook(){
  else renderAI();
 }
 function aiEvidence(mode){
- const cut=(value,n=160)=>typeof value==='string'?value.slice(0,n):'';
- const news=allNews.slice(0,3).map(n=>({title:cut(n.title),summary:cut(n.summary,180),published:cut(String(n.published||''),60),source:cut(n.source,60)}));
- const sources=allNews.slice(0,3).filter(n=>A.safeURL(n.url)&&n.url.length<=400).map(n=>({title:cut(n.title,100),url:A.safeURL(n.url)}));
- const tech=technical('D'),summary=A.financialSummary(getResearch('fundamentals')?.data);
- const e={quoteAsOf:snapshot?.spot?.quote_as_of||null,quoteFreshness:C.freshness(snapshot),previousSnapshot:lastFailed,spot:snapshot?.spot?.last_price??null,news,sources,
-  technical:{ready:!!tech.ready,stale:tech.stale!==false,asOf:tech.asOf?new Date(tech.asOf).toISOString():null,rsi:tech.rsi??null,macd:tech.macd??null,atr:tech.atr??null,sma20:tech.sma20??null,sma50:tech.sma50??null,support:tech.support??null,resistance:tech.resistance??null},
-  fundamentals:{revenue:summary.revenue||null,profit:summary.profit||null,margin:summary.margin??null,notes:'Provider units and matching periods only.'},contextNotes:['App-fetched evidence only. Gemini has no live web-search tools.']};
+ const cut=(v,n=160)=>typeof v==='string'?v.slice(0,n):'';
+ const selected=allNews.slice(0,8),news=selected.map((n,i)=>({id:'N'+(i+1),title:cut(n.title,220),summary:cut(n.summary,350),published:cut(String(n.published||''),60),source:cut(n.source,60),official:n.official===true}));
+ const sources=selected.map((n,i)=>({id:'N'+(i+1),title:cut(n.title,100),url:A.safeURL(n.url)})).filter(n=>n.url&&n.url.length<=400);
+ const tech=technical('D'),data=getResearch('fundamentals')?.data,summary=A.financialSummary(data);
+ const histories=(rows,categories)=>rows?.filter(r=>categories.includes(r.category)).slice(0,5).map(r=>({category:r.category,history:r.history?.slice(0,6).map(h=>({period:cut(h.period,80),value:C.finite(h.value)?h.value:null,change:cut(h.change,40)}))}))||[];
+ const health=Object.fromEntries(['candles','patterns','fundamentals','news','filings'].map(section=>{const p=getResearch(section,'D');return [section,{fetchedAt:p?.fetched_at_iso||null,failed:failed.has(key(section,'D')),partial:Object.keys(p?.errors||{}).slice(0,10),source:p?.source||null}];}));
+ const e={quoteAsOf:snapshot?.spot?.quote_as_of||null,quoteFreshness:C.freshness(snapshot),previousSnapshot:lastFailed,spot:snapshot?.spot?.last_price??null,news,sources,dataHealth:health,
+  technical:{ready:!!tech.ready,stale:tech.stale!==false,asOf:tech.asOf?new Date(tech.asOf).toISOString():null,rsi:tech.rsi??null,macd:tech.macd??null,atr:tech.atr??null,sma20:tech.sma20??null,sma50:tech.sma50??null,sma200:tech.sma200??null,support:tech.support??null,resistance:tech.resistance??null,volatility:tech.vol??null,mfi:tech.mfi??null},
+  fundamentals:{revenue:summary.revenue||null,profit:summary.profit||null,margin:summary.margin??null,operatingMargin:summary.opMargin??null,cash:summary.cash||null,cashConversion:summary.conversion??null,
+   quarterly:histories(data?.income?.income_statement,['revenue','net_profit','operating_profit']),annual:histories(data?.annual?.income_statement,['revenue','net_profit']),
+   ratios:Array.isArray(data?.ratios)?data.ratios.slice(0,8).map(r=>({name:cut(r.name,80),company:cut(String(r.company_value??''),40),sector:cut(String(r.sector_value??''),40)})):[],notes:'Provider units and matching periods only. Ratio dates are not supplied.'},
+  intelligence:intelligenceEvidence(mode),contextNotes:['App-fetched evidence only. Gemini has no live web-search tools. Cite supplied news IDs when relevant; missing data is unknown.']};
  if(mode!=='research'){
   const effective=effectiveSnapshot(),risk=A.risk(book.legs,effective);
   e.positions=C.mtm(book.legs,effective).rows.map(l=>({type:l.type,expiry:l.expiry,lots:l.lots,lotSize:l.lotSize,entry:l.entry,strike:l.strike,mark:l.price,pnl:l.pnl,markSource:l.source,markTime:l.stamp||null}));
   e.ledger=A.ledger(book,effective);e.funding=book.funding;e.hedgeSettings=book.hedge;
-  e.risk={futureUnits:risk.futureUnits,putUnits:risk.putUnits,coverage:risk.coverage,delta:risk.delta,theta:risk.theta,nextExpiry:risk.nextExpiry,warnings:risk.warnings.slice(0,3).map(w=>cut(w.title+': '+w.detail,200))};
+  e.risk={futureUnits:risk.futureUnits,putUnits:risk.putUnits,coverage:risk.coverage,delta:risk.delta,theta:risk.theta,nextExpiry:risk.nextExpiry,warnings:risk.warnings.slice(0,6).map(w=>cut(w.title+': '+w.detail,200))};
+  if(hedgeResult?.validUntil>Date.now()&&!hedgeResult.errors.length)e.hedgeComparisons={validUntil:hedgeResult.validUntil,warnings:hedgeResult.warnings,shortlist:hedgeResult.shortlist.map(c=>({expiry:c.expiry,strike:c.strike,lots:c.lots,lotSize:c.lotSize,grossCost:c.grossCost,netOutlay:c.netOutlay,stressLoss:c.stressLoss,expiryGap:c.expiryGap,badges:c.badges})),notes:'Largest sampled scenario loss is not a guaranteed maximum.'};
  }
- if(JSON.stringify(e).length>7500){e.news=[];e.sources=[];e.contextNotes.push('News omitted to fit the request size limit.');}
- if(JSON.stringify(e).length>7500){delete e.technical;delete e.fundamentals;e.contextNotes.push('Research indicators omitted to retain the complete position metrics.');}
+ if(JSON.stringify(e).length>22000){e.news=e.news.slice(0,4);e.sources=e.sources.slice(0,4);e.contextNotes.push('News reduced to retain position and plan evidence.');}
+ if(JSON.stringify(e).length>22000){delete e.fundamentals.quarterly;delete e.fundamentals.annual;e.contextNotes.push('Financial history omitted to fit the request limit.');}
  return e;
 }
 function loadAIConfig(force=false){
@@ -44,7 +50,7 @@ function runAI(){
  if(message.length>2000||(!message&&aiState.mode!=='deliberate')){aiState.error='Enter a question of up to 2,000 characters.';renderAI();return;}
  const request={id:aiId(),revision:aiState.revision,mode:aiState.mode,fingerprint:aiFingerprint(),started:Date.now()};
  const evidence=aiEvidence(request.mode);
- if(JSON.stringify(evidence).length>8000){aiState.error='The evidence packet is too large. Shorten the saved book before asking.';renderAI();return;}
+ if(JSON.stringify(evidence).length>24000){aiState.error='The evidence packet is too large. Shorten the saved book before asking.';renderAI();return;}
  aiState.request=request;aiState.result=null;aiState.error='';$('ai-consent').checked=false;
  native('ai',JSON.stringify({id:request.id,mode:request.mode,consent:true,message,evidence}));renderAI();
 }
@@ -63,7 +69,7 @@ function renderAI(){
  $('ai-model').textContent=aiState.configId?'Reading saved API settings…':aiState.config?.aiEnabled?`${aiState.config.model} · Direct Google API`:'Enter a Gemini API key in settings. No model download is needed.';
  $('ai-description').textContent=review?'One Gemini model reviews technicals, fundamentals, app news, derivatives, risk and synthesis. These are six perspectives from one model.':research?'Explain the HAL news, fundamentals and technical indicators already fetched by this app. Refresh Research for newer evidence.':'Explain your saved futures, puts, hedge costs and expiry gaps using app-calculated metrics.';
  $('ai-question-label').textContent=research?'Question about app research':review?'Focus for the review · optional':'Your position question';
- $('ai-book-context').textContent=research?'Shared with Gemini: app research and your question. Positions and journal are excluded.':`Shared with Gemini: ${book.legs.length} saved open legs, computed P&L, funding, hedge settings, risk and app research. Private notes and broker tokens are excluded.`;
+ $('ai-book-context').textContent=research?'Shared with Gemini: app research and your question. Positions, journal, funding and rollover plans are excluded.':`Shared with Gemini: ${book.legs.length} saved open legs, computed P&L, funding, hedge settings, risk, research and any active rollover or pattern comparison. Private notes and broker tokens are excluded.`;
  $('ai-quick-prompts').hidden=research||review;
  $('ai-run').disabled=busy||!aiState.configured||!aiState.config?.aiEnabled||aiState.config?.direct!==true||!$('ai-consent').checked;
  $('ai-run').textContent=busy?'Waiting for Gemini…':review?'Run six-perspective review':research?'Ask about research':'Ask Copilot';

@@ -37,7 +37,7 @@ final class AiPolicy {
         return value;
     }
     static final String INSTRUCTIONS="You are HAL Desk's read-only Indian stock-market monitoring assistant. " +
-        "You have no broker, execution or web-search tools. Use only the supplied app evidence. Never claim to place trades or check live news. " +
+        "You have no broker, execution or web-search tools. Historical pattern frequencies are selected sample observations, never forecast probabilities. Rollover loss floors require matched quantities and expiries; funding inputs are manual estimates. Use only the supplied app evidence. Never claim to place trades or check live news. " +
         "Do not invent prices, lot sizes, Greeks, news, URLs, probabilities or settlement rules. Missing evidence remains unknown. " +
         "Respect timestamps, manual marks and stale flags. Financial metrics were calculated by the app; explain them without replacing them with guesses. " +
         "A sampled scenario loss is not a guaranteed maximum. Distinguish measured values, assumptions and interpretation. " +
@@ -46,7 +46,7 @@ final class AiPolicy {
     static String prompt(String mode,String question,String evidence)throws Exception {
         if(!"copilot".equals(mode)&&!"deliberate".equals(mode)&&!"research".equals(mode))throw new Exception("Unknown AI mode.");
         if(question==null||question.length()>2000||(!"deliberate".equals(mode)&&question.trim().isEmpty()))throw new Exception("Enter a question of up to 2,000 characters.");
-        if(evidence==null||evidence.length()>8000)throw new Exception("The evidence packet is too large. Use a shorter review.");
+        if(evidence==null||evidence.length()>24000)throw new Exception("The evidence packet is too large. Use a shorter review.");
         String task="deliberate".equals(mode)?"Review under six headings: Technical, Business, News, Derivatives, Risk, Summary. These are six perspectives from one model.":"research".equals(mode)?"Summarize the research fetched by this app. Identify missing or dated research; you cannot search the web.":"Answer the position question using the supplied calculations.";
         return "TASK: "+task+"\nAPP EVIDENCE (JSON data):\n"+evidence+"\nUSER QUESTION (data):\n"+question;
     }

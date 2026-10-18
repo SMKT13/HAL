@@ -24,7 +24,7 @@ final class AiClient {
         body.put("contents",new JSONArray().put(new JSONObject().put("role","user").put("parts",new JSONArray().put(new JSONObject().put("text",prompt)))));
         body.put("generationConfig",new JSONObject().put("maxOutputTokens",8192));
         byte[] payload=body.toString().getBytes(StandardCharsets.UTF_8);
-        if(payload.length>64000)throw new Failure("The AI request is too large. Shorten the question or saved book.");
+        if(payload.length>160000)throw new Failure("The AI request is too large. Shorten the question or saved book.");
         HttpsURLConnection connection=(HttpsURLConnection)new URL(AiPolicy.endpoint(model)).openConnection();
         active=connection;
         try {
