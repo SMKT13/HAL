@@ -1,5 +1,7 @@
 import React from "react";
 import { RefreshCw, Settings, ShieldCheck, Sparkles } from "lucide-react";
+import { C } from "../utils/engine";
+import { useFreshnessClock } from "../utils/useFreshnessClock";
 const tabs = [
   ["overview", "Overview"],
   ["positions", "Position Desk"],
@@ -15,7 +17,12 @@ export function Header({
   onOpenSettings,
   loading,
   dataStatus,
+  snapshot,
 }: any) {
+  const now = useFreshnessClock(!!snapshot);
+  if (snapshot && !snapshot.researchUnavailable)
+    dataStatus =
+      C.freshness(snapshot, now) === "Recent market quote" ? "live" : "stale";
   const status =
     dataStatus === "live"
       ? "Recent quote"

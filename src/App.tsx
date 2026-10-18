@@ -8,7 +8,7 @@ import { NewsView } from "./components/NewsView";
 import { AICopilotView } from "./components/AICopilotView";
 import { SettingsModal } from "./components/SettingsModal";
 import { Notice } from "./components/UI";
-import { A, C } from "./utils/engine";
+import { A } from "./utils/engine";
 import { loadBook, saveBook } from "./utils/book";
 import { api, viewerKey, when } from "./utils/api";
 
@@ -37,8 +37,10 @@ export function App() {
       const clean = saveBook(localStorage, next);
       setBook(clean);
       setNotice("Saved on this device.");
+      return true;
     } catch (e: any) {
       setNotice(e.message);
+      return false;
     }
   };
   const fetchResearch = async (
@@ -164,13 +166,8 @@ export function App() {
         onRefresh={() => refresh()}
         onOpenSettings={() => setSettings(true)}
         loading={loading}
-        dataStatus={
-          snapshot && !snapshot.researchUnavailable
-            ? C.freshness(snapshot) === "Recent market quote"
-              ? "live"
-              : "stale"
-            : market?.data_status || "unavailable"
-        }
+        snapshot={snapshot}
+        dataStatus={market?.data_status || "unavailable"}
         lastSession={market?.last_session}
       />
       <main className="desk-shell">

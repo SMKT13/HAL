@@ -133,7 +133,8 @@ const book = {
 const errors = [];
 let aiCalls = 0,
   requested = [],
-  delayedCopilot = null;
+  delayedCopilot = null,
+  delayedHedges = null;
 server.stdout.on("data", (d) => console.log("server:", d.toString().trim()));
 server.stderr.on("data", (d) =>
   console.log("server error:", d.toString().trim()),
@@ -207,7 +208,14 @@ try {
       const s = u.searchParams.get("section"),
         frame = u.searchParams.get("frame");
       let payload = {};
-      if (s === "hedges" || s === "chain") payload = chain(frame);
+      if (s === "hedges" || s === "chain") {
+        if (s === "hedges" && delayedHedges) {
+          const pending = delayedHedges;
+          pending.started();
+          await pending.gate;
+        }
+        payload = chain(frame);
+      }
       if (s === "candles")
         payload = {
           history: {
@@ -277,6 +285,7 @@ try {
       body: JSON.stringify(data),
     });
   });
+  await page.clock.install({ time: new Date(now) });
   await page.goto(base);
   await page
     .getByRole("heading", { name: "Clarity for your HAL book." })
@@ -309,6 +318,87 @@ try {
       .legs,
     JSON.parse(initial).legs,
   );
+  // The visible shortlist must describe the current inputs, including edits
+  // made while a network refresh is in flight.
+  const budget = page.getByLabel("New-hedge budget (₹)", { exact: true });
+  const lowerCost = page.getByText("Lower cost", { exact: false });
+  const comparePuts = page.getByRole("button", {
+    name: "Refresh & compare puts",
+  });
+  await budget.fill("0");
+  await page
+    .getByText("Comparison inputs changed. Refresh and compare puts again.", {
+      exact: true,
+    })
+    .waitFor();
+  assert.equal(await lowerCost.count(), 0);
+  await budget.fill(String(book.hedge.budget));
+  assert.equal(
+    await lowerCost.count(),
+    0,
+    "Reverting an edit must not resurrect an earlier comparison",
+  );
+  let releaseHedges, markHedgesStarted;
+  const hedgesStarted = new Promise((resolve) => {
+    markHedgesStarted = resolve;
+  });
+  delayedHedges = {
+    started: markHedgesStarted,
+    gate: new Promise((resolve) => {
+      releaseHedges = resolve;
+    }),
+  };
+  await comparePuts.click();
+  await hedgesStarted;
+  await budget.fill("0");
+  releaseHedges();
+  await page
+    .getByText(
+      "Comparison inputs changed during refresh. Refresh and compare puts again.",
+      { exact: true },
+    )
+    .waitFor();
+  delayedHedges = null;
+  assert.equal(await lowerCost.count(), 0);
+  assert.equal(
+    JSON.parse(await page.evaluate(() => localStorage.getItem("hal_desk_v2")))
+      .hedge.budget,
+    book.hedge.budget,
+  );
+  await budget.fill(String(book.hedge.budget));
+  await comparePuts.click();
+  await lowerCost.first().waitFor();
+  snapshot.spot.last_price += 1;
+  await page
+    .getByRole("button", { name: "Refresh market data", exact: true })
+    .click();
+  await page
+    .getByText("Comparison inputs changed. Refresh and compare puts again.", {
+      exact: true,
+    })
+    .waitFor();
+  assert.equal(
+    await lowerCost.count(),
+    0,
+    "A changed market snapshot must invalidate the comparison",
+  );
+  await comparePuts.click();
+  await lowerCost.first().waitFor();
+  assert.equal(await page.locator(".status-badge").innerText(), "Recent quote");
+  await page.clock.fastForward(121000);
+  await page
+    .getByText(
+      "Comparison quotes have expired. Refresh and compare puts again.",
+      { exact: true },
+    )
+    .waitFor();
+  assert.equal(await lowerCost.count(), 0);
+  assert.equal(
+    await page.locator(".status-badge").innerText(),
+    "Older data",
+    "Freshness must advance even with automatic feed refresh disabled",
+  );
+
   await nav("Markets");
   await page.getByRole("button", { name: "15 min", exact: true }).click();
   await page.waitForTimeout(100);
@@ -322,6 +412,111 @@ try {
   assert.ok(requested.some((s) => s.includes("section=chain&frame=" + e2)));
   await nav("HAL Research");
   await page.getByText("QA Q1").first().waitFor();
+  await page
+    .getByRole("button", { name: "Business notes", exact: true })
+    .click();
+  const title = page.getByLabel("Title", { exact: true }),
+    note = page.locator("textarea");
+  const failBookSaves = async (fail) =>
+    page.evaluate((fail) => {
+      if (fail) {
+        window.halOriginalSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (key, value) {
+          if (key === "hal_desk_v2")
+            throw new DOMException(
+              "Synthetic quota failure",
+              "QuotaExceededError",
+            );
+          return window.halOriginalSetItem.call(this, key, value);
+        };
+      } else {
+        Storage.prototype.setItem = window.halOriginalSetItem;
+        delete window.halOriginalSetItem;
+      }
+    }, fail);
+  await title.fill("Research draft survives storage failure");
+  await note.fill("Retain the full unsaved notebook text.");
+  const beforeFailedNote = await page.evaluate(() =>
+    localStorage.getItem("hal_desk_v2"),
+  );
+  await failBookSaves(true);
+  await page.getByRole("button", { name: "Save note", exact: true }).click();
+  await page
+    .getByText(/Note was not saved. Your draft has been retained/)
+    .waitFor();
+  assert.equal(
+    await title.inputValue(),
+    "Research draft survives storage failure",
+  );
+  assert.equal(
+    await note.inputValue(),
+    "Retain the full unsaved notebook text.",
+  );
+  assert.equal(
+    await page.evaluate(() => localStorage.getItem("hal_desk_v2")),
+    beforeFailedNote,
+  );
+  await failBookSaves(false);
+  await page.getByRole("button", { name: "Save note", exact: true }).click();
+  await page
+    .getByRole("heading", {
+      name: "Research draft survives storage failure",
+      exact: true,
+    })
+    .waitFor();
+  assert.equal(await title.inputValue(), "");
+  assert.equal(await note.inputValue(), "");
+  assert.equal(
+    JSON.parse(await page.evaluate(() => localStorage.getItem("hal_desk_v2")))
+      .notes.length,
+    1,
+  );
+  await nav("Position Desk");
+  await page.getByLabel("entry 1", { exact: true }).fill("5001");
+  const beforeFailedPosition = await page.evaluate(() =>
+    localStorage.getItem("hal_desk_v2"),
+  );
+  await failBookSaves(true);
+  await page
+    .getByRole("button", { name: "Save open book", exact: true })
+    .click();
+  await page.getByText(/Open book was not saved/).waitFor();
+  assert.equal(
+    await page.getByLabel("entry 1", { exact: true }).inputValue(),
+    "5001",
+  );
+  assert.equal(
+    await page.evaluate(() => localStorage.getItem("hal_desk_v2")),
+    beforeFailedPosition,
+  );
+  assert.equal(await page.getByText(/Open book saved\. Contract/).count(), 0);
+  await failBookSaves(false);
+  await page
+    .getByRole("button", { name: "Save open book", exact: true })
+    .click();
+  await page.getByText(/Open book saved\. Contract/).waitFor();
+  assert.equal(
+    JSON.parse(await page.evaluate(() => localStorage.getItem("hal_desk_v2")))
+      .legs[0].entry,
+    5001,
+  );
+  await page.getByRole("button", { name: "Journal", exact: true }).click();
+  await page.getByLabel("Actual exit price", { exact: true }).fill("5100");
+  const beforeFailedClose = await page.evaluate(() =>
+    localStorage.getItem("hal_desk_v2"),
+  );
+  await failBookSaves(true);
+  await page.getByRole("button", { name: "Record close", exact: true }).click();
+  await page.getByText(/Actual close was not saved/).waitFor();
+  assert.equal(
+    await page.evaluate(() => localStorage.getItem("hal_desk_v2")),
+    beforeFailedClose,
+  );
+  assert.equal(
+    await page.getByText("Actual close recorded.", { exact: true }).count(),
+    0,
+  );
+  await failBookSaves(false);
   await nav("Newsroom");
   await page
     .getByRole("heading", { name: "Synthetic HAL test headline" })
@@ -465,6 +660,23 @@ try {
   );
   await page.getByLabel("Theme", { exact: true }).selectOption("dark");
   await page.getByRole("button", { name: "Close", exact: true }).click();
+  // Freshness also advances on the overview and open book without a comparison.
+  for (const screen of ["Overview", "Position Desk"]) {
+    await nav(screen);
+    const refreshedAt = await page.evaluate(() => new Date().toISOString());
+    Object.assign(snapshot.spot, {
+      quote_as_of: refreshedAt,
+      last_trade_at: refreshedAt,
+    });
+    await page
+      .getByRole("button", { name: "Refresh market data", exact: true })
+      .click();
+    await page.getByText(/Recent market quote[. ·]/).waitFor();
+    await page.clock.fastForward(121000);
+    await page.getByText(/Older market quote[. ·]/).waitFor();
+    assert.equal(await page.locator(".status-badge").innerText(), "Older data");
+  }
+  await nav("Overview");
   await mkdir("test-results", { recursive: true });
   await page.screenshot({ path: "test-results/desktop.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -476,7 +688,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "PASS React desktop/mobile: six screens, exact marks, hedge immutability, chart remount, timeframe/expiry feeds, bookmarks, consent, AI errors/provenance, AI mode-switch race, 12-leg import, reload persistence, recovery, invalid-import rejection, themes.",
+    "PASS React desktop/mobile: six screens, exact marks, hedge immutability, comparison invalidation and request races, clock-driven quote expiry, failed-save draft retention and retry, close-save failure, chart remount, timeframe/expiry feeds, bookmarks, consent, AI errors/provenance, AI mode-switch race, 12-leg import, reload persistence, recovery, invalid-import rejection, themes.",
   );
 } finally {
   await browser?.close();

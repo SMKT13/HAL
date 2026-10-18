@@ -2,8 +2,10 @@ import React from "react";
 import { A, C } from "../utils/engine";
 import { money, number, when } from "../utils/api";
 import { Panel, Metric, Notice } from "./UI";
+import { useFreshnessClock } from "../utils/useFreshnessClock";
 export function OverviewView({ market, snapshot, book, goAI, navigate }: any) {
-  const risk = A.risk(book.legs, snapshot),
+  const now = useFreshnessClock(!!snapshot);
+  const risk = A.risk(book.legs, snapshot, now),
     ledger = A.ledger(book, snapshot);
   const spot = snapshot?.spot?.last_price ?? market?.quote?.price,
     prev = snapshot?.spot?.prev_close ?? market?.quote?.prev_close;
@@ -82,7 +84,7 @@ export function OverviewView({ market, snapshot, book, goAI, navigate }: any) {
             </Notice>
           ))}
           <p className="muted small">
-            {C.freshness(snapshot)} · {when(snapshot?.spot?.quote_as_of)}
+            {C.freshness(snapshot, now)} · {when(snapshot?.spot?.quote_as_of)}
           </p>
         </Panel>
         <Panel
