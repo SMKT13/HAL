@@ -24,6 +24,7 @@ import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -33,6 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class MainActivity extends Activity {
     private WebView web;
@@ -40,6 +42,9 @@ public final class MainActivity extends Activity {
     private SharedPreferences prefs;
     private final ExecutorService executor=Executors.newSingleThreadExecutor();
     private final ExecutorService researchExecutor=Executors.newFixedThreadPool(2);
+    private final ExecutorService aiExecutor=Executors.newFixedThreadPool(2);
+    private final AtomicReference<Object> aiWorking=new AtomicReference<>();
+    private volatile int aiGeneration=0;
     private final ConcurrentHashMap<String,Long> researchRequests=new ConcurrentHashMap<>();
     private byte[] pendingExport;
     private final AtomicBoolean working=new AtomicBoolean(false);
@@ -49,6 +54,7 @@ public final class MainActivity extends Activity {
     private static final String ORIGIN="https://appassets.androidplatform.net/";
     private boolean pageReady=false;
     private boolean settingsShowing=false;
+    private boolean aiSettingsShowing=false;
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
@@ -69,6 +75,7 @@ public final class MainActivity extends Activity {
                 String url=request.getUrl().toString();String asset="";String mime="text/plain";
                 if(url.equals(ORIGIN+"index.html")){asset="index.html";mime="text/html";}
                 if(url.equals(ORIGIN+"app.js")){asset="app.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"ai-ui.js")){asset="ai-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"core.js")){asset="core.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"analytics.js")){asset="analytics.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"hedge.js")){asset="hedge.js";mime="application/javascript";}
@@ -92,8 +99,94 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return prefs.getString("mode","direct");}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.1");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.2");}catch(Exception ignored){}
         send("connection",obj);
+        aiStatus();
+    }
+    private void aiStatus() {
+        JSONObject data=object("configured",secrets.has("ai_viewer"));
+        try { data.put("origin",prefs.getString("ai_origin",MarketClient.SERVER)); } catch(Exception ignored) {}
+        send("ai_connection",data);
+    }
+    private void aiRequest(String request, boolean config) {
+        if(request==null || request.length()>128000)return;
+        final JSONObject args;
+        try { args=new JSONObject(request); } catch(Exception error) { return; }
+        final String id=args.optString("id"),selectedMode=config?null:args.optString("mode");
+        if(!id.matches("[A-Za-z0-9_-]{1,80}"))return;
+        final JSONObject payload=new JSONObject();
+        try {
+            AiEndpoint.target(prefs.getString("ai_origin",MarketClient.SERVER),selectedMode);
+            if(!config) {
+                if(!Boolean.TRUE.equals(args.opt("consent")))throw new Exception("Confirm sharing this request with Gemini.");
+                String message=args.optString("message","").trim();
+                if(message.length()>2000 || (!"deliberate".equals(selectedMode)&&message.isEmpty()))throw new Exception("Enter a question of up to 2,000 characters.");
+                payload.put("consent",true);payload.put("message",message);
+                if(!"research".equals(selectedMode)) {
+                    JSONObject source=args.optJSONObject("book");
+                    if(source==null || source.optJSONArray("legs")==null || source.getJSONArray("legs").length()>12)throw new Exception("Review the saved position book first.");
+                    JSONObject clean=new JSONObject();
+                    for(String key:new String[]{"version","legs","journal","funding","hedge","preferences","legacy"})if(source.has(key))clean.put(key,source.get(key));
+                    clean.put("notes",new JSONArray());clean.put("bookmarks",new JSONArray());
+                    JSONArray journal=clean.optJSONArray("journal");if(journal!=null)for(int i=0;i<journal.length();i++){JSONObject entry=journal.optJSONObject(i);if(entry!=null)entry.remove("note");}
+                    JSONObject legacy=clean.optJSONObject("legacy");if(legacy!=null)legacy.put("journal",new JSONArray());
+                    payload.put("book",clean);
+                }
+            }
+            // Runs on the UI thread, as do credential updates: capture the host and key together.
+            final String origin=prefs.getString("ai_origin",MarketClient.SERVER),credential=secrets.get("ai_viewer");
+            if(credential.isEmpty())throw new Exception("Connect your AI server and viewer key first.");
+            final int current=aiGeneration;
+            final Object ticket=new Object();
+            if(!config && !aiWorking.compareAndSet(null,ticket))throw new Exception("An AI request is still finishing. Please wait.");
+            aiExecutor.execute(()->{
+                try {
+                    if(current!=aiGeneration)return;
+                    JSONObject result=new AiClient().request(origin,credential,selectedMode,config?null:payload);
+                    JSONObject event=object("id",id);event.put("data",result);
+                    if(current==aiGeneration)send(config?"ai_config":"ai_result",event);
+                } catch(Exception error) {
+                    JSONObject event=object("id",id);
+                    try {event.put("message",error instanceof java.io.IOException?"Could not reach the AI server. Check your connection and retry.":error.getMessage());}catch(Exception ignored){}
+                    if(current==aiGeneration)send(config?"ai_config_error":"ai_error",event);
+                } finally {if(!config)aiWorking.compareAndSet(ticket,null);}
+            });
+        } catch(Exception error) {
+            JSONObject event=object("id",id);try{event.put("message",error.getMessage());}catch(Exception ignored){}
+            send(config?"ai_config_error":"ai_error",event);
+        }
+    }
+    private void showAiSettings() {
+        if(aiSettingsShowing)return;aiSettingsShowing=true;
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(24),dp(8),dp(24),dp(16));
+        form.addView(text("Connect your private HAL AI server. Gemini uses its server-side key and market feed. Your phone's Upstox token is never sent to this server. Only requests you approve are shared."));
+        form.addView(text("HAL server HTTPS address"));
+        EditText address=new EditText(this);address.setSingleLine(true);address.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);address.setText(prefs.getString("ai_origin",MarketClient.SERVER));form.addView(address);
+        form.addView(text("Viewer key — HAL_VIEWER_KEY"));
+        EditText credential=new EditText(this);credential.setSingleLine(true);credential.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);credential.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);credential.setHint(secrets.has("ai_viewer")?"Saved securely — leave blank to keep":"Enter the server viewer key");form.addView(credential);
+        form.addView(text("The server needs GEMINI_API_KEY and the HAL AI routes from this repository. AI works with either market connection mode. Provider quota or charges may apply."));
+        ScrollView scroll=new ScrollView(this);scroll.addView(form);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("AI connection").setView(scroll).setPositiveButton("Save AI connection",null).setNegativeButton("Cancel",null).setNeutralButton("Disconnect AI",null).create();
+        dialog.setOnDismissListener(d->{aiSettingsShowing=false;credential.setText("");});
+        dialog.setOnShowListener(d->{
+            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                try {
+                    String origin=AiEndpoint.normalize(address.getText().toString()),value=credential.getText().toString().trim();
+                    if(value.length()>16384 || value.matches("(?s).*\\p{Cntrl}.*") || value.contains(" "))throw new Exception("Paste only the viewer key, without spaces or line breaks.");
+                    if(value.isEmpty()&&(!secrets.has("ai_viewer")||!origin.equals(prefs.getString("ai_origin",MarketClient.SERVER))))throw new Exception("Enter the viewer key for this server address.");
+                    // Drop the prior key before changing hosts, so a failed save cannot mix credentials.
+                    if(!origin.equals(prefs.getString("ai_origin",MarketClient.SERVER)))secrets.remove("ai_viewer");
+                    if(!prefs.edit().putString("ai_origin",origin).commit())throw new Exception("The AI connection could not be saved.");
+                    if(!value.isEmpty())secrets.set("ai_viewer",value);
+                    aiGeneration++;aiWorking.set(null);dialog.dismiss();aiStatus();
+                } catch(Exception error){credential.setError(error.getMessage());}
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
+                try{secrets.remove("ai_viewer");aiGeneration++;aiWorking.set(null);dialog.dismiss();aiStatus();}
+                catch(Exception error){credential.setError("Could not remove the saved AI credential.");}
+            });
+        });dialog.show();
     }
     private void refresh(String expiry) {
         if(expiry==null || expiry.length()>10 || (!expiry.isEmpty() && !expiry.matches("\\d{4}-\\d{2}-\\d{2}"))) {send("error",object("code","invalid_expiry"));return;}
@@ -180,8 +273,8 @@ public final class MainActivity extends Activity {
                 }catch(Exception error){credential.setError("Secure storage unavailable. Unlock your phone and try again.");}
             });
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
-                new AlertDialog.Builder(this).setTitle("Forget saved credentials?").setMessage("Your manual positions stay on this phone.")
-                    .setPositiveButton("Forget",(a,b)->{generation++;secrets.clear();client=new MarketClient();lastRequest=0;dialog.dismiss();status();send("reset",new JSONObject());})
+                new AlertDialog.Builder(this).setTitle("Forget market credentials?").setMessage("Remove the Upstox and market-server credentials. Your AI connection and manual positions stay on this phone.")
+                    .setPositiveButton("Forget",(a,b)->{try{generation++;secrets.remove("direct");secrets.remove("server");client=new MarketClient();lastRequest=0;dialog.dismiss();status();send("reset",new JSONObject());}catch(Exception error){credential.setError("Could not remove the saved market credentials.");}})
                     .setNegativeButton("Cancel",null).show();
             });
         });dialog.show();
@@ -192,6 +285,9 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void settings(){runOnUiThread(()->showSettings());}
         @JavascriptInterface public void refresh(String expiry){MainActivity.this.refresh(expiry);}
         @JavascriptInterface public void research(String request){MainActivity.this.research(request);}
+        @JavascriptInterface public void aiConfig(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,true));}
+        @JavascriptInterface public void ai(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,false));}
+        @JavascriptInterface public void aiSettings(){runOnUiThread(()->showAiSettings());}
         @JavascriptInterface public void openLink(String url){runOnUiThread(()->MainActivity.this.openLink(url));}
         @JavascriptInterface public void exportBackup(String json){runOnUiThread(()->exportDocument(json,false));}
         @JavascriptInterface public void exportCSV(String csv){runOnUiThread(()->exportDocument(csv,true));}
@@ -207,6 +303,6 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onPause(){super.onPause();web.onPause();web.pauseTimers();}
     @Override protected void onResume(){super.onResume();if(web!=null){web.onResume();web.resumeTimers();}}
-    @Override protected void onDestroy(){generation++;executor.shutdownNow();researchExecutor.shutdownNow();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}super.onDestroy();}
+    @Override protected void onDestroy(){generation++;aiGeneration++;executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}super.onDestroy();}
     @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp.back()",null);else super.onBackPressed();}
 }

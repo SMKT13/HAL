@@ -1,6 +1,14 @@
-# HAL Desk 2.1 — Android research and position monitor
+# HAL Desk 2.2 — Android research and position monitor
 
-Personal, read-only HAL app for Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 3. This updates the earlier HAL Upstox 1.0 app using its original signing key and storage origin.
+Personal, read-only HAL app for Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 4. Preserve the original signing key and storage origin to update an existing installation without losing its saved book.
+
+## New in 2.2 — AI Copilot
+
+The sixth **AI** tab offers position questions, a six-perspective review from one Gemini model, and optional search research. Connect your private HAL backend using its public HTTPS origin (no path) and `HAL_VIEWER_KEY` in **Connect AI**. AI works independently of Direct Upstox or market-server mode. No backend is deployed automatically. The reachable server must run the current repository's Node gateway with `GEMINI_API_KEY`; `HAL_AI_SEARCH=1` enables search research. Its own Upstox/Yahoo configuration supplies the AI evidence. The phone's direct Upstox token is never sent to this server.
+
+The AI viewer key is encrypted with Android Keystore and kept outside the WebView, APK, backups and logs. Native HTTPS permits only `/api/config` and the three `/api/ai/` routes on the explicitly saved origin, rejects redirects, and requires a new viewer key when switching hosts. Disconnecting AI preserves market credentials and positions. Forgetting market credentials preserves the AI connection.
+
+Every generation requires consent. Position requests include the saved open legs, manual marks, ledger inputs, funding and hedge preferences; notes, bookmarks and legacy notebook text are excluded. Search requests do not include the book. Replies and provider links are escaped and validated, remain in memory, and are discarded after relevant question/mode/book changes. Unknown or old source times remain visible. A failed model or connection request displays an error without a fabricated answer. Search grounding requires actual safe source links; it does not prove every claim. Provider quota or charges may apply.
 
 ## New in 2.1 — Find a hedge
 
@@ -65,7 +73,7 @@ bash build.sh
 
 Restore the existing private `signing/personal.jks` and `signing/password.txt` before building an update. They are deliberately excluded from Git. The build refuses to silently create a replacement signing identity. For a separate new installation only, set `HAL_CREATE_SIGNING_KEY=1`. A different key cannot update the previously installed app.
 
-Output: `build/HAL-Desk-v2.1.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 17; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release.
+Output: `build/HAL-Desk-v2.2.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 17; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release.
 
 ## Checks
 
@@ -75,12 +83,13 @@ node --test tests/analytics.test.js tests/hedge.test.js
 npm install
 npx playwright install chromium
 node tests/ui.test.js
+node tests/ai-ui.test.js
 ```
 
 An existing Chromium may be selected with `HAL_CHROMIUM_PATH`. UI tests run from this directory; fixtures use synthetic prices and 100-unit lots, never actual contract specifications. They are excluded from the APK. See `VERIFICATION.md` for results and device/feed limitations.
 
 ## License and privacy
 
-Lightweight Charts 5.0.8 is bundled under Apache-2.0 with its copyright notice, full license and TradingView attribution. See `licenses/` and Settings → Open source notices. The application has no ads, telemetry, external JavaScript, or order API allowlist. Financial records are local to the app sandbox; Android automatic cloud backup and screenshots are disabled. Exported backups are ordinary private files under the user's control, not encrypted by the app. Uninstalling deletes the app's records and credentials.
+Lightweight Charts 5.0.8 is bundled under Apache-2.0 with its copyright notice, full license and TradingView attribution. See `licenses/` and Settings → Open source notices. The application has no ads, telemetry, external JavaScript, or order API allowlist. Financial records stay in the app sandbox except the explicitly approved AI requests described above. Android automatic cloud backup and screenshots are disabled. Exported backups are ordinary private files under the user's control, not encrypted by the app. Uninstalling deletes the app's records and credentials.
 
 This is an unofficial personal app, unaffiliated with HAL, NSE or Upstox.

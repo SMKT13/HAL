@@ -1,4 +1,14 @@
-# HAL Desk 2.1 verification — 16 October 2026
+# HAL Desk 2.2 verification — 18 October 2026
+
+- Existing 128 backend/calculation checks pass: 47 Python, 21 Node, 21 core and 39 analytics/hedge checks. TypeScript checks and the Vite production build pass.
+- Existing React and native asset browser suites pass. New Android AI browser coverage checks six-tab navigation, explicit per-run consent, no automatic generation, exclusion of private notes/bookmarks/journal text, valid payloads with and without legacy reconciliation, Copilot and structured reviews, search provenance, escaped text and safe source links, question/mode/book response races, malformed responses, provider errors, timeouts and late replies, unavailable AI/search, persistence and dark/light 320/390/768 px layouts with enlarged text.
+- 23 pure-Java AI destination checks pass, covering HTTPS origins, explicit host/credential boundaries, rejection of userinfo, nonstandard ports, paths, query/fragment/control characters and private literal hosts, and fixed AI/config routes. These checks also run in CI's Java build job.
+- Android SDK 35 shell compilation and APK signature verification pass. Package remains `in.smkt.haldesk` with the original asset origin, version code 4 / version name 2.2. The signed APK certificate matches the prior 2.1 release.
+- AI uses native HTTPS to the explicitly configured HAL gateway. The viewer key is kept outside the page. Gemini and broker keys are not bundled. No market-order routes or hosting changes are introduced.
+
+Limits: browser AI tests use a synthetic native bridge and do not call Gemini or Upstox. Live credentials, provider quota, native HTTPS on a phone, Android settings/Keystore behavior and installation over an existing app remain unverified on a physical device. The signature match establishes update compatibility with the previously built APK; the user still needs to install the update. Existing Java deprecation warnings remain.
+
+## Earlier 2.1 verification — 16 October 2026
 
 ## Passed
 

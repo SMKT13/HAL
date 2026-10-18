@@ -80,7 +80,9 @@ The optional feed cache is disposable. Open books remain on the user's device; c
 
 ## Android
 
-The complete native source is restored under `android/`, including its direct read-only Upstox connection, encrypted local credential storage, five native asset screens and tested hedge tools. The React AI desk is the web interface; this repair does not silently install a new APK or change the native app's release identity.
+The native source under `android/` includes a direct read-only Upstox connection, encrypted credential storage, six screens, tested hedge tools and an on-demand Gemini Copilot. The Android **AI** tab connects to the existing HAL AI backend independently of the market-data connection. In **Connect AI**, enter your private HAL server's HTTPS origin and `HAL_VIEWER_KEY`. The server needs `GEMINI_API_KEY`; search research additionally needs `HAL_AI_SEARCH=1`. No hosting changes are made by building the APK.
+
+The Android app sends approved requests through native HTTPS, with redirects blocked and fixed AI routes. Provider keys remain on the server; the AI viewer credential stays in Android Keystore storage and never enters the page, a backup or the APK. The phone's direct Upstox token is not sent to the AI server. Position requests share the saved book, excluding research notes, bookmarks and legacy notebook text; search requests share only the question. The server fetches its own configured market feeds and computes evidence. Consent is required for every generation. Replies are transient and discarded when the question, mode or relevant saved book changes. AI uses the configured provider account's quota and pricing.
 
 Both interfaces use the same pure `core.js`, `analytics.js` and `hedge.js` calculations. See [Android build instructions](android/README.md). Preserve your original private signing files for compatible updates; never commit or distribute them.
 
@@ -103,6 +105,7 @@ npm run build
 npx playwright install chromium
 npm run test:ui
 (cd android && node tests/ui.test.js)
+(cd android && node tests/ai-ui.test.js)
 ```
 
 GitHub Actions runs the Python, Node, real Python-worker integration, Android calculation, React browser and native asset browser regressions and compiles an unsigned Android APK. Browser tests use clearly synthetic fixtures and do not call Upstox or Gemini. The worker integration test uses an explicitly empty broker token, so it makes no upstream request. Live token permissions, model quota and physical-device behavior require verification in the user's configured environment.
