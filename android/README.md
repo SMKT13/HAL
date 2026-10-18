@@ -1,6 +1,19 @@
-# HAL Desk 2.4.1 — Android research and position monitor
+# HAL Desk 2.5 — Android research and position monitor
 
-Personal, read-only HAL app for Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 7. Preserve the original signing key and storage origin to update an existing installation without losing its saved book.
+Personal, read-only HAL app for Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 8. Preserve the original signing key and storage origin to update an existing installation without losing its saved book.
+
+## New in 2.5 — intelligence and next rollover
+
+- **AI → Know what changed:** save a local comparison point, then review spot, same-book open P&L, RSI and newly observed news URLs. Position edits withhold financial change comparisons. Checkpoints contain calculated metrics, not private notes or AI replies; they remain on this device and are separate from book backups.
+- **AI → Historical pattern scanner:** load up to five years of completed daily bars, choose a 20/40/60/90-session window and 5/10/20/40-session outcome, then compare. Banded DTW compares log-price shapes with direction, volatility and 50-bar trend filters. Selected full pattern-plus-outcome windows never overlap, and all outcomes end before the current pattern starts. The chart overlays historical shapes without a projected future line. Median/range, adverse excursion and close drawdown describe selected observations, not forecast probabilities or a strategy backtest. Flat windows and large price discontinuities are excluded rather than adjusted. Missing, failed, refreshing or older-than-seven-day history withholds retained results.
+- **Positions → My next rollover:** compare closing the saved current basket, rolling one futures lot and rolling your target quantity. Choose listed futures and put expiries, enter premium/loss limits, post-exit cash, incremental margin per new futures lot, reserve, charges, slippage and maximum spread; refresh full quotes and compare. Settings persist in version-2 book backups. Comparing never changes actual holdings.
+- Gemini now receives more dated news, quarterly/annual financial history, ratios, technical indicators and feed-health flags. Optional shortcuts explain the calculated checkpoint, historical matches and rollover. Each request still requires sharing consent. App research mode excludes positions, journal, funding, checkpoint changes and rollover plans. Direct Google API and the key-paste fix are retained.
+
+Rollover quotes require recent source times, acceptable spread, traded volume/OI and enough displayed bid/ask depth for exact contract units. Required chain failures or pending refreshes withhold choices. Zero or missing budgets and funding assumptions cannot produce a qualifying choice. The label **Lowest premium within entered limits** describes a calculation, not a best-trade claim or broker approval. Results re-evaluate every 30 seconds while visible.
+
+**Funding:** entered cash is the amount available *after closing the old basket and paying all exit costs*. It must already reflect futures settlement and old put sale proceeds. The calculator does not add sale proceeds again. Required cash equals entered incremental margin per new lot × new lots + new put premium + entry charges + reserve. Carry points are exposure from the higher futures entry, not an additional upfront cash payment. Actual broker margin and delivery funding remain unverified.
+
+**Loss baseline:** additional payoff loss starts from the old basket's quoted-bid liquidation value before exit friction. It includes old exit slippage/fees and new entry slippage/fees once. An exact terminal floor requires identical new futures/put expiry and fully matched units. Earlier puts disclose the calendar-day gap, with scenarios stopping at put expiry under constant futures basis; they cannot qualify against a full-futures-expiry loss limit. Puts outliving futures have unknown residual value. Terminal scenarios do not cap interim margin calls. Original realised P&L and recorded charges reconcile separately to strategy net without double counting option premium or settlement cash.
 
 ## Fixed in 2.4.1 — API key paste
 
@@ -51,7 +64,7 @@ API contracts: [Upstox full market quotes](https://upstox.com/developer/api-docu
 - Upstox quarterly/annual financials, consolidated/standalone basis, valuation ratios, cash flow, balance sheet, shareholding, corporate actions and provider company/peer context. Period-matched margins and cash conversion; unknown fields remain unavailable.
 - Upstox recent news plus three official NSE corporate RSS feeds. Topic filters, conservative duplicate grouping, bookmarks and source links. Media reports are distinct from exchange disclosures; corroboration is not inferred automatically. Manual sourced business notes can record order book, deliveries, guidance and event dates.
 - Manual long futures/protective-put book, indicative LTP or bid marks, explicit manual overrides, exact expiry/strike matching and lot mismatch checks. Existing v1 positions migrate without deleting their original record.
-- Active hedge quantity coverage, unit-based delta/theta when every put chain is complete and recently retrieved, expiry timeline and expiry-gap warnings. Rollover comparison is a non-executable futures LTP spread.
+- Active hedge quantity coverage, unit-based delta/theta when every put chain is complete and recently retrieved, expiry timeline and expiry-gap warnings. The simple carry view is a non-executable futures LTP spread; the new rollover workspace uses full bid/ask quotes.
 - Mixed-expiry price/time/IV scenarios only up to the earliest expiry. European Black–Scholes put estimates and constant-basis futures; editable rate/dividend/IV assumptions. Exact intrinsic payoff remains limited to shared-expiry baskets.
 - Local completed-close journal with partial closes, charges, separate settlement cash and strategy net P&L. Manual funding snapshots are separate. Sparse P&L observations accumulate while the app is open.
 - Android document-picker JSON backup/import with validation, review before replacement, previous-import recovery, and journal CSV. Credentials are excluded. Open positions are manual records, not imported broker holdings.
@@ -85,21 +98,22 @@ bash build.sh
 
 Restore the existing private `signing/personal.jks` and `signing/password.txt` before building an update. They are deliberately excluded from Git. The build refuses to silently create a replacement signing identity. For a separate new installation only, set `HAL_CREATE_SIGNING_KEY=1`. A different key cannot update the previously installed app.
 
-Output: `build/HAL-Desk-v2.4.1.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 21; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release. It uses the installed Android SDK tools and standard platform APIs only; no AI dependency or model downloads are performed by the build.
+Output: `build/HAL-Desk-v2.5.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 21; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release. It uses the installed Android SDK tools and standard platform APIs only; no AI dependency or model downloads are performed by the build.
 
 ## Checks
 
 ```bash
 node tests/core.test.js
-node --test tests/analytics.test.js tests/hedge.test.js
+node --test tests/analytics.test.js tests/hedge.test.js tests/intelligence.test.js
 npm install
 npx playwright install chromium
 node tests/ui.test.js
 node tests/ai-ui.test.js
+node tests/intelligence-ui.test.js
 bash tests/test-native-ai.sh
 ```
 
-An existing Chromium may be selected with `HAL_CHROMIUM_PATH`. UI tests run from this directory; fixtures use synthetic prices and 100-unit lots, never actual contract specifications. Native REST tests mock HTTPS and use a checksum-pinned, test-only org.json jar; it is never packaged into the APK. Set `HAL_JSON_JAR` to a predownloaded copy and `ECJ_JAR` if javac is unavailable. Tests are excluded from the APK. See `VERIFICATION.md` for results and device/feed limitations.
+An existing Chromium may be selected with `HAL_CHROMIUM_PATH`. UI tests run from this directory; fixtures use synthetic prices and 100/150-unit lots, never inferred current contract specifications. Native REST tests mock HTTPS and use a checksum-pinned, test-only org.json jar; it is never packaged into the APK. Set `HAL_JSON_JAR` to a predownloaded copy and `ECJ_JAR` if javac is unavailable. Tests are excluded from the APK. See `VERIFICATION.md` for results and device/feed limitations.
 
 ## License and privacy
 

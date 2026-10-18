@@ -80,7 +80,9 @@ The optional feed cache is disposable. Open books remain on the user's device; c
 
 ## Android
 
-Android 2.4.1 calls the **Gemini API directly from the native Android app**. Open the sixth **AI** tab → **Gemini settings**, enter your own Gemini API key and select a model (default `gemini-3.8-flash`). The key is encrypted with Android Keystore. There is no HAL AI server, website dependency or model download. Internet and Google API quota/billing apply. The separate React/web Gemini integration above is retained.
+Android 2.5 calls the **Gemini API directly from the native Android app**. Open the sixth **AI** tab → **Gemini settings**, enter your own Gemini API key and select a model (default `gemini-3.8-flash`). The key is encrypted with Android Keystore. There is no HAL AI server, website dependency or model download. Internet and Google API quota/billing apply. The separate React/web Gemini integration above is retained.
+
+Android 2.5 adds local checkpoint briefings, a completed-daily-bar historical pattern scanner and **Positions → My next rollover**. The paper planner compares closing, one lot and target lots with protective puts, explicit post-exit funding and fees, full bid/ask quality checks and expiry-gap warnings. Matching-expiry payoff floors are separate from interim margin risk; earlier puts never receive an invented later loss floor. Gemini can explain calculated plans and historical observations after explicit consent. Historical frequencies are not forecasts, and comparing never changes the saved book. See the Android guide for methods and assumptions.
 
 The Android key field supports long authorization keys and dots, cleans pasted whitespace and does not silently truncate pasted credentials.
 
@@ -108,6 +110,7 @@ npx playwright install chromium
 npm run test:ui
 (cd android && node tests/ui.test.js)
 (cd android && node tests/ai-ui.test.js)
+(cd android && node tests/intelligence-ui.test.js)
 ```
 
 GitHub Actions runs the Python, Node, real Python-worker integration, Android calculation, React browser and native asset browser regressions and compiles an unsigned Android APK. Browser tests use clearly synthetic fixtures and do not call Upstox or Gemini. The worker integration test uses an explicitly empty broker token, so it makes no upstream request. Live token permissions, model quota and physical-device behavior require verification in the user's configured environment.
