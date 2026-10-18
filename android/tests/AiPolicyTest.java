@@ -10,7 +10,20 @@ public final class AiPolicyTest {
         for(String value:new String[]{"https://evil.example/","gemini-test?key=leak","gemini-test/../../other","gemini-test#fragment","gemini-x\r\nHeader:x","models/gemini-test","gemini-","gemini-"+new String(new char[80]).replace('\0','x')})rejects(()->AiPolicy.endpoint(value));
         check(AiPolicy.model("gemini-3.5-flash-lite").equals("gemini-3.5-flash-lite"));
         check(AiPolicy.validKey("SYNTHETIC_KEY_1234567890-TEST"));
-        for(String value:new String[]{"","short","Bearer SYNTHETIC_KEY_1234567890","SYNTHETIC_KEY_1234567890\n","SYNTHETIC_KEY_1234567890?","x"+new String(new char[256]).replace('\0','x')})check(!AiPolicy.validKey(value));
+        for(String value:new String[]{"","short","Bearer SYNTHETIC_KEY_1234567890","SYNTHETIC_KEY_1234567890\n","SYNTHETIC_KEY_1234567890\u0000","SYNTHETIC_KEY_1234567890\u00e9",new String(new char[8193]).replace('\0','x')})check(!AiPolicy.validKey(value));
+        String standard="AIzaSYNTHETIC_KEY_1234567890",auth="AQ.SYNTHETIC_"+new String(new char[600]).replace('\0','x')+".suffix";
+        check(AiPolicy.validKey(standard));check(AiPolicy.validKey(auth));
+        for(String key:new String[]{standard,auth}){
+            check(AiPolicy.pastedKey(key).equals(key));
+            check(AiPolicy.pastedKey(" \t\r\n"+key+" \n").equals(key));
+            check(AiPolicy.pastedKey("\u00a0\u200b\ufeff"+key+"\u202f\u2060").equals(key));
+            check(AiPolicy.pastedKey(key.substring(0,12)+"\r\n \t"+key.substring(12)).equals(key));
+            for(String quote:new String[]{"\"","'","`"})check(AiPolicy.pastedKey(quote+key+quote).equals(key));
+        }
+        check(AiPolicy.pastedKey(" \r\n\u00a0\u200b").equals(""));check(AiPolicy.pastedKey(null).equals(""));
+        String max=new String(new char[8192]).replace('\0','x');check(AiPolicy.pastedKey(max).equals(max));
+        rejects(()->AiPolicy.pastedKey(max+"x"));rejects(()->AiPolicy.pastedKey(new String(new char[32769]).replace('\0','x')));
+        rejects(()->AiPolicy.pastedKey("incomplete"));rejects(()->AiPolicy.pastedKey(standard+"\u0000"));rejects(()->AiPolicy.pastedKey(standard+"\u00e9"));
         for(String mode:new String[]{"copilot","deliberate","research"}){
             String prompt=AiPolicy.prompt(mode,"Explain the evidence","{\"quoteAsOf\":null,\"quoteFreshness\":\"stale\",\"pnl\":20000}");
             check(prompt.contains("\"quoteAsOf\":null")&&prompt.contains("stale")&&prompt.contains("20000"));

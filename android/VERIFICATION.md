@@ -1,3 +1,10 @@
+# HAL Desk 2.4.1 key-paste verification — 18 October 2026
+
+- 59 Java policy checks pass, including standard-style and long dotted synthetic keys, leading/trailing and wrapped whitespace, non-breaking/invisible separators, quote wrappers, empty-input retention, 8,192-character boundary, oversized/incomplete input and unsupported control/non-ASCII rejection.
+- 99 native REST client checks pass using a synthetic 600+ character dotted authorization-style key. The complete key reaches only the HTTPS header, with no body leakage, URL credential, redirection or stale cancellation result. No live provider call is made.
+- SDK 35 signed build passes for version 2.4.1/code 7. APK alignment and v2/v3 signatures verify with the original certificate. The native field no longer truncates at 256 characters; paste cleanup happens before validation and encrypted storage.
+- The AI asset browser regression suite remains passing. Native clipboard/paste and a live user-key call still require a phone check; no physical device/emulator or user key was available here.
+
 # HAL Desk 2.4 direct Gemini API verification — 18 October 2026
 
 - Existing 128 backend/calculation checks, TypeScript checks and production web build pass. The separate web Gemini integration is retained.

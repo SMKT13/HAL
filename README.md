@@ -80,7 +80,9 @@ The optional feed cache is disposable. Open books remain on the user's device; c
 
 ## Android
 
-Android 2.4 calls the **Gemini API directly from the native Android app**. Open the sixth **AI** tab → **Gemini settings**, enter your own Gemini API key and select a model (default `gemini-3.8-flash`). The key is encrypted with Android Keystore. There is no HAL AI server, website dependency or model download. Internet and Google API quota/billing apply. The separate React/web Gemini integration above is retained.
+Android 2.4.1 calls the **Gemini API directly from the native Android app**. Open the sixth **AI** tab → **Gemini settings**, enter your own Gemini API key and select a model (default `gemini-3.8-flash`). The key is encrypted with Android Keystore. There is no HAL AI server, website dependency or model download. Internet and Google API quota/billing apply. The separate React/web Gemini integration above is retained.
+
+The Android key field supports long authorization keys and dots, cleans pasted whitespace and does not silently truncate pasted credentials.
 
 Position Copilot explains app-calculated P&L, risk and hedge limitations. Six perspectives requests one model's review across technicals, business, app news, derivatives, risk and synthesis. App research explains news and indicators already fetched by the app, without AI web search. Before each run, the UI lists the shared evidence and requires a sharing checkbox. Broker tokens, private notes, bookmarks and journal text are excluded; AI evidence/replies are transient and excluded from backups. Stop, timeout and late-response guards prevent obsolete replies from appearing as current analysis. Direct Upstox and Gemini work independently of a HAL backend.
 

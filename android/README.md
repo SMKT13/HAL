@@ -1,6 +1,10 @@
-# HAL Desk 2.4 — Android research and position monitor
+# HAL Desk 2.4.1 — Android research and position monitor
 
-Personal, read-only HAL app for Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 6. Preserve the original signing key and storage origin to update an existing installation without losing its saved book.
+Personal, read-only HAL app for Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 7. Preserve the original signing key and storage origin to update an existing installation without losing its saved book.
+
+## Fixed in 2.4.1 — API key paste
+
+The native key field no longer silently truncates at 256 characters or rejects dots. It accepts header-safe opaque keys up to 8,192 characters, including long authorization-key formats. Pasted whitespace, line wrapping, common invisible separators and matching quote wrappers are cleaned before secure storage. Empty input retains a saved key. Incomplete, oversized and unsupported-character errors are distinguished; Google checks actual key validity on an explicit review request. Neither keys nor clipboard content are logged or exposed to the page.
 
 ## New in 2.4 — direct Gemini API
 
@@ -81,7 +85,7 @@ bash build.sh
 
 Restore the existing private `signing/personal.jks` and `signing/password.txt` before building an update. They are deliberately excluded from Git. The build refuses to silently create a replacement signing identity. For a separate new installation only, set `HAL_CREATE_SIGNING_KEY=1`. A different key cannot update the previously installed app.
 
-Output: `build/HAL-Desk-v2.4.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 21; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release. It uses the installed Android SDK tools and standard platform APIs only; no AI dependency or model downloads are performed by the build.
+Output: `build/HAL-Desk-v2.4.1.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 21; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release. It uses the installed Android SDK tools and standard platform APIs only; no AI dependency or model downloads are performed by the build.
 
 ## Checks
 

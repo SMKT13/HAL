@@ -101,7 +101,7 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return prefs.getString("mode","direct");}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.4");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.4.1");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
@@ -152,8 +152,9 @@ public final class MainActivity extends Activity {
         form.addView(text("Gemini API key"));
         EditText credential=new EditText(this);credential.setSingleLine(true);credential.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         credential.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
-        credential.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(256)});
+        // Do not silently truncate long authorization keys when pasting.
         credential.setHint(secrets.has("gemini")?"Saved securely — leave blank to keep":"Paste your Gemini API key");form.addView(credential);
+        form.addView(text("Paste the complete key from Google AI Studio. Pasted whitespace is removed automatically. Key formats containing dots and long authorization keys are supported; Google verifies the key when you run a review."));
         form.addView(text("Model ID"));EditText model=new EditText(this);model.setSingleLine(true);model.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         model.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(81)});model.setText(prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));form.addView(model);
         form.addView(text("The key is encrypted with Android Keystore and is never sent to the web page or included in backups. Selected questions and evidence go to Google only when you run a review. Broker tokens and private notes are excluded. API usage may incur Google charges. Research uses news and indicators already fetched by this app; no AI web search."));
@@ -163,9 +164,9 @@ public final class MainActivity extends Activity {
         dialog.setOnShowListener(d->{
             dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
-                String value=credential.getText().toString().trim(),selected=model.getText().toString().trim();
+                final String value;String selected=model.getText().toString().trim();
+                try{value=AiPolicy.pastedKey(credential.getText().toString());}catch(Exception error){credential.setError(error.getMessage());return;}
                 try{AiPolicy.model(selected);}catch(Exception error){model.setError(error.getMessage());return;}
-                if(!value.isEmpty()&&!AiPolicy.validKey(value)){credential.setError("Paste only the Gemini API key, without spaces or line breaks.");return;}
                 if(value.isEmpty()&&!secrets.has("gemini")){credential.setError("Enter your Gemini API key.");return;}
                 try {
                     if(!value.isEmpty())secrets.set("gemini",value);

@@ -10,7 +10,32 @@ final class AiPolicy {
     static String endpoint(String value) throws Exception {
         return "https://generativelanguage.googleapis.com/v1beta/models/"+model(value)+":generateContent";
     }
-    static boolean validKey(String value){return value!=null&&value.matches("[A-Za-z0-9_-]{20,256}");}
+    static final int MAX_KEY_LENGTH=8192;
+    // The provider owns key formats. Locally check bounds and HTTP-header safety only.
+    static boolean validKey(String value){
+        if(value==null||value.length()<20||value.length()>MAX_KEY_LENGTH)return false;
+        for(int i=0;i<value.length();i++)if(value.charAt(i)<=32||value.charAt(i)>=127)return false;
+        return true;
+    }
+    static String pastedKey(String raw)throws Exception {
+        if(raw==null)return "";
+        if(raw.length()>32768)throw new Exception("The pasted text is too long. Copy only the complete Gemini API key.");
+        StringBuilder clean=new StringBuilder();
+        for(int i=0;i<raw.length();i++){
+            char c=raw.charAt(i);
+            if(Character.isWhitespace(c)||Character.isSpaceChar(c)||c=='\u200b'||c=='\u200c'||c=='\u200d'||c=='\u2060'||c=='\ufeff')continue;
+            clean.append(c);
+        }
+        String value=clean.toString();
+        if(value.length()>=2){char first=value.charAt(0),last=value.charAt(value.length()-1);
+            if(first==last&&(first=='\"'||first=='\''||first=='`'))value=value.substring(1,value.length()-1);
+        }
+        if(value.isEmpty())return value;
+        if(value.length()>MAX_KEY_LENGTH)throw new Exception("The key exceeds the supported length. Copy only the complete Gemini API key.");
+        if(value.length()<20)throw new Exception("The key looks incomplete. Copy the entire Gemini API key from Google AI Studio.");
+        if(!validKey(value))throw new Exception("The pasted key contains unsupported characters. Copy the complete key again from Google AI Studio.");
+        return value;
+    }
     static final String INSTRUCTIONS="You are HAL Desk's read-only Indian stock-market monitoring assistant. " +
         "You have no broker, execution or web-search tools. Use only the supplied app evidence. Never claim to place trades or check live news. " +
         "Do not invent prices, lot sizes, Greeks, news, URLs, probabilities or settlement rules. Missing evidence remains unknown. " +

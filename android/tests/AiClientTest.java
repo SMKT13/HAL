@@ -8,7 +8,7 @@ import org.json.*;
 
 /** Runs the real REST client with an in-memory HTTPS connection. No real keys/network. */
 public final class AiClientTest {
-    static final String KEY="SYNTHETIC_KEY_1234567890-TEST";
+    static final String KEY="AQ.SYNTHETIC_"+new String(new char[600]).replace('\0','x')+".suffix";
     static Mock next;static int checks;
     static void check(boolean ok){checks++;if(!ok)throw new AssertionError("REST check "+checks);}
     static class Mock extends HttpsURLConnection {
