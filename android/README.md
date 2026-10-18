@@ -1,14 +1,23 @@
-# HAL Desk 2.2 — Android research and position monitor
+# HAL Desk 2.3 — Android research and position monitor
 
-Personal, read-only HAL app for Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 4. Preserve the original signing key and storage origin to update an existing installation without losing its saved book.
+Personal, read-only HAL app for 64-bit Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 5. Preserve the original signing key and storage origin to update an existing installation without losing its saved book.
 
-## New in 2.2 — AI Copilot
+## New in 2.3 — fully on-device AI
 
-The sixth **AI** tab offers position questions, a six-perspective review from one Gemini model, and optional search research. Connect your private HAL backend using its public HTTPS origin (no path) and `HAL_VIEWER_KEY` in **Connect AI**. AI works independently of Direct Upstox or market-server mode. No backend is deployed automatically. The reachable server must run the current repository's Node gateway with `GEMINI_API_KEY`; `HAL_AI_SEARCH=1` enables search research. Its own Upstox/Yahoo configuration supplies the AI evidence. The phone's direct Upstox token is never sent to this server.
+The **AI** tab runs a local model in the Android process through LiteRT-LM 0.18.0. There is no AI server URL, API key, account, remote generation or cloud fallback. The separate web interface keeps its existing Gemini integration.
 
-The AI viewer key is encrypted with Android Keystore and kept outside the WebView, APK, backups and logs. Native HTTPS permits only `/api/config` and the three `/api/ai/` routes on the explicitly saved origin, rejects redirects, and requires a new viewer key when switching hosts. Disconnecting AI preserves market credentials and positions. Forgetting market credentials preserves the AI connection.
+Open **Set up local AI** and either:
 
-Every generation requires consent. Position requests include the saved open legs, manual marks, ledger inputs, funding and hedge preferences; notes, bookmarks and legacy notebook text are excluded. Search requests do not include the book. Replies and provider links are escaped and validated, remain in memory, and are discarded after relevant question/mode/book changes. Unknown or old source times remain visible. A failed model or connection request displays an error without a fabricated answer. Search grounding requires actual safe source links; it does not prove every claim. Provider quota or charges may apply.
+- Download the approximately 345 MB Qwen3 0.6B CPU int4 model in the native app. Download is explicitly initiated, pinned to a model revision, bounded to its expected size and verified against SHA-256. Redirects are restricted to Hugging Face and its model CDN hosts. Questions and financial records are never part of this request.
+- Import a trusted CPU `.litertlm` model through Android's document picker. The app streams it to private storage, checks the container header and a 1 MB–1.5 GB size limit, then atomically replaces the active model. Failed or cancelled transfers keep the previous model. Import does not establish inference compatibility; the runtime checks the model when a review starts.
+
+A 64-bit Android device and enough RAM/free storage are required. The default download needs about 550 MB free to preserve working space. Larger imported models need more. The APK bundles arm64-v8a and x86_64 CPU runtime libraries, not model weights. Performance and model quality depend on the device and selected model; no physical-device speed is claimed here.
+
+**Position Copilot** explains the shared engine's calculated position marks, ledger and risk. **Six perspectives** asks one local model for a review across technicals, business, saved news, derivatives, risk and synthesis. **Saved research** uses cached research only; it cannot search the web. Missing/stale inputs and source timestamps are preserved. App calculations remain authoritative; the generated interpretation can still be wrong. Sources shown under an answer come from saved app evidence, not invented model citations. Notes, bookmarks and free-text journal entries are excluded from prompts. Evidence/replies are transient and never exported or cached by the AI UI.
+
+Generation starts only when you press Ask/Review. Stop and timeout controls cancel local decoding. The runtime closes conversations and engines after a response to release memory. Replies for an earlier question, mode or saved book are discarded. Market quotes/news continue using the existing connection; local inference can use saved data with networking disabled. No trading or order endpoints are added.
+
+Official runtime guide: https://developers.google.com/edge/litert-lm/android . Model source and license: https://huggingface.co/litert-community/Qwen3-0.6B (Apache-2.0). Model revision, size and digest are pinned in `ModelPolicy.java`.
 
 ## New in 2.1 — Find a hedge
 
@@ -73,7 +82,7 @@ bash build.sh
 
 Restore the existing private `signing/personal.jks` and `signing/password.txt` before building an update. They are deliberately excluded from Git. The build refuses to silently create a replacement signing identity. For a separate new installation only, set `HAL_CREATE_SIGNING_KEY=1`. A different key cannot update the previously installed app.
 
-Output: `build/HAL-Desk-v2.2.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 17; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release.
+Output: `build/HAL-Desk-v2.3.apk`. The optional Android Studio/Gradle project uses AGP 8.7.3 / Gradle 8.9 / JDK 17; no wrapper is included. Studio can sync without private keys, but a release without a signing key is unsigned. The shell build is the route verified for this release. `prepare-runtime.py` downloads hash-pinned runtime dependencies; `package-runtime.py` includes JNI libraries, Kotlin class-loader resources and service metadata. D8/R8 9.1.56 is pinned for Kotlin 2.4 compatibility. Runtime artifacts are excluded from Git. The first build requires internet for these public build dependencies; installed AI inference does not.
 
 ## Checks
 
@@ -90,6 +99,6 @@ An existing Chromium may be selected with `HAL_CHROMIUM_PATH`. UI tests run from
 
 ## License and privacy
 
-Lightweight Charts 5.0.8 is bundled under Apache-2.0 with its copyright notice, full license and TradingView attribution. See `licenses/` and Settings → Open source notices. The application has no ads, telemetry, external JavaScript, or order API allowlist. Financial records stay in the app sandbox except the explicitly approved AI requests described above. Android automatic cloud backup and screenshots are disabled. Exported backups are ordinary private files under the user's control, not encrypted by the app. Uninstalling deletes the app's records and credentials.
+Lightweight Charts 5.0.8 is bundled under Apache-2.0 with its copyright notice, full license and TradingView attribution. See `licenses/` and Settings → Open source notices. The application has no ads, telemetry, external JavaScript, or order API allowlist. Financial records stay in the app sandbox with AI inference performed locally as described above. Android automatic cloud backup and screenshots are disabled. Exported backups are ordinary private files under the user's control, not encrypted by the app. Uninstalling deletes the app's records and credentials.
 
 This is an unofficial personal app, unaffiliated with HAL, NSE or Upstox.

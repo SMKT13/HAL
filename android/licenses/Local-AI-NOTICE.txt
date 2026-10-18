@@ -1,0 +1,19 @@
+HAL Desk on-device AI acknowledgements
+
+LiteRT-LM 0.18.0 — The LiteRT-LM Authors / Google AI Edge
+https://github.com/google-ai-edge/LiteRT-LM
+Apache License 2.0
+
+Kotlin standard library and reflection 2.4.0 — JetBrains
+Kotlin coroutines 1.11.0 — JetBrains
+Gson 2.14.0 — Google
+JetBrains annotations 23.0.0 — JetBrains
+These runtime dependencies are distributed under Apache License 2.0. Their resource/license files are included in the APK.
+
+Optional downloaded model: litert-community/Qwen3-0.6B
+Original model: Qwen/Qwen3-0.6B — Qwen Team
+https://huggingface.co/litert-community/Qwen3-0.6B
+Apache License 2.0. Weights are downloaded only on request, not bundled in the APK.
+
+D8/R8 9.1.56 is a build-only dependency, not part of the APK runtime.
+Apache License 2.0 text is available in Lightweight-Charts-LICENSE.txt and dependency resources.

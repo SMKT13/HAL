@@ -38,4 +38,4 @@ jobs:
           java-version: "17"
       - run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
       - run: HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash android/build.sh
-      - run: javac -d android/build/test-classes android/app/src/main/java/in/smkt/haldesk/AiEndpoint.java android/tests/AiEndpointTest.java && java -cp android/build/test-classes in.smkt.haldesk.AiEndpointTest
+      - run: javac -d android/build/test-classes android/app/src/main/java/in/smkt/haldesk/ModelPolicy.java android/app/src/main/java/in/smkt/haldesk/ModelStore.java android/app/src/main/java/in/smkt/haldesk/LocalPrompt.java android/tests/LocalAiTest.java && java -cp android/build/test-classes in.smkt.haldesk.LocalAiTest

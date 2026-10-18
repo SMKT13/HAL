@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
+import android.provider.OpenableColumns;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -42,7 +44,11 @@ public final class MainActivity extends Activity {
     private SharedPreferences prefs;
     private final ExecutorService executor=Executors.newSingleThreadExecutor();
     private final ExecutorService researchExecutor=Executors.newFixedThreadPool(2);
-    private final ExecutorService aiExecutor=Executors.newFixedThreadPool(2);
+    private final ExecutorService aiExecutor=Executors.newSingleThreadExecutor();
+    private final LocalAi localAi=new LocalAi();
+    private ModelStore modelStore;
+    private final AtomicBoolean modelBusy=new AtomicBoolean(false),modelCancelled=new AtomicBoolean(false);
+    private volatile String activeAiId="";
     private final AtomicReference<Object> aiWorking=new AtomicReference<>();
     private volatile int aiGeneration=0;
     private final ConcurrentHashMap<String,Long> researchRequests=new ConcurrentHashMap<>();
@@ -59,6 +65,7 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         secrets=new SecretStore(this);prefs=getSharedPreferences("connection",MODE_PRIVATE);
+        try{modelStore=new ModelStore(getFilesDir());secrets.remove("ai_viewer");prefs.edit().remove("ai_origin").apply();}catch(Exception ignored){}
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(11,16,32));
         root.setOnApplyWindowInsetsListener((view,insets)->{ view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom()); return insets.consumeSystemWindowInsets(); });
         web=new WebView(this);web.setBackgroundColor(Color.rgb(11,16,32));
@@ -99,94 +106,129 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return prefs.getString("mode","direct");}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.2");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.3");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
     private void aiStatus() {
-        JSONObject data=object("configured",secrets.has("ai_viewer"));
-        try { data.put("origin",prefs.getString("ai_origin",MarketClient.SERVER)); } catch(Exception ignored) {}
+        JSONObject data=object("configured",modelStore!=null&&modelStore.ready()&&!modelBusy.get());
+        try {data.put("offline",true);data.put("model",modelStore!=null&&modelStore.ready()?modelStore.label():"No local model installed");data.put("busy",modelBusy.get());data.put("revision",aiGeneration);}catch(Exception ignored){}
         send("ai_connection",data);
     }
     private void aiRequest(String request, boolean config) {
-        if(request==null || request.length()>128000)return;
-        final JSONObject args;
-        try { args=new JSONObject(request); } catch(Exception error) { return; }
-        final String id=args.optString("id"),selectedMode=config?null:args.optString("mode");
-        if(!id.matches("[A-Za-z0-9_-]{1,80}"))return;
-        final JSONObject payload=new JSONObject();
+        if(request==null||request.length()>16000)return;
+        final JSONObject args;try{args=new JSONObject(request);}catch(Exception error){return;}
+        final String id=args.optString("id");if(!id.matches("[A-Za-z0-9_-]{1,80}"))return;
         try {
-            AiEndpoint.target(prefs.getString("ai_origin",MarketClient.SERVER),selectedMode);
-            if(!config) {
-                if(!Boolean.TRUE.equals(args.opt("consent")))throw new Exception("Confirm sharing this request with Gemini.");
-                String message=args.optString("message","").trim();
-                if(message.length()>2000 || (!"deliberate".equals(selectedMode)&&message.isEmpty()))throw new Exception("Enter a question of up to 2,000 characters.");
-                payload.put("consent",true);payload.put("message",message);
-                if(!"research".equals(selectedMode)) {
-                    JSONObject source=args.optJSONObject("book");
-                    if(source==null || source.optJSONArray("legs")==null || source.getJSONArray("legs").length()>12)throw new Exception("Review the saved position book first.");
-                    JSONObject clean=new JSONObject();
-                    for(String key:new String[]{"version","legs","journal","funding","hedge","preferences","legacy"})if(source.has(key))clean.put(key,source.get(key));
-                    clean.put("notes",new JSONArray());clean.put("bookmarks",new JSONArray());
-                    JSONArray journal=clean.optJSONArray("journal");if(journal!=null)for(int i=0;i<journal.length();i++){JSONObject entry=journal.optJSONObject(i);if(entry!=null)entry.remove("note");}
-                    JSONObject legacy=clean.optJSONObject("legacy");if(legacy!=null)legacy.put("journal",new JSONArray());
-                    payload.put("book",clean);
-                }
+            if(config){
+                JSONObject info=object("aiEnabled",modelStore!=null&&modelStore.ready()&&!modelBusy.get());
+                info.put("model",modelStore!=null&&modelStore.ready()?modelStore.label():"Import a local model");info.put("offline",true);info.put("researchEnabled",true);
+                JSONObject event=object("id",id);event.put("data",info);send("ai_config",event);return;
             }
-            // Runs on the UI thread, as do credential updates: capture the host and key together.
-            final String origin=prefs.getString("ai_origin",MarketClient.SERVER),credential=secrets.get("ai_viewer");
-            if(credential.isEmpty())throw new Exception("Connect your AI server and viewer key first.");
-            final int current=aiGeneration;
-            final Object ticket=new Object();
-            if(!config && !aiWorking.compareAndSet(null,ticket))throw new Exception("An AI request is still finishing. Please wait.");
+            if(!Boolean.TRUE.equals(args.opt("local")))throw new Exception("Only on-device AI requests are supported.");
+            if(modelBusy.get())throw new Exception("Wait for the model transfer to finish.");
+            if(modelStore==null||!modelStore.ready())throw new Exception("Download or import a local model first.");
+            JSONObject evidence=args.optJSONObject("evidence");if(evidence==null)throw new Exception("Refresh the app evidence before running a review.");
+            final String prompt=LocalPrompt.build(args.optString("mode"),args.optString("message"),evidence.toString());
+            final String dataAsOf=evidence.optString("quoteAsOf","");
+            final JSONArray sources=evidence.optJSONArray("sources");
+            final int current=aiGeneration;final Object ticket=new Object();
+            if(!aiWorking.compareAndSet(null,ticket))throw new Exception("The previous local review is still finishing. Please wait.");
+            activeAiId=id;localAi.prepare();
             aiExecutor.execute(()->{
                 try {
                     if(current!=aiGeneration)return;
-                    JSONObject result=new AiClient().request(origin,credential,selectedMode,config?null:payload);
-                    JSONObject event=object("id",id);event.put("data",result);
-                    if(current==aiGeneration)send(config?"ai_config":"ai_result",event);
-                } catch(Exception error) {
+                    String reply=localAi.generate(modelStore.file(),getCacheDir(),prompt);
+                    JSONObject result=object("success",true);result.put("local",true);result.put("source","On-device · "+modelStore.label());
+                    result.put("reply",reply);result.put("grounded",false);result.put("generatedAt",java.time.Instant.now().toString());
+                    result.put("dataAsOf",dataAsOf);result.put("sources",sources==null?new JSONArray():sources);
+                    JSONObject event=object("id",id);event.put("data",result);if(current==aiGeneration)send("ai_result",event);
+                } catch(Throwable error) {
                     JSONObject event=object("id",id);
-                    try {event.put("message",error instanceof java.io.IOException?"Could not reach the AI server. Check your connection and retry.":error.getMessage());}catch(Exception ignored){}
-                    if(current==aiGeneration)send(config?"ai_config_error":"ai_error",event);
-                } finally {if(!config)aiWorking.compareAndSet(ticket,null);}
+                    String message=error instanceof OutOfMemoryError?"The local model needs more free RAM. Close other apps and try a smaller model.":error instanceof UnsatisfiedLinkError?"The local runtime could not load on this device. A supported 64-bit Android device is required.":"The local model could not finish. Try a shorter question or a compatible CPU .litertlm model.";
+                    if(error instanceof Exception&&"Local review cancelled.".equals(error.getMessage()))message="Local review cancelled.";
+                    try{event.put("message",message);}catch(Exception ignored){}if(current==aiGeneration)send("ai_error",event);
+                } finally {if(aiWorking.compareAndSet(ticket,null))activeAiId="";}
             });
-        } catch(Exception error) {
-            JSONObject event=object("id",id);try{event.put("message",error.getMessage());}catch(Exception ignored){}
-            send(config?"ai_config_error":"ai_error",event);
-        }
+        }catch(Exception error){JSONObject event=object("id",id);try{event.put("message",error.getMessage());}catch(Exception ignored){}send(config?"ai_config_error":"ai_error",event);}
     }
-    private void showAiSettings() {
+    private boolean modelChangeAllowed(){
+        if(modelBusy.get()||aiWorking.get()!=null){send("ai_model_error",object("message","Stop the current local review or model transfer first."));return false;}
+        if(modelStore==null){send("ai_model_error",object("message","Local model storage is unavailable. Free storage and restart the app."));return false;}
+        return true;
+    }
+    private void pickModel(){
+        if(!modelChangeAllowed())return;
+        try{Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType("*/*");startActivityForResult(intent,43);}
+        catch(Exception error){send("ai_model_error",object("message","A model file picker is unavailable."));}
+    }
+    private void modelProgress(long bytes,long total){
+        JSONObject data=object("bytes",bytes);try{data.put("total",total);}catch(Exception ignored){}send("ai_model_progress",data);
+    }
+    private void importModel(Uri uri){
+        if(!modelChangeAllowed()||!modelBusy.compareAndSet(false,true))return;
+        modelCancelled.set(false);aiStatus();
+        aiExecutor.execute(()->{
+            try {
+                String label="Imported model.litertlm";long size=-1;
+                try(Cursor cursor=getContentResolver().query(uri,new String[]{OpenableColumns.DISPLAY_NAME,OpenableColumns.SIZE},null,null,null)){
+                    if(cursor!=null&&cursor.moveToFirst()){
+                        int n=cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME),b=cursor.getColumnIndex(OpenableColumns.SIZE);
+                        if(n>=0)label=cursor.getString(n);if(b>=0&&!cursor.isNull(b))size=cursor.getLong(b);
+                    }
+                }
+                if(label==null||!label.toLowerCase(java.util.Locale.ROOT).endsWith(".litertlm"))throw new Exception("Choose a .litertlm model file.");
+                try(InputStream input=getContentResolver().openInputStream(uri)){
+                    if(input==null)throw new Exception("The model file could not be opened.");
+                    modelStore.install(input,label,size,null,modelCancelled,this::modelProgress);
+                }
+                aiGeneration++;send("ai_model_done",object("message","Model imported. All AI reviews run on this phone."));
+            }catch(Exception error){send("ai_model_error",object("message",error instanceof java.io.InterruptedIOException?"Model transfer cancelled.":error.getMessage()));}
+            finally{modelBusy.set(false);aiStatus();}
+        });
+    }
+    private void downloadModel(){
+        if(!modelChangeAllowed())return;
+        new AlertDialog.Builder(this).setTitle("Download local AI model?")
+            .setMessage("Qwen3 0.6B CPU model: about 345 MB, downloaded once from Hugging Face. Your positions and questions are never sent. Keep at least 550 MB free for the model. You can import a compatible .litertlm file instead.")
+            .setNegativeButton("Cancel",null).setPositiveButton("Download",(dialog,which)->{
+                if(!modelChangeAllowed()||!modelBusy.compareAndSet(false,true))return;
+                modelCancelled.set(false);aiStatus();
+                aiExecutor.execute(()->{
+                    javax.net.ssl.HttpsURLConnection connection=null;
+                    try {
+                        String address=ModelPolicy.DOWNLOAD_URL;
+                        for(int redirects=0;redirects<6;redirects++){
+                            ModelPolicy.downloadDestination(address);
+                            connection=(javax.net.ssl.HttpsURLConnection)new java.net.URL(address).openConnection();
+                            connection.setInstanceFollowRedirects(false);connection.setConnectTimeout(20000);connection.setReadTimeout(30000);connection.setRequestProperty("Accept-Encoding","identity");
+                            int code=connection.getResponseCode();
+                            if(code>=300&&code<400){String location=connection.getHeaderField("Location");String next=new java.net.URL(new java.net.URL(address),location).toString();connection.disconnect();connection=null;address=next;continue;}
+                            if(code!=200)throw new Exception("The model download is unavailable. Retry later or import a model file.");
+                            try(InputStream input=connection.getInputStream()){modelStore.install(input,"Qwen3 0.6B · CPU int4",ModelPolicy.DOWNLOAD_BYTES,ModelPolicy.DOWNLOAD_SHA,modelCancelled,this::modelProgress);}
+                            aiGeneration++;send("ai_model_done",object("message","Model downloaded and checksum verified. AI now runs offline on this phone."));return;
+                        }
+                        throw new Exception("Too many model download redirects. Import a model file instead.");
+                    }catch(Exception error){send("ai_model_error",object("message",error instanceof java.io.InterruptedIOException?"Model transfer cancelled.":"The model download could not finish. The previous model is retained; retry or import a .litertlm file."));}
+                    finally{if(connection!=null)connection.disconnect();modelBusy.set(false);aiStatus();}
+                });
+            }).show();
+    }
+    private void showAiSettings(){
         if(aiSettingsShowing)return;aiSettingsShowing=true;
-        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(24),dp(8),dp(24),dp(16));
-        form.addView(text("Connect your private HAL AI server. Gemini uses its server-side key and market feed. Your phone's Upstox token is never sent to this server. Only requests you approve are shared."));
-        form.addView(text("HAL server HTTPS address"));
-        EditText address=new EditText(this);address.setSingleLine(true);address.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);address.setText(prefs.getString("ai_origin",MarketClient.SERVER));form.addView(address);
-        form.addView(text("Viewer key — HAL_VIEWER_KEY"));
-        EditText credential=new EditText(this);credential.setSingleLine(true);credential.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);credential.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);credential.setHint(secrets.has("ai_viewer")?"Saved securely — leave blank to keep":"Enter the server viewer key");form.addView(credential);
-        form.addView(text("The server needs GEMINI_API_KEY and the HAL AI routes from this repository. AI works with either market connection mode. Provider quota or charges may apply."));
-        ScrollView scroll=new ScrollView(this);scroll.addView(form);
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("AI connection").setView(scroll).setPositiveButton("Save AI connection",null).setNegativeButton("Cancel",null).setNeutralButton("Disconnect AI",null).create();
-        dialog.setOnDismissListener(d->{aiSettingsShowing=false;credential.setText("");});
-        dialog.setOnShowListener(d->{
-            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
-                try {
-                    String origin=AiEndpoint.normalize(address.getText().toString()),value=credential.getText().toString().trim();
-                    if(value.length()>16384 || value.matches("(?s).*\\p{Cntrl}.*") || value.contains(" "))throw new Exception("Paste only the viewer key, without spaces or line breaks.");
-                    if(value.isEmpty()&&(!secrets.has("ai_viewer")||!origin.equals(prefs.getString("ai_origin",MarketClient.SERVER))))throw new Exception("Enter the viewer key for this server address.");
-                    // Drop the prior key before changing hosts, so a failed save cannot mix credentials.
-                    if(!origin.equals(prefs.getString("ai_origin",MarketClient.SERVER)))secrets.remove("ai_viewer");
-                    if(!prefs.edit().putString("ai_origin",origin).commit())throw new Exception("The AI connection could not be saved.");
-                    if(!value.isEmpty())secrets.set("ai_viewer",value);
-                    aiGeneration++;aiWorking.set(null);dialog.dismiss();aiStatus();
-                } catch(Exception error){credential.setError(error.getMessage());}
-            });
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
-                try{secrets.remove("ai_viewer");aiGeneration++;aiWorking.set(null);dialog.dismiss();aiStatus();}
-                catch(Exception error){credential.setError("Could not remove the saved AI credential.");}
-            });
-        });dialog.show();
+        String message="AI runs entirely on this phone using LiteRT-LM. No account, API key or AI server is needed. Market feeds still use the existing data connection.\n\n"+
+            (modelStore!=null&&modelStore.ready()?"Installed: "+modelStore.label():"No local model is installed.")+"\n\nDownload the small CPU model once, or import a trusted CPU .litertlm model (up to 1.5 GB). Local models can be slower and less capable than cloud AI. Performance depends on your device's RAM. The app never searches the web during AI generation.";
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("On-device AI").setMessage(message)
+            .setPositiveButton("Download model",(d,w)->downloadModel()).setNegativeButton("Import model",(d,w)->pickModel())
+            .setNeutralButton("Remove model",(d,w)->{
+                if(!modelChangeAllowed())return;
+                new AlertDialog.Builder(this).setTitle("Remove local model?").setMessage("This frees the model's storage. Positions, notes and market credentials stay on your phone.")
+                    .setNegativeButton("Keep",null).setPositiveButton("Remove",(a,b)->{
+                        if(!modelChangeAllowed()||!modelBusy.compareAndSet(false,true))return;
+                        aiExecutor.execute(()->{try{modelStore.remove();aiGeneration++;}catch(Exception error){send("ai_model_error",object("message","Could not remove the model."));}finally{modelBusy.set(false);aiStatus();}});
+                    }).show();
+            }).create();
+        dialog.setOnDismissListener(d->aiSettingsShowing=false);dialog.setOnShowListener(d->dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE));dialog.show();
     }
     private void refresh(String expiry) {
         if(expiry==null || expiry.length()>10 || (!expiry.isEmpty() && !expiry.matches("\\d{4}-\\d{2}-\\d{2}"))) {send("error",object("code","invalid_expiry"));return;}
@@ -234,6 +276,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);if(result!=RESULT_OK||data==null||data.getData()==null){if(request==41)pendingExport=null;return;}
+        if(request==43){importModel(data.getData());return;}
         if(request==41){try{if(pendingExport==null)throw new Exception();try(OutputStream out=getContentResolver().openOutputStream(data.getData())){if(out==null)throw new Exception();out.write(pendingExport);}send("file_saved",new JSONObject());}catch(Exception e){send("file_error",object("message","The file could not be saved."));}finally{pendingExport=null;}}
         if(request==42){final Uri uri=data.getData();executor.execute(()->{try{ByteArrayOutputStream bytes=new ByteArrayOutputStream();try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new Exception();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(bytes.size()+n>2000000)throw new Exception();bytes.write(buf,0,n);}}JSONObject imported=new JSONObject(new String(bytes.toByteArray(),StandardCharsets.UTF_8));send("import_preview",imported);}catch(Exception e){send("file_error",object("message","Choose a valid HAL Desk JSON backup under 2 MB."));}});}
     }
@@ -288,6 +331,8 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void aiConfig(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,true));}
         @JavascriptInterface public void ai(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,false));}
         @JavascriptInterface public void aiSettings(){runOnUiThread(()->showAiSettings());}
+        @JavascriptInterface public void aiCancel(String id){if(id!=null&&id.equals(activeAiId))localAi.cancel();}
+        @JavascriptInterface public void aiCancelModel(){modelCancelled.set(true);}
         @JavascriptInterface public void openLink(String url){runOnUiThread(()->MainActivity.this.openLink(url));}
         @JavascriptInterface public void exportBackup(String json){runOnUiThread(()->exportDocument(json,false));}
         @JavascriptInterface public void exportCSV(String csv){runOnUiThread(()->exportDocument(csv,true));}
@@ -301,8 +346,8 @@ public final class MainActivity extends Activity {
             catch(Exception error){send("error",object("code","browser_unavailable"));}
         });}
     }
-    @Override protected void onPause(){super.onPause();web.onPause();web.pauseTimers();}
+    @Override protected void onPause(){super.onPause();localAi.cancel();web.onPause();web.pauseTimers();}
     @Override protected void onResume(){super.onResume();if(web!=null){web.onResume();web.resumeTimers();}}
-    @Override protected void onDestroy(){generation++;aiGeneration++;executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}super.onDestroy();}
+    @Override protected void onDestroy(){generation++;aiGeneration++;modelCancelled.set(true);localAi.cancel();executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}super.onDestroy();}
     @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp.back()",null);else super.onBackPressed();}
 }

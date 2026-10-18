@@ -18,3 +18,5 @@
 .ai-compose textarea{min-height:120px;resize:vertical}.ai-consent{align-items:flex-start;line-height:1.6}.ai-consent input{margin-top:5px;flex-shrink:0}
 .ai-answer{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8}.ai-provenance p{margin-bottom:0}#ai-results{margin-top:20px}#ai-results li{margin:8px 0;overflow-wrap:anywhere}#ai-results h2,#ai-results h3,#ai-results .eyebrow{overflow-wrap:anywhere}.ai-sources{display:grid;gap:10px}.ai-sources button{text-align:left;white-space:normal;overflow-wrap:anywhere;max-width:100%}
 @media(max-width:350px){.ai-connection{align-items:flex-start;flex-direction:column}.bottom-nav button{font-size:.6rem}#ai-modes{gap:0}#ai-modes button{font-size:.72rem}}
+
+#ai-stop[hidden],#ai-cancel-model[hidden]{display:none}
