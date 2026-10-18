@@ -43,6 +43,21 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(data['data']['annual']['params']['time_period'], 'yearly')
         self.assertNotIn('TEST-SECRET', json.dumps(data)); self.assertEqual(len(data['data']), 8)
 
+    def test_pattern_history_is_daily_only_and_has_no_intraday_request(self):
+        calls = []
+        def api(path, params, token):
+            calls.append(path)
+            return {'candles': []}
+        with patch.dict(os.environ, {'UPSTOX_ACCESS_TOKEN': 'fixture-secret'}), patch.object(u, 'hal_underlying', return_value='NSE_EQ|INE066F01020'), patch.object(r, 'api', side_effect=api):
+            data = r.load('patterns', 'D')
+            for frame in ('15m', '1h'):
+                with self.assertRaises(u.FeedError): r.load('patterns', frame)
+        self.assertEqual(len(calls), 1)
+        self.assertIn('/days/1/', calls[0])
+        end, start = calls[0].split('/')[-2:]
+        self.assertEqual((dt.date.fromisoformat(end) - dt.date.fromisoformat(start)).days, 1826)
+        self.assertNotIn('fixture-secret', json.dumps(data))
+
     def test_token_rotation_invalidates_cache(self):
         with patch.object(r, 'api', return_value={'status': 'NORMAL_OPEN'}) as call:
             with patch.dict(os.environ, {'UPSTOX_ACCESS_TOKEN': 'one'}): r.load('status'); r.load('status')

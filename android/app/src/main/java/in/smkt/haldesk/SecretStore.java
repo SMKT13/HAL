@@ -41,5 +41,8 @@ final class SecretStore {
         return new String(cipher.doFinal(Base64.decode(parts[1],Base64.NO_WRAP)),StandardCharsets.UTF_8);
     }
     boolean has(String name) { return prefs.contains(name); }
+    synchronized void remove(String name) throws Exception {
+        if (!prefs.edit().remove(name).commit()) throw new Exception("secure_save_failed");
+    }
     synchronized void clear() { prefs.edit().clear().commit(); }
 }

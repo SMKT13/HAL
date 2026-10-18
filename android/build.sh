@@ -5,6 +5,7 @@ cd "$(dirname "$0")"
 bt="$ANDROID_SDK_ROOT/build-tools/35.0.0"
 platform="$ANDROID_SDK_ROOT/platforms/android-35/android.jar"
 rm -rf build/classes build/generated build/dex
+rm -f build/classes.jar build/unsigned.apk build/aligned.apk
 mkdir -p build/classes build/generated build/dex signing
 "$bt/aapt2" compile --dir app/src/main/res -o build/resources.zip
 "$bt/aapt2" link -o build/unsigned.apk -I "$platform" --manifest app/src/main/AndroidManifest.xml --java build/generated -A app/src/main/assets build/resources.zip
@@ -32,5 +33,5 @@ if [ ! -f signing/personal.jks ]; then
  python3 -c 'import secrets,pathlib;pathlib.Path("signing/password.txt").write_text(secrets.token_urlsafe(32))'
  keytool -genkeypair -keystore signing/personal.jks -storepass:file signing/password.txt -keypass:file signing/password.txt -alias hal-personal -dname 'CN=HAL Upstox Personal App' -keyalg RSA -keysize 3072 -validity 10000 >/dev/null 2>&1
 fi
-"$bt/apksigner" sign --ks signing/personal.jks --ks-pass file:signing/password.txt --out build/HAL-Desk-v2.1.apk build/aligned.apk
-"$bt/apksigner" verify --verbose --print-certs build/HAL-Desk-v2.1.apk
+"$bt/apksigner" sign --ks signing/personal.jks --ks-pass file:signing/password.txt --out build/HAL-Desk-v2.5.apk build/aligned.apk
+"$bt/apksigner" verify --verbose --print-certs build/HAL-Desk-v2.5.apk

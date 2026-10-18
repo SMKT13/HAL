@@ -27,10 +27,11 @@ final class ResearchClient {
         catch(Exception e){String code=error(e);if(code.equals("token_expired_or_unauthorized")||code.equals("upstox_rate_limited")||code.equals("credential_missing"))throw e;errors.put(name,code);if(code.equals("network_unavailable")&&errors.length()>1)throw e;}
     }
     JSONObject load(String mode,String token,String section,String frame,String type)throws Exception{
-        if(!section.matches("candles|news|fundamentals|filings|status|chain|hedges"))throw new MarketClient.Failure("invalid_research_request");
+        if(!section.matches("candles|patterns|news|fundamentals|filings|status|chain|hedges"))throw new MarketClient.Failure("invalid_research_request");
         if(!type.matches("consolidated|standalone"))throw new MarketClient.Failure("invalid_research_request");
         if(section.equals("chain")||section.equals("hedges")){if(!frame.matches("\\d{4}-\\d{2}-\\d{2}"))throw new MarketClient.Failure("invalid_expiry");LocalDate.parse(frame);}
         else if(!frame.matches("D|15m|1h"))throw new MarketClient.Failure("invalid_research_request");
+        if(section.equals("patterns")&&!frame.equals("D"))throw new MarketClient.Failure("invalid_research_request");
         if(mode.equals("server"))return market.request(MarketClient.SERVER+"/api/upstox/research?section="+section+"&frame="+enc(frame)+"&type="+type,token,true);
         JSONObject out=new JSONObject(),data=new JSONObject(),errors=new JSONObject();
         out.put("section",section);out.put("frame",frame);out.put("type",type);out.put("source",section.equals("filings")?"NSE corporate RSS":"Upstox official API");
@@ -54,10 +55,10 @@ final class ResearchClient {
                 field(data,errors,"profile",base+"profile","",token);
                 field(data,errors,"peers",base+"competitors","",token);
             }
-            if(section.equals("candles")){
+            if(section.equals("candles")||section.equals("patterns")){
                 LocalDate today=LocalDate.now(ZoneId.of("Asia/Kolkata"));String unit=frame.equals("D")?"days":frame.equals("15m")?"minutes":"hours",interval=frame.equals("15m")?"15":"1";
-                field(data,errors,"history","/v3/historical-candle/"+enc(key)+"/"+unit+"/"+interval+"/"+today.minusDays(1)+"/"+today.minusDays(frame.equals("D")?450:frame.equals("15m")?25:80),"",token);
-                field(data,errors,"intraday","/v3/historical-candle/intraday/"+enc(key)+"/"+unit+"/"+interval,"",token);
+                field(data,errors,"history","/v3/historical-candle/"+enc(key)+"/"+unit+"/"+interval+"/"+today.minusDays(1)+"/"+today.minusDays(section.equals("patterns")?1827:frame.equals("D")?450:frame.equals("15m")?25:80),"",token);
+                if(!section.equals("patterns"))field(data,errors,"intraday","/v3/historical-candle/intraday/"+enc(key)+"/"+unit+"/"+interval,"",token);
             }
         }
         out.put("data",data);out.put("errors",errors);out.put("fetched_at_iso",OffsetDateTime.now().toString());return out;

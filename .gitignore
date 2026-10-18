@@ -10,6 +10,7 @@ cache.json
 reports/
 android/build/
 android/signing/
+android/runtime/
 *.apk
 *.jks
 *.keystore

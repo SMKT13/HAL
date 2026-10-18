@@ -33,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class MainActivity extends Activity {
     private WebView web;
@@ -40,6 +41,11 @@ public final class MainActivity extends Activity {
     private SharedPreferences prefs;
     private final ExecutorService executor=Executors.newSingleThreadExecutor();
     private final ExecutorService researchExecutor=Executors.newFixedThreadPool(2);
+    private final ExecutorService aiExecutor=Executors.newSingleThreadExecutor();
+    private volatile AiClient activeAi;
+    private volatile String activeAiId="";
+    private final AtomicReference<Object> aiWorking=new AtomicReference<>();
+    private volatile int aiGeneration=0;
     private final ConcurrentHashMap<String,Long> researchRequests=new ConcurrentHashMap<>();
     private byte[] pendingExport;
     private final AtomicBoolean working=new AtomicBoolean(false);
@@ -49,10 +55,12 @@ public final class MainActivity extends Activity {
     private static final String ORIGIN="https://appassets.androidplatform.net/";
     private boolean pageReady=false;
     private boolean settingsShowing=false;
+    private boolean aiSettingsShowing=false;
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         secrets=new SecretStore(this);prefs=getSharedPreferences("connection",MODE_PRIVATE);
+        try{secrets.remove("ai_viewer");prefs.edit().remove("ai_origin").apply();}catch(Exception ignored){}
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(11,16,32));
         root.setOnApplyWindowInsetsListener((view,insets)->{ view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom()); return insets.consumeSystemWindowInsets(); });
         web=new WebView(this);web.setBackgroundColor(Color.rgb(11,16,32));
@@ -69,6 +77,9 @@ public final class MainActivity extends Activity {
                 String url=request.getUrl().toString();String asset="";String mime="text/plain";
                 if(url.equals(ORIGIN+"index.html")){asset="index.html";mime="text/html";}
                 if(url.equals(ORIGIN+"app.js")){asset="app.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"intelligence.js")){asset="intelligence.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"intelligence-ui.js")){asset="intelligence-ui.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"ai-ui.js")){asset="ai-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"core.js")){asset="core.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"analytics.js")){asset="analytics.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"hedge.js")){asset="hedge.js";mime="application/javascript";}
@@ -92,8 +103,84 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return prefs.getString("mode","direct");}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.1");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.5");}catch(Exception ignored){}
         send("connection",obj);
+        aiStatus();
+    }
+    private void aiStatus() {
+        JSONObject data=object("configured",secrets.has("gemini"));
+        try{data.put("direct",true);data.put("model",prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));data.put("revision",aiGeneration);}catch(Exception ignored){}
+        send("ai_connection",data);
+    }
+    private void aiRequest(String request,boolean config) {
+        if(request==null||request.length()>65536)return;
+        final JSONObject args;try{args=new JSONObject(request);}catch(Exception error){return;}
+        final String id=args.optString("id");if(!id.matches("[A-Za-z0-9_-]{1,80}"))return;
+        try {
+            final String model=AiPolicy.model(prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));
+            if(config){
+                JSONObject info=object("aiEnabled",secrets.has("gemini"));info.put("model",model);info.put("direct",true);info.put("researchEnabled",true);
+                JSONObject event=object("id",id);event.put("data",info);send("ai_config",event);return;
+            }
+            if(!Boolean.TRUE.equals(args.opt("consent")))throw new Exception("Confirm sharing this question and its evidence with Gemini.");
+            if(!secrets.has("gemini"))throw new Exception("Enter your Gemini API key in AI settings first.");
+            JSONObject evidence=args.optJSONObject("evidence");if(evidence==null)throw new Exception("Refresh the app evidence before running a review.");
+            final String mode=args.optString("mode"),question=args.optString("message");
+            AiPolicy.prompt(mode,question,evidence.toString());
+            final String key;
+            try{key=secrets.get("gemini");}catch(Exception error){throw new Exception("Secure key storage is unavailable. Unlock your phone and check AI settings.");}
+            if(!AiPolicy.validKey(key))throw new Exception("Enter a valid Gemini API key in AI settings.");
+            final int current=aiGeneration;final Object ticket=new Object();
+            if(!aiWorking.compareAndSet(null,ticket))throw new Exception("The previous API request is still finishing. Please wait.");
+            final AiClient client=new AiClient();activeAi=client;activeAiId=id;
+            aiExecutor.execute(()->{
+                try {
+                    if(current!=aiGeneration)return;
+                    JSONObject result=client.generate(key,model,mode,question,evidence);
+                    JSONObject event=object("id",id);event.put("data",result);if(current==aiGeneration)send("ai_result",event);
+                }catch(Exception error){
+                    JSONObject event=object("id",id);
+                    try{event.put("message",error instanceof AiClient.Failure?error.getMessage():"The Gemini request could not finish. Check your API settings and retry.");}catch(Exception ignored){}
+                    if(current==aiGeneration)send("ai_error",event);
+                }finally{if(aiWorking.compareAndSet(ticket,null)){activeAiId="";activeAi=null;}}
+            });
+        }catch(Exception error){JSONObject event=object("id",id);try{event.put("message",error.getMessage());}catch(Exception ignored){}send(config?"ai_config_error":"ai_error",event);}
+    }
+    private void cancelAi(){AiClient client=activeAi;if(client!=null)client.cancel();}
+    private void showAiSettings(){
+        if(aiSettingsShowing)return;aiSettingsShowing=true;
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(24),dp(8),dp(24),dp(16));
+        form.addView(text("Android calls Google's Gemini API directly. No HAL server or website is needed. Internet and your Google AI quota are required."));
+        form.addView(text("Gemini API key"));
+        EditText credential=new EditText(this);credential.setSingleLine(true);credential.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        credential.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+        // Do not silently truncate long authorization keys when pasting.
+        credential.setHint(secrets.has("gemini")?"Saved securely — leave blank to keep":"Paste your Gemini API key");form.addView(credential);
+        form.addView(text("Paste the complete key from Google AI Studio. Pasted whitespace is removed automatically. Key formats containing dots and long authorization keys are supported; Google verifies the key when you run a review."));
+        form.addView(text("Model ID"));EditText model=new EditText(this);model.setSingleLine(true);model.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        model.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(81)});model.setText(prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));form.addView(model);
+        form.addView(text("The key is encrypted with Android Keystore and is never sent to the web page or included in backups. Selected questions and evidence go to Google only when you run a review. Broker tokens and private notes are excluded. API usage may incur Google charges. Research uses news and indicators already fetched by this app; no AI web search."));
+        ScrollView scroll=new ScrollView(this);scroll.addView(form);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Gemini API settings").setView(scroll).setPositiveButton("Save",null).setNegativeButton("Cancel",null).setNeutralButton("Forget API key",null).create();
+        dialog.setOnDismissListener(d->{aiSettingsShowing=false;credential.setText("");});
+        dialog.setOnShowListener(d->{
+            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+                final String value;String selected=model.getText().toString().trim();
+                try{value=AiPolicy.pastedKey(credential.getText().toString());}catch(Exception error){credential.setError(error.getMessage());return;}
+                try{AiPolicy.model(selected);}catch(Exception error){model.setError(error.getMessage());return;}
+                if(value.isEmpty()&&!secrets.has("gemini")){credential.setError("Enter your Gemini API key.");return;}
+                try {
+                    if(!value.isEmpty())secrets.set("gemini",value);
+                    if(!prefs.edit().putString("ai_model",selected).commit())throw new Exception();
+                    aiGeneration++;cancelAi();dialog.dismiss();aiStatus();
+                }catch(Exception error){credential.setError("Could not save securely. Unlock your phone and try again.");}
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
+                try{secrets.remove("gemini");aiGeneration++;cancelAi();dialog.dismiss();aiStatus();}
+                catch(Exception error){credential.setError("Could not remove the saved API key.");}
+            });
+        });dialog.show();
     }
     private void refresh(String expiry) {
         if(expiry==null || expiry.length()>10 || (!expiry.isEmpty() && !expiry.matches("\\d{4}-\\d{2}-\\d{2}"))) {send("error",object("code","invalid_expiry"));return;}
@@ -180,8 +267,8 @@ public final class MainActivity extends Activity {
                 }catch(Exception error){credential.setError("Secure storage unavailable. Unlock your phone and try again.");}
             });
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
-                new AlertDialog.Builder(this).setTitle("Forget saved credentials?").setMessage("Your manual positions stay on this phone.")
-                    .setPositiveButton("Forget",(a,b)->{generation++;secrets.clear();client=new MarketClient();lastRequest=0;dialog.dismiss();status();send("reset",new JSONObject());})
+                new AlertDialog.Builder(this).setTitle("Forget market credentials?").setMessage("Remove the Upstox and market-server credentials. Your AI connection and manual positions stay on this phone.")
+                    .setPositiveButton("Forget",(a,b)->{try{generation++;secrets.remove("direct");secrets.remove("server");client=new MarketClient();lastRequest=0;dialog.dismiss();status();send("reset",new JSONObject());}catch(Exception error){credential.setError("Could not remove the saved market credentials.");}})
                     .setNegativeButton("Cancel",null).show();
             });
         });dialog.show();
@@ -192,6 +279,10 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void settings(){runOnUiThread(()->showSettings());}
         @JavascriptInterface public void refresh(String expiry){MainActivity.this.refresh(expiry);}
         @JavascriptInterface public void research(String request){MainActivity.this.research(request);}
+        @JavascriptInterface public void aiConfig(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,true));}
+        @JavascriptInterface public void ai(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,false));}
+        @JavascriptInterface public void aiSettings(){runOnUiThread(()->showAiSettings());}
+        @JavascriptInterface public void aiCancel(String id){runOnUiThread(()->{if(id!=null&&id.equals(activeAiId))cancelAi();});}
         @JavascriptInterface public void openLink(String url){runOnUiThread(()->MainActivity.this.openLink(url));}
         @JavascriptInterface public void exportBackup(String json){runOnUiThread(()->exportDocument(json,false));}
         @JavascriptInterface public void exportCSV(String csv){runOnUiThread(()->exportDocument(csv,true));}
@@ -207,6 +298,6 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onPause(){super.onPause();web.onPause();web.pauseTimers();}
     @Override protected void onResume(){super.onResume();if(web!=null){web.onResume();web.resumeTimers();}}
-    @Override protected void onDestroy(){generation++;executor.shutdownNow();researchExecutor.shutdownNow();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}super.onDestroy();}
+    @Override protected void onDestroy(){generation++;aiGeneration++;cancelAi();executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}super.onDestroy();}
     @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp.back()",null);else super.onBackPressed();}
 }
