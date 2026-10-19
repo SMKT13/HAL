@@ -22,3 +22,10 @@ test('price and loss triggers require confirmed book and appropriate fresh evide
 test('failed refresh removes price triggers and scenarios while preserving structural gaps',()=>{const {b,s}=fixture();b.legs[1].expiry='2026-11-24';b.riskProfile.reviewBelow=5001;b.riskProfile.confirmedBook=D.bookKey(b.legs);s.researchUnavailable=true;const d=D.review(b,s,{now});assert.equal(d.scenarios.length,0);assert.ok(!d.events.some(e=>e.id==='reviewBelow'));assert.ok(d.events.some(e=>e.title==='Protection ends before futures'));});
 test('pending refresh and failed required chains never use retained IV silently',()=>{const {b,s}=fixture();assert.equal(D.review(b,s,{now,refreshing:true}).scenarios.length,0);s.failedExpiries=[expiry];assert.equal(D.review(b,s,{now}).scenarios.length,0);delete s.failedExpiries;delete s.option_rows[0].put.iv;assert.match(D.review(b,s,{now}).scenarioError,/IV missing/);});
 test('empty book is a setup state and review is pure',()=>{assert.equal(D.review(A.emptyBook(),null,{now}).status,'Start with your position');const {b,s}=fixture(),before=JSON.stringify([b,s]);D.review(b,s,{now});assert.equal(JSON.stringify([b,s]),before);});
+
+test('every bundled script is reachable through the native WebView asset allowlist',()=>{
+ const fs=require('node:fs'),path=require('node:path'),base=path.join(__dirname,'../app/src/main');
+ const html=fs.readFileSync(path.join(base,'assets/index.html'),'utf8'),native=fs.readFileSync(path.join(base,'java/in/smkt/haldesk/MainActivity.java'),'utf8');
+ const files=[...html.matchAll(/<script src="([^"]+)"/g)].map(x=>x[1]);assert.ok(files.includes('desk.js')&&files.includes('desk-ui.js'));
+ for(const file of files){assert.ok(fs.existsSync(path.join(base,'assets',file)),file+' bundled');assert.ok(native.includes('if(url.equals(ORIGIN+"'+file+'")){asset="'+file+'";mime="application/javascript";}'),file+' native route');}
+});

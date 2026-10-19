@@ -1,6 +1,6 @@
 ## v2.6 position desk — 2026-10-19
 
-- 15 new pure-engine regressions cover profile migration/validation, per-leg clocks/units, accounting, model-to-model shocks, futures cash/reserve separation, stale/future funding, confirmation edits/expiry, trigger gates, failed/pending feeds, missing IV and nonmutation.
+- 15 new pure-engine regressions plus a native asset-route contract check cover profile migration/validation, per-leg clocks/units, accounting, model-to-model shocks, futures cash/reserve separation, stale/future funding, confirmation edits/expiry, trigger gates, failed/pending feeds, missing IV and nonmutation.
 - New Chromium desk suite covers four destinations, limits/confirmation/funding, trigger rendering, immediate refresh withholding, Plan navigation, consented AI evidence/research privacy, edited-book invalidation, persistence/backups, 320/390/768px dark/light and enlarged text.
 - Existing Android UI/AI/intelligence, React browser regression, Python/TypeScript and Android calculation suites pass. TypeScript and Vite build pass.
 - Native Gemini checks: 59 request-policy and 99 transport/response checks pass with mocked HTTPS.
