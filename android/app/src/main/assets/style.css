@@ -39,3 +39,5 @@
 .desk-heading{display:block;margin:18px 0 22px}.desk-heading h1{font-size:1.8rem;line-height:1.2;margin-top:5px}.desk-heading-actions{margin-top:14px}.desk-verdict{padding:16px 19px}.desk-verdict h2{font-size:1.05rem}.desk-verdict .text-button{min-height:36px}.basket-overview .big-value{font-size:2.5rem}.basket-overview{margin-bottom:12px}
 
 .view{animation:none}
+
+.context-item h3{margin:10px 0}.context-item details p{margin-top:10px;font-size:.8rem;color:var(--muted)}.context-item summary{margin:12px 0;font-size:.8rem;cursor:pointer}#desk-business>h3{margin-top:8px}#desk-business .metric-tile{padding:12px;box-shadow:none}#desk-business .metric-tile b{font-size:1.1rem!important}

@@ -1,4 +1,4 @@
- > Android v2.6 adds Today / My Position / Plan / Research, saved risk limits, book confirmation, funding freshness, shock review and consented AI desk evidence. See [Android release scope](android/README.md). This is the first rework stage; background alerts and wider market-impact integrations remain on the roadmap.
+ > Android v2.7 adds Today / My Position / Plan / Research, saved risk limits, book confirmation, funding freshness, shock review, shared held-contract full quotes, sourced position context and consented AI desk evidence. See [Android release scope](android/README.md). This is the first rework stage; background alerts and wider market-impact integrations remain on the roadmap.
 
 # HAL Desk
 

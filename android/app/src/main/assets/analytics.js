@@ -36,7 +36,7 @@ function technicals(raw,frame='D',now=Date.now(),fetchedAt=null){
  if(finite(hist)){score+=Math.sign(hist);evidence.push({label:'MACD histogram',value:hist,reading:hist>0?'Positive':'Negative'});}if(finite(rs.at(-1))){score+=rs.at(-1)>55?1:rs.at(-1)<45?-1:0;evidence.push({label:'RSI 14',value:rs.at(-1),reading:rs.at(-1)>70?'Overbought range':rs.at(-1)<30?'Oversold range':'Momentum range'});}
  return {ready:n>=50,stale,rows,all,frame,asOf:last.t,provisional:all.length>rows.length,close:last.c,sma20:s20.at(-1),sma50:s50.at(-1),sma200:s200.at(-1),rsi:rs.at(-1),macd:macd.at(-1),signal:signal.at(-1),hist,atr:atr(rows),mfi,bbLow:finite(sd)?bbMean-2*sd:null,bbHigh:finite(sd)?bbMean+2*sd:null,vol,pivot:p,s1:2*p-last.h,r1:2*p-last.l,support:Math.min(...rows.slice(-20).map(r=>r.l)),resistance:Math.max(...rows.slice(-20).map(r=>r.h)),bias:n<50?'Insufficient history':stale?'Data needs refresh':score>=2?'Bullish':score<=-2?'Bearish':'Neutral',evidence,series:{sma20:s20,sma50:s50,rsi:rs,macd,signal}};
 }
-function chainFor(l,s){return s?.option_expiry===l.expiry?s:s?.chains?.[l.expiry];}
+function chainFor(l,s){return s?.option_expiry===l.expiry?{...s,fetched_at_iso:s.optionChainFetchedAt||s.fetched_at_iso}:s?.chains?.[l.expiry];}
 function optionFor(l,s){return (chainFor(l,s)?.option_rows||[]).find(x=>x.strike===l.strike)?.put||null;}
 function risk(legs,s,now=Date.now()){
  const active=legs.filter(l=>expiryTime(l.expiry)>=now),futs=active.filter(l=>l.type==='FUT'),puts=active.filter(l=>l.type==='PE');

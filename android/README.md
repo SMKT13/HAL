@@ -1,3 +1,11 @@
+## v2.7 — Held-contract quotes and position context
+
+The position desk now refreshes full put quotes for every active expiry in the saved book, using the existing read-only Upstox full-quote feed. One shared valuation feeds Today, My Position, the ledger, scenarios and AI. The regular market snapshot still supplies spot and futures; a newer full-feed futures quote can update the same verified contract. Per-contract quote/trade/retrieval clocks remain intact, and a newer spot/basic chain cannot relabel an old put quote as fresh. Missing strikes, mismatched lot sizes, failed/pending requests and clock errors retain explicit unavailable/saved states. Full held-quote refreshes reuse the existing endpoint and observe a 15-second retry cooldown.
+
+Today also maps reported headlines to position-review questions. MoUs remain potential business, unconfirmed wording is labelled, and duplicate stories prefer the official source when available. Each card preserves publication time, source link, affected saved exposure, verification prompts and feed age. This is topic-based context, not independent verification or a numerical event-to-price forecast. Business checks show period-matched revenue, operating margin/profit and annual operating-cash-to-profit, with unknowns and partial/failed sources labelled. Direct Gemini receives this same position context only in consented position modes.
+
+Foreground auto-refresh retains its existing one-minute setting and now refreshes held put expiries as well; provider permissions/rate limits still apply. Full expiry chains are fetched by the existing feed, rather than a new arbitrary-instrument quote route. When the app is closed or Android suspends it, no refresh/notification guarantee is made. Background notifications, broader NIFTY/sector/VIX context and selective hedge adjustment routes remain future work.
+
 ## v2.6 — Position desk foundation
 
 The first position-centred rework is implemented in Android. Four primary destinations replace the six-item bottom bar: **Today, My Position, Plan, Research**. Markets, News and direct Gemini remain inside Research; Today opens a position-specific AI question without sending it automatically.

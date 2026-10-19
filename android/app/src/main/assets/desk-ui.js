@@ -1,6 +1,16 @@
 'use strict';
 const deskFields=['capital','maxLoss','hedgeBudget','reserve','reviewBelow','reviewAbove'];
-function deskReview(){return HALDesk.review(book,effectiveSnapshot(),{technical:pending.has(key('candles','D'))?null:technical('D'),refreshing:loading||[...pending.keys()].some(k=>k.startsWith('chain:'))});}
+function deskReview(){return HALDesk.review(book,effectiveSnapshot(),{technical:pending.has(key('candles','D'))?null:technical('D'),refreshing:loading});}
+function deskContext(){
+ const health=section=>{const p=getResearch(section);return {at:p?.fetched_at_iso,pending:pending.has(key(section,'D')),failed:failed.has(key(section,'D')),partial:Object.keys(p?.errors||{}).length>0};};
+ return HALDesk.context(book.legs,allNews,getResearch('fundamentals')?.data,{newsHealth:health('news'),filingsHealth:health('filings'),fundamentalHealth:health('fundamentals')});
+}
+function renderDeskContext(){
+ const c=deskContext(),b=c.business;
+ $('home-news').innerHTML=c.items.slice(0,4).map(n=>`<article class="card context-item"><div class="news-meta"><span>${esc(n.topic)} · ${n.official?'OFFICIAL FEED':'REPORTED'}</span><span>${esc(n.state)}</span></div><h3>${esc(n.title)}</h3><p class="fine">Published ${esc(when(n.published))} · ${esc(n.source)}</p><p class="small"><b>Review:</b> ${esc(n.development)}</p><details><summary>Why this matters to your position</summary><p>${esc(n.affected)}</p><p>${esc(n.positionLink)}</p><p><b>Verify:</b> ${esc(n.verify)}</p><p class="fine">${esc(n.evidence)}. No numerical price impact is inferred.</p></details><button class="text-button source-link" data-url="${esc(n.url)}">Read original source ↗</button></article>`).join('')||empty('No items in the available news/disclosure window. This does not mean there were no developments.');
+ $('desk-context-note').textContent='News: '+c.newsState+' · Filings: '+c.filingsState+'. '+c.limitations;
+ $('desk-business').innerHTML=`<span class="eyebrow">${esc(b.basis)} · ${esc(b.state)}</span><h3>${esc(b.period||'Reporting period unavailable')}</h3><div class="metric-grid two">${tile('REVENUE · ₹ CRORE',fmt(b.revenue),'Reported period above')}${tile('OPERATING MARGIN',C.finite(b.operatingMargin)?fmt(b.operatingMargin)+'%':'—','Matched reporting periods only')}${tile('NET PROFIT · ₹ CRORE',fmt(b.profit),'Matched revenue period')}${tile('OPERATING CASH / PROFIT',C.finite(b.cashConversion)?fmt(b.cashConversion,2)+'×':'—','Annual period: '+(b.cashPeriod||'unavailable'))}</div><p class="fine">Retrieved ${esc(when(b.retrievedAt))}${b.partial?' · Some financial fields failed.':''}. Compare seasonal year-on-year periods, deliveries and receivables before changing the thesis. These figures do not establish a fair price.</p><button class="text-button" data-desk-business>Review financial evidence ↗</button>`;
+}
 function syncDeskProfile(){for(const k of deskFields)$('desk-'+k).value=book.riskProfile[k]??'';}
 function deskPlan(which='scenario'){
  switchTab('plan');
@@ -32,18 +42,20 @@ function renderDesk(){
  $('desk-setup').innerHTML=setup.map(card).join('');$('desk-setup-count').textContent=setup.length+' input'+(setup.length===1?'':'s')+' to review';
  $('desk-stress').innerHTML=d.scenarios.length?'<div class="table-wrap"><table><thead><tr><th>Spot shock</th><th>Model change</th><th>Futures cash loss</th><th>Cash less reserve</th></tr></thead><tbody>'+d.scenarios.map(s=>`<tr><td>${s.shock}%</td><td>${money(s.modelChange)}</td><td>${money(s.futuresCashLoss)}</td><td class="${s.cashAfterReserve<0?'negative':''}">${money(s.cashAfterReserve)}</td></tr>`).join('')+'</tbody></table></div>':empty(d.scenarioError||'Scenario data unavailable.');
  $('desk-stress-note').textContent=(d.dataMode==='saved'?'Saved-snapshot planning. ':'')+'Instant price shocks at unchanged time and IV; changes compare two Black–Scholes model values, not the quoted premium. Cash loss assumes futures move with spot, no put sale proceeds and no extra margin. Cash headroom requires funding saved within 24 hours. Not a loss cap or forecast.';
+ $('desk-quotes-refresh').disabled=book.legs.filter(l=>l.type==='PE').some(l=>pending.has(key('hedges',l.expiry)));
  $('desk-health-rows').innerHTML=dataRow('Spot',d.spotCurrent?'Recent quote and trade timestamps':'Older, missing, failed or pending')+dataRow('Quote time',when(snapshot?.spot?.quote_as_of))+dataRow('Last spot trade',when(snapshot?.spot?.last_trade_at))+d.states.map(l=>`<div class="desk-feed-row"><b>${l.type==='PE'?fmt(l.strike,0)+' PE':'Futures'} · ${esc(shortDate(l.expiry))}</b><span class="pill">${esc(l.status.toUpperCase())}</span><p>${esc(l.reason)}</p><p>Quote ${esc(when(l.quoteAt))} · Trade ${esc(when(l.tradeAt))}${l.source==='Manual mark'?' · Manual mark '+esc(when(l.manualAt)):''}</p></div>`).join('')+['candles','fundamentals','news','filings'].map(section=>dataRow(section[0].toUpperCase()+section.slice(1),researchStatus(section))).join('');
  $('desk-plan-context').textContent=book.legs.length?`${book.legs.length} saved legs · ${fmt(d.risk.futureUnits,0)} futures units · Next expiry ${shortDate(d.risk.nextExpiry)}. ${d.dataMode==='current'?'Check each planner’s executable-quote requirements.':'Saved context only; fresh full quotes are required for hedge and rollover comparisons.'}`:'Add your current open book in My Position first.';
+ renderDeskContext();
  $('desk-limits-summary').textContent='Strategy loss limit '+money(p.maxLoss)+' · New hedge budget '+money(p.hedgeBudget)+' · Cash reserve '+money(p.reserve)+'. Planner values are reviewed separately before comparison.';
 }
 function bindDesk(){
  // Move the existing tested engines into Plan without duplicating their forms or IDs.
  for(const id of ['position-scenario','position-hedge','rollover-workspace']){$('desk-plan-workspace').appendChild($(id));$(id).classList.remove('subpanel');}
  $('position-scenario').classList.add('active');$('position-hedge').hidden=true;$('rollover-workspace').hidden=true;
- syncDeskProfile();$('desk-refresh').onclick=refresh;
+ syncDeskProfile();$('desk-refresh').onclick=()=>{refresh();refreshHeldQuotes(true);};$('desk-quotes-refresh').onclick=()=>refreshHeldQuotes(true);
  $('desk-save-profile').onclick=()=>{try{const profile=A.riskProfile({...book.riskProfile,...Object.fromEntries(deskFields.map(k=>[k,C.value($('desk-'+k).value)]))});saveBook({...book,riskProfile:profile});renderDesk();toast('Position limits saved. Planner settings stay explicit.');}catch(e){toast(e.message);}};
  $('desk-confirm').onclick=()=>{try{saveBook({...book,riskProfile:{...book.riskProfile,confirmedAt:new Date().toISOString(),confirmedBook:HALDesk.bookKey(book.legs)}});renderDesk();toast('Saved book confirmed for this review.');}catch(e){toast(e.message);}};
  $('desk-ai').onclick=()=>{switchTab('ai');aiState.mode='copilot';$('ai-question').value='Review my open HAL position first: data gaps, triggered limits, protection strikes and expiry gaps, futures cash stress, then alternatives to compare. Use the desk calculations. Separate facts, assumptions and unknowns. Do not invent a price target or a best trade.';invalidateAI();renderAI();};
  $('desk-use-limits').onclick=()=>{const p=book.riskProfile;if(p.hedgeBudget!==null)$('hedge-budget').value=p.hedgeBudget;if(p.hedgeBudget!==null)$('plan-budget').value=p.hedgeBudget;if(p.reserve!==null)$('plan-cashReserve').value=p.reserve;for(const id of ['hedge-budget','plan-budget','plan-cashReserve'])$(id).dispatchEvent(new Event('input',{bubbles:true}));toast('Budget and reserve copied. Check all planner assumptions before comparing.');};
- document.addEventListener('click',e=>{const action=e.target.closest('[data-desk-action]'),plan=e.target.closest('[data-plan-panel]');if(action)deskAction(action.dataset.deskAction);if(plan)deskPlan(plan.dataset.planPanel);});
+ document.addEventListener('click',e=>{const action=e.target.closest('[data-desk-action]'),plan=e.target.closest('[data-plan-panel]');if(action)deskAction(action.dataset.deskAction);if(plan)deskPlan(plan.dataset.planPanel);if(e.target.closest('[data-desk-business]')){switchTab('research');panel('research','fundamental');}});
 }

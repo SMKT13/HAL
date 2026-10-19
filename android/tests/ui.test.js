@@ -18,12 +18,12 @@ const funds={income:{type:'consolidated',income_statement:[{category:'revenue',h
   if(!localStorage.getItem('qa-seeded')){localStorage.setItem('hal_positions_v1',JSON.stringify(old));localStorage.setItem('qa-seeded','1');}
   window.HALNative={ready:()=>setTimeout(()=>HALApp.receive('connection',{mode:'direct',configured:false}),0),settings:()=>{window.settingsOpened=true},refresh:e=>{window.requestedExpiry=e},research:r=>{(window.researchRequests??=[]).push(JSON.parse(r))},openLink:u=>{window.openedLink=u},exportBackup:x=>{window.backupJSON=x},exportCSV:x=>{window.csv=x},importBackup:()=>{},minimize:()=>{}};
  },oldBook);
- await page.goto('http://127.0.0.1:8765/index.html');await page.locator('#welcome').waitFor({state:'visible'});
+ await page.goto('http://127.0.0.1:8765/index.html');await page.clock.runFor(20);await page.locator('#welcome').waitFor({state:'visible'});
  assert.equal(await page.locator('#spot').textContent(),'₹—');assert.equal(await page.evaluate(()=>JSON.parse(localStorage.hal_desk_v2).legs.length),3);
  await page.locator('#connect').click();assert.equal(await page.evaluate(()=>window.settingsOpened),true);
  await page.evaluate(data=>{HALApp.receive('connection',{mode:'direct',configured:true});HALApp.receive('snapshot',data);},fixture);
  const send=async(section,data,frame='D',type='consolidated')=>page.evaluate(x=>HALApp.receive('research',x),{section,frame,type,key:`${section}:${frame}:${type}`,data,errors:{},fetched_at_iso:'2026-10-16T05:00:00Z',source:'SYNTHETIC QA DATA'});
- await send('candles',{history:{candles},intraday:{candles:[]}});await send('fundamentals',funds);await send('status',{market:{status:'NORMAL_OPEN'}});
+ const initialFull=JSON.parse(JSON.stringify(fixture));initialFull.quotes_fetched_at=initialFull.fetched_at_iso;initialFull.option_rows.forEach(r=>{r.put.quote={last_price:r.put.ltp,bid:r.put.bid,ask:r.put.ask,bid_quantity:1000,ask_quantity:1000,volume:5000,open_interest:r.put.oi,quote_as_of:initialFull.fetched_at_iso,last_trade_at:initialFull.fetched_at_iso};});await send('hedges',initialFull,fixture.option_expiry);await send('candles',{history:{candles},intraday:{candles:[]}});await send('fundamentals',funds);await send('status',{market:{status:'NORMAL_OPEN'}});
  await send('news',{articles:{'NSE_EQ|TEST':[{heading:'Synthetic HAL aircraft production update',summary:'Synthetic fixture; not actual news.',article_link:'https://example.com/hal-qa',published_time:Date.parse('2026-10-16T04:00:00Z')}]}});
  await send('filings',{items:[{title:'Synthetic HAL results disclosure',summary:'Synthetic filing fixture.',url:'https://nsearchives.nseindia.com/test-only.pdf',published:'Fri, 16 Oct 2026 04:00:00 GMT',official:true}]});
  assert.equal(await page.locator('#spot').textContent(),'₹5,000.00');assert.equal(await page.locator('#home-pnl').textContent(),'−₹28,095.00');
@@ -37,8 +37,8 @@ const funds={income:{type:'consolidated',income_statement:[{category:'revenue',h
  await page.locator('#hedge-budget').fill('100000');await page.locator('#hedge-maxLoss').fill('200000');
  const beforeHedge=await page.evaluate(()=>JSON.stringify(JSON.parse(localStorage.hal_desk_v2).legs));
  await page.locator('#hedge-refresh').click();
- assert.deepEqual(await page.evaluate(()=>window.researchRequests.filter(r=>r.section==='hedges').map(r=>r.frame).sort()),['2026-10-27','2026-11-24']);
- const hedgePackets={};for(const d of fixture.available_expiries){const h=JSON.parse(JSON.stringify(fixture));h.option_expiry=d;h.quotes_fetched_at=h.fetched_at_iso;h.option_rows.forEach(r=>{r.put.quote={bid:r.put.bid,ask:r.put.ask,bid_quantity:1000,ask_quantity:1000,volume:5000,open_interest:r.put.oi,quote_as_of:h.fetched_at_iso,last_trade_at:h.fetched_at_iso};});hedgePackets[d]=h;await send('hedges',h,d);}
+ assert.deepEqual(await page.evaluate(()=>[...new Set(window.researchRequests.filter(r=>r.section==='hedges').map(r=>r.frame))].sort()),['2026-10-27','2026-11-24'],await page.locator('#hedge-status').textContent());
+ const hedgePackets={};for(const d of fixture.available_expiries){const h=JSON.parse(JSON.stringify(fixture));h.option_expiry=d;h.quotes_fetched_at=h.fetched_at_iso;h.option_rows.forEach(r=>{r.put.quote={last_price:r.put.ltp,bid:r.put.bid,ask:r.put.ask,bid_quantity:1000,ask_quantity:1000,volume:5000,open_interest:r.put.oi,quote_as_of:h.fetched_at_iso,last_trade_at:h.fetched_at_iso};});hedgePackets[d]=h;await send('hedges',h,d);}
  assert.ok(await page.locator('.hedge-card').count()>0);assert.match(await page.locator('#hedge-results').textContent(),/Lower cost/);assert.match(await page.locator('#hedge-detail').textContent(),/selling an asset is not new profit/);
  assert.equal(await page.evaluate(()=>JSON.stringify(JSON.parse(localStorage.hal_desk_v2).legs)),beforeHedge);
  await page.locator('#hedge-horizon').selectOption('2');assert.equal(await page.locator('.hedge-payoff tbody tr').count(),4);

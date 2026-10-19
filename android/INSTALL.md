@@ -1,3 +1,9 @@
+## Current update — v2.7 (version code 10)
+
+Install `HAL-Desk-v2.7.apk` over your existing installation. The original package, signing certificate and storage origin are retained. Export a Settings backup before updating and keep the app installed to preserve its local data.
+
+Start in **My Position**: confirm the saved contracts and update your limits/funding. In **Today**, refresh position data and open **Data & source clocks** to inspect each held quote. News now includes position-review prompts; Business checks retain reported periods and missing-data labels. Direct Gemini still requires your explicit consent. No trades are placed.
+
 ## Position desk update — v2.6 (version code 9)
 
 Install `HAL-Desk-v2.6.apk` over the existing HAL Desk installation. The package, app-assets origin and original signing certificate are preserved. Export a backup in Settings before updating; keep the app installed to retain its local book and encrypted keys.
