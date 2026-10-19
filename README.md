@@ -1,3 +1,5 @@
+ > Android v2.6 adds Today / My Position / Plan / Research, saved risk limits, book confirmation, funding freshness, shock review and consented AI desk evidence. See [Android release scope](android/README.md). This is the first rework stage; background alerts and wider market-impact integrations remain on the roadmap.
+
 # HAL Desk
 
 A private, read-only HAL research and position monitor. The React/TypeScript interface and Gemini integration are retained. Real feed adapters, the native Android source, backup migrations and regression tests are restored.
@@ -114,3 +116,4 @@ npm run test:ui
 ```
 
 GitHub Actions runs the Python, Node, real Python-worker integration, Android calculation, React browser and native asset browser regressions and compiles an unsigned Android APK. Browser tests use clearly synthetic fixtures and do not call Upstox or Gemini. The worker integration test uses an explicitly empty broker token, so it makes no upstream request. Live token permissions, model quota and physical-device behavior require verification in the user's configured environment.
+

@@ -9,7 +9,7 @@ book.journal=[{kind:'fee',date:'2026-10-18',amount:15,note:'PRIVATE JOURNAL NOTE
 const answer={success:true,direct:true,source:'gemini-synthetic-test',grounded:false,generatedAt:stamp,dataAsOf:null,reply:'Synthetic Gemini interpretation. <img src=x onerror=alert(1)>',sources:[{title:'Saved disclosure fixture',url:'https://www.nseindia.com/qa-only'},{title:'Unsafe',url:'javascript:alert(1)'}]};
 (async()=>{
  fs.mkdirSync('tests/.output',{recursive:true});
- const names=['index.html','style.css','core.js','analytics.js','hedge.js','hedge-ui.js','intelligence.js','intelligence-ui.js','ai-ui.js','charts.js','lightweight-charts.js','app.js'];
+ const names=['index.html','style.css','core.js','analytics.js','desk.js','desk-ui.js','hedge.js','hedge-ui.js','intelligence.js','intelligence-ui.js','ai-ui.js','charts.js','lightweight-charts.js','app.js'];
  const server=http.createServer((req,res)=>{const name=req.url.slice(1);if(!names.includes(name)){res.writeHead(404).end();return;}res.setHeader('Content-Type',name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync('app/src/main/assets/'+name));});
  await new Promise(resolve=>server.listen(8766,'127.0.0.1',resolve));let browser;
  try{
@@ -23,12 +23,12 @@ const answer={success:true,direct:true,source:'gemini-synthetic-test',grounded:f
    window.HALNative={ready:()=>setTimeout(()=>{HALApp.receive('connection',{mode:'direct',configured:false});HALApp.receive('ai_connection',{direct:true,configured:true,model:'gemini-synthetic-test',revision:0});},0),aiConfig:raw=>{const {id}=JSON.parse(raw);setTimeout(()=>HALApp.receive('ai_config',{id,data:window.aiTestConfig}),0);},ai:raw=>window.aiCalls.push(JSON.parse(raw)),aiCancel:id=>window.cancelledReviews.push(id),aiSettings:()=>window.apiSettingsOpened=true,settings:()=>{},openLink:url=>window.openedLink=url,minimize:()=>{},research:()=>{}};
   },book);
   await page.goto('http://127.0.0.1:8766/index.html');
-  const nav=async name=>page.locator(`nav [data-tab="${name}"]`).click();
+  const nav=async name=>{if(['markets','news','ai'].includes(name)){await page.locator('.bottom-nav [data-tab="research"]').click();await page.locator(`#desk-research-nav [data-go="${name}"]`).click();}else await page.locator(`.bottom-nav [data-tab="${name}"]`).click();};
   const last=()=>page.evaluate(()=>window.aiCalls.at(-1));
   const send=async(data,event='ai_result',id)=>page.evaluate(({data,event,id})=>HALApp.receive(event,{id:id||window.aiCalls.at(-1).id,...(event==='ai_error'?{message:data}:{data})}),{data,event,id});
   const ask=async()=>{await page.locator('#ai-consent').check();await page.locator('#ai-run').click();return last();};
   await nav('ai');await page.getByText(/Direct Google API/).waitFor();
-  assert.equal(await page.locator('nav [data-tab]').count(),6);assert.equal(await page.evaluate(()=>aiCalls.length),0,'Opening AI never starts generation');
+  assert.equal(await page.locator('.bottom-nav [data-tab]').count(),4);assert.equal(await page.evaluate(()=>aiCalls.length),0,'Opening AI never starts generation');
   assert.equal(await page.locator('#view-ai input').count(),1,'Only sharing consent enters the page; key entry is native');
   assert.equal(await page.locator('#ai-run').isDisabled(),true,'No request without explicit sharing consent');
   await page.evaluate(()=>runAI());assert.equal(await page.evaluate(()=>aiCalls.length),0,'Native request is not sent without consent');
@@ -72,3 +72,4 @@ const answer={success:true,direct:true,source:'gemini-synthetic-test',grounded:f
   console.log('PASS Android direct Gemini UI: consent, transient app-calculated P&L/risk evidence, private-text exclusion, three modes, missing/stale evidence, safe output/sources, input/book/settings races, cancellation, quota/errors, timeout, persistence and responsive dark/light layouts. Synthetic native bridge; no live provider call.');
  }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});
+

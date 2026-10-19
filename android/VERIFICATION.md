@@ -1,3 +1,13 @@
+## v2.6 position desk — 2026-10-19
+
+- 15 new pure-engine regressions cover profile migration/validation, per-leg clocks/units, accounting, model-to-model shocks, futures cash/reserve separation, stale/future funding, confirmation edits/expiry, trigger gates, failed/pending feeds, missing IV and nonmutation.
+- New Chromium desk suite covers four destinations, limits/confirmation/funding, trigger rendering, immediate refresh withholding, Plan navigation, consented AI evidence/research privacy, edited-book invalidation, persistence/backups, 320/390/768px dark/light and enlarged text.
+- Existing Android UI/AI/intelligence, React browser regression, Python/TypeScript and Android calculation suites pass. TypeScript and Vite build pass.
+- Native Gemini checks: 59 request-policy and 99 transport/response checks pass with mocked HTTPS.
+- SDK35 APK build succeeds: package `in.smkt.haldesk`, version code 9/name 2.6; original certificate SHA-256 `a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382`; alignment and APK v2/v3 signatures checked.
+- Today screenshots in both themes inspected locally. All test quotes, lot units, holdings and headlines are synthetic.
+- Not verified: physical-phone install/upgrade, background timing, user Upstox/Gemini credentials/entitlements, current holdings or live market results. No live-provider or trading-performance testing claim.
+
 # HAL Desk 2.5 intelligence and rollover verification — 18 October 2026
 
 - 149 backend/calculation checks pass: 48 Python, 21 Node/TypeScript, 21 original Android core, 39 analytics/hedge and 20 new intelligence checks. TypeScript checking and the production React build pass.
@@ -43,3 +53,4 @@ Limits: no physical Android device/emulator or user Gemini/Upstox key was availa
 No physical Android device or emulator was available. Authenticated Upstox full quotes are implemented against official API contracts and covered by offline fixtures; they were not fetched with the user's token here. First-device upgrade, actual token permissions, broker depth availability and Android document-picker behavior still need a phone check. The optional Gradle route was not used.
 
 Java compilation retains compatibility/deprecation warnings but no errors. The new server endpoint is supplied as source; the APK does not merge or deploy it. Direct mode uses the native implementation independently. Rankings are model comparisons under entered assumptions, not guaranteed fills, maximum losses or forecasts.
+

@@ -29,7 +29,7 @@ function aiEvidence(mode){
  if(mode!=='research'){
   const effective=effectiveSnapshot(),risk=A.risk(book.legs,effective);
   e.positions=C.mtm(book.legs,effective).rows.map(l=>({type:l.type,expiry:l.expiry,lots:l.lots,lotSize:l.lotSize,entry:l.entry,strike:l.strike,mark:l.price,pnl:l.pnl,markSource:l.source,markTime:l.stamp||null}));
-  e.ledger=A.ledger(book,effective);e.funding=book.funding;e.hedgeSettings=book.hedge;
+  const desk=deskReview();e.positionDesk={status:desk.status,confirmed:desk.confirmed,dataMode:desk.dataMode,limits:{capital:desk.profile.capital,maxLoss:desk.profile.maxLoss,hedgeBudget:desk.profile.hedgeBudget,reserve:desk.profile.reserve,reviewBelow:desk.profile.reviewBelow,reviewAbove:desk.profile.reviewAbove},triggers:desk.events.slice(0,8),stress:desk.scenarios,stressAssumptions:"Instant price shocks, same time and IV; model-to-model change. Futures cash stress excludes option sale proceeds and additional margin. Not a loss floor."};e.ledger=A.ledger(book,effective);e.funding=book.funding;e.hedgeSettings=book.hedge;
   e.risk={futureUnits:risk.futureUnits,putUnits:risk.putUnits,coverage:risk.coverage,delta:risk.delta,theta:risk.theta,nextExpiry:risk.nextExpiry,warnings:risk.warnings.slice(0,6).map(w=>cut(w.title+': '+w.detail,200))};
   if(hedgeResult?.validUntil>Date.now()&&!hedgeResult.errors.length)e.hedgeComparisons={validUntil:hedgeResult.validUntil,warnings:hedgeResult.warnings,shortlist:hedgeResult.shortlist.map(c=>({expiry:c.expiry,strike:c.strike,lots:c.lots,lotSize:c.lotSize,grossCost:c.grossCost,netOutlay:c.netOutlay,stressLoss:c.stressLoss,expiryGap:c.expiryGap,badges:c.badges})),notes:'Largest sampled scenario loss is not a guaranteed maximum.'};
  }
@@ -69,7 +69,7 @@ function renderAI(){
  $('ai-model').textContent=aiState.configId?'Reading saved API settings…':aiState.config?.aiEnabled?`${aiState.config.model} · Direct Google API`:'Enter a Gemini API key in settings. No model download is needed.';
  $('ai-description').textContent=review?'One Gemini model reviews technicals, fundamentals, app news, derivatives, risk and synthesis. These are six perspectives from one model.':research?'Explain the HAL news, fundamentals and technical indicators already fetched by this app. Refresh Research for newer evidence.':'Explain your saved futures, puts, hedge costs and expiry gaps using app-calculated metrics.';
  $('ai-question-label').textContent=research?'Question about app research':review?'Focus for the review · optional':'Your position question';
- $('ai-book-context').textContent=research?'Shared with Gemini: app research and your question. Positions, journal, funding and rollover plans are excluded.':`Shared with Gemini: ${book.legs.length} saved open legs, computed P&L, funding, hedge settings, risk, research and any active rollover or pattern comparison. Private notes and broker tokens are excluded.`;
+ $('ai-book-context').textContent=research?'Shared with Gemini: app research and your question. Positions, journal, funding and rollover plans are excluded.':`Shared with Gemini: ${book.legs.length} saved open legs, computed P&L, funding, position limits, review triggers, hedge settings, risk, research and any active rollover or pattern comparison. Private notes and broker tokens are excluded.`;
  $('ai-quick-prompts').hidden=research||review;
  $('ai-run').disabled=busy||!aiState.configured||!aiState.config?.aiEnabled||aiState.config?.direct!==true||!$('ai-consent').checked;
  $('ai-run').textContent=busy?'Waiting for Gemini…':review?'Run six-perspective review':research?'Ask about research':'Ask Copilot';
@@ -115,3 +115,4 @@ function bindAI(){
   if(aiState.configId&&Date.now()-aiState.configStarted>10000){aiState.configId=null;aiState.error='API settings did not respond. Restart the app.';renderAI();}
  },5000);renderAI();
 }
+

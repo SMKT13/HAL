@@ -65,11 +65,12 @@ function renderIntelligence(){renderBriefing();renderPatterns();renderPlan();}
 function bindIntelligence(){
  syncPlan(true);$('briefing-save').onclick=()=>{try{const next=currentCheckpoint();if(!C.finite(next.spot)||!next.quoteAsOf)throw Error('Load a timestamped market snapshot before saving a comparison point.');localStorage.setItem('hal_checkpoint_v1',JSON.stringify(next));intelligenceCheckpoint=next;invalidateAI();renderBriefing();toast('Comparison point saved. AI replies are not saved.');}catch(e){toast(e.message);}};
  $('briefing-ai').onclick=()=>intelligenceReview('briefing');$('pattern-ai').onclick=()=>{if(!usablePattern()||!patternResult?.stats){toast('Compare historical patterns first.');return;}intelligenceReview('patterns');};$('plan-ai').onclick=()=>intelligenceReview('rollover');
- $('intelligence-roll-open').onclick=()=>{switchTab('positions');$('rollover-workspace').open=true;$('rollover-workspace').scrollIntoView({block:'start'});};
+ $('intelligence-roll-open').onclick=()=>{deskPlan('rollover');$('rollover-workspace').open=true;$('rollover-workspace').scrollIntoView({block:'start'});};
  $('pattern-refresh').onclick=()=>{requestResearch('patterns','D',true);invalidateAI();renderPatterns();};$('pattern-scan').onclick=()=>{try{const d=patternData();if(patternUnavailable())throw Error('Wait for a successful history refresh before scanning.');patternResult=I.patterns(d.raw,{window:Number($('pattern-window').value),horizon:Number($('pattern-horizon').value)});patternSignature=currentPatternSignature();invalidateAI();renderPatterns();}catch(e){$('pattern-status').textContent=e.message;}};
  for(const k of ['window','horizon'])$('pattern-'+k).onchange=()=>{patternResult=null;$('pattern-results').innerHTML='';invalidateAI();renderPatterns();};
  for(const k of planFields)$('plan-'+k).addEventListener('input',()=>{rollResult=null;planActive=false;$('plan-results').innerHTML='';if(k==='from')syncPlan();invalidateAI();renderPlan();});
  $('plan-compare').onclick=()=>{try{const s=readPlan();saveBook({...book,rollover:s});planActive=true;renderPlan();}catch(e){$('plan-status').textContent=e.message;}};
  $('plan-refresh').onclick=()=>{try{const s=readPlan();if(!s.putExpiry||!s.from||!s.to||!s.lots)throw Error('Select the futures and put expiries and target lots first.');if(!configured){native('settings');return;}saveBook({...book,rollover:s});planActive=true;for(const d of planDates(s))requestResearch('hedges',d,true);renderPlan();}catch(e){$('plan-status').textContent=e.message;}};
- setInterval(()=>{if(['ai','positions'].includes(tab))renderIntelligence();},30000);
+ setInterval(()=>{if(['ai','positions','plan'].includes(tab))renderIntelligence();},30000);
 }
+

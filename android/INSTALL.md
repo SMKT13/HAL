@@ -1,3 +1,11 @@
+## Position desk update — v2.6 (version code 9)
+
+Install `HAL-Desk-v2.6.apk` over the existing HAL Desk installation. The package, app-assets origin and original signing certificate are preserved. Export a backup in Settings before updating; keep the app installed to retain its local book and encrypted keys.
+
+Open **My Position**, check the saved contracts against your broker, confirm them, and enter your own limits and a current funding snapshot. Today shows the rules that can be evaluated. Blank inputs remain unknown. Markets, News and AI are under Research; hedge/scenario/rollover tools are under Plan. A basic chain may correctly show Saved planning because it lacks per-contract clocks.
+
+No real orders, background notifications or automatic AI calls are introduced. This is the first position-centred rework stage.
+
 # HAL Desk 2.1 — hedge finder update
 
 ## Install over your current app
@@ -45,3 +53,4 @@ Your five existing screens, themes, charts, technical/fundamental research, news
 The update passed 56 Android calculation/accounting checks, 46 Python backend tests, 16 existing web regression tests and the Chromium UI suite, including hedge comparisons, failure/staleness handling, settings backup, and 320/390/768 px layouts with enlarged text. The APK compiled, aligned and verified against the original update certificate.
 
 Authenticated Upstox quotes and a physical Android upgrade could not be tested in the build environment. On your phone, confirm the saved book, load current full quotes and inspect the timestamps. No token is embedded in the APK and no synthetic test quotes ship in the app.
+
