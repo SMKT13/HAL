@@ -12,7 +12,7 @@ if not p.exists():
 if hashlib.sha256(p.read_bytes()).hexdigest()!='3ea61b2a06e31edf1c91134fe9106b0ebb16628be169f3db75bc7a2b06b45796':
     raise SystemExit('Test-only org.json dependency checksum mismatch')
 PY
-sources=(app/src/main/java/in/smkt/haldesk/AiPolicy.java app/src/main/java/in/smkt/haldesk/AiClient.java tests/AiPolicyTest.java tests/AiClientTest.java)
+sources=(app/src/main/java/in/smkt/haldesk/AiPolicy.java app/src/main/java/in/smkt/haldesk/AiClient.java app/src/main/java/in/smkt/haldesk/AgentDesk.java tests/AiPolicyTest.java tests/AiClientTest.java tests/AgentDeskTest.java)
 if command -v javac >/dev/null; then
  javac -encoding UTF-8 -source 8 -target 8 -cp "$test_json_jar" -d build/test-classes "${sources[@]}"
 else
@@ -21,3 +21,4 @@ else
 fi
 java -cp "build/test-classes:$test_json_jar" in.smkt.haldesk.AiPolicyTest
 java -cp "build/test-classes:$test_json_jar" in.smkt.haldesk.AiClientTest
+java -cp "build/test-classes:$test_json_jar" in.smkt.haldesk.AgentDeskTest
