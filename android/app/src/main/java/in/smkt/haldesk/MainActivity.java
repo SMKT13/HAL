@@ -82,6 +82,8 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"ai-ui.js")){asset="ai-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"core.js")){asset="core.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"analytics.js")){asset="analytics.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"desk.js")){asset="desk.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"desk-ui.js")){asset="desk-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"hedge.js")){asset="hedge.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"hedge-ui.js")){asset="hedge-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"charts.js")){asset="charts.js";mime="application/javascript";}
@@ -301,3 +303,4 @@ public final class MainActivity extends Activity {
     @Override protected void onDestroy(){generation++;aiGeneration++;cancelAi();executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}super.onDestroy();}
     @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp.back()",null);else super.onBackPressed();}
 }
+

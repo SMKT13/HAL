@@ -1,3 +1,34 @@
+## v2.7 — Held-contract quotes and position context
+
+The position desk now refreshes full put quotes for every active expiry in the saved book, using the existing read-only Upstox full-quote feed. One shared valuation feeds Today, My Position, the ledger, scenarios and AI. The regular market snapshot still supplies spot and futures; a newer full-feed futures quote can update the same verified contract. Per-contract quote/trade/retrieval clocks remain intact, and a newer spot/basic chain cannot relabel an old put quote as fresh. Missing strikes, mismatched lot sizes, failed/pending requests and clock errors retain explicit unavailable/saved states. Full held-quote refreshes reuse the existing endpoint and observe a 15-second retry cooldown.
+
+Today also maps reported headlines to position-review questions. MoUs remain potential business, unconfirmed wording is labelled, and duplicate stories prefer the official source when available. Each card preserves publication time, source link, affected saved exposure, verification prompts and feed age. This is topic-based context, not independent verification or a numerical event-to-price forecast. Business checks show period-matched revenue, operating margin/profit and annual operating-cash-to-profit, with unknowns and partial/failed sources labelled. Direct Gemini receives this same position context only in consented position modes.
+
+Foreground auto-refresh retains its existing one-minute setting and now refreshes held put expiries as well; provider permissions/rate limits still apply. Full expiry chains are fetched by the existing feed, rather than a new arbitrary-instrument quote route. When the app is closed or Android suspends it, no refresh/notification guarantee is made. Background notifications, broader NIFTY/sector/VIX context and selective hedge adjustment routes remain future work.
+
+## v2.6 — Position desk foundation
+
+The first position-centred rework is implemented in Android. Four primary destinations replace the six-item bottom bar: **Today, My Position, Plan, Research**. Markets, News and direct Gemini remain inside Research; Today opens a position-specific AI question without sending it automatically.
+
+- **Today** starts with open P&L, units and next expiry. It adds net strategy P&L, verified-contract notional, net delta, owned put strikes/dates, review triggers, downside shocks and per-contract source clocks. Graphite and warm-paper themes use a restrained green accent.
+- **My Position** keeps the book, risk, funding and journal tools. An optional profile records allocated capital, maximum net strategy loss, new-hedge budget, reserve and two spot review prices. Confirmation applies to the saved contracts for 24 hours; quantity, contract or entry edits invalidate it. No prior chat holding is silently loaded.
+- **Plan** hosts the existing stress-test, hedge and rollover engines. Budget/reserve can be copied explicitly; a strategy loss limit is never copied into a planner's additional-loss field because the baselines differ. Comparisons never edit holdings or place trades.
+- **AI** receives desk limits, triggered rules, data state and scenarios only in position modes with explicit consent. Research-only requests exclude them. Keys stay in native encrypted storage; no new server, permissions or automatic paid AI calls.
+
+### Trust and calculations
+
+`desk.js` is a pure review engine. Each leg requires exact contract units. A current mark requires retrieval/provider quote within two minutes, a last trade within fifteen minutes, no manual override and no failed/pending required refresh. Spot quote and trade must both be within two minutes. Basic option-chain rows lack individual clocks, so **Saved planning** is expected unless full contract timestamps are actually present. A fresh spot price does not make the whole basket fresh. This release does not add a new full-quote feed.
+
+Saved snapshots support labelled structural/scenario review. Missing contract units/marks, expired legs, or failed/pending required feeds withhold scenarios; no IV is invented. The -3/-5/-10% table compares two model values at the same time and IV, avoiding false changes from quoted/model premium differences. It is not an executable P&L, terminal floor or forecast.
+
+Futures cash loss is active futures units × spot × shock magnitude at constant basis, without crediting put gains or sale proceeds. Headroom subtracts that loss and the reserve from manual free funds. Funding expires after 24 hours; additional margin and price paths are not modelled. Net strategy P&L reuses open + realised − charges; put premium and settlement cash are not counted twice. Net return on allocated capital is not a money-weighted return or peak-to-trough drawdown.
+
+Price triggers need a confirmed book and fresh spot. The strategy-loss trigger additionally needs a current full basket. These are review rules, not automatic suitability/trade recommendations. The profile is included in v2 backups; existing v1/v2 imports gain blank defaults. App storage origin and signing identity are preserved.
+
+### Remaining agreed roadmap
+
+This is the **position-desk foundation**, not the entire redesign. Remaining: unified full-quote refresh for held contracts; selective add/replace/reduce hedge comparisons; material-event impact mapping; NIFTY/sector/VIX context; fuller long-horizon ledger; best-effort on-device trading-day notifications. Existing foreground refresh remains. No background scheduler or notification permission is added. Physical-phone and user-token validation remain necessary.
+
 # HAL Desk 2.5 — Android research and position monitor
 
 Personal, read-only HAL app for Android 8+ with an updated Android System WebView. Package `in.smkt.haldesk`, version code 8. Preserve the original signing key and storage origin to update an existing installation without losing its saved book.
@@ -120,3 +151,4 @@ An existing Chromium may be selected with `HAL_CHROMIUM_PATH`. UI tests run from
 Lightweight Charts 5.0.8 is bundled under Apache-2.0 with its copyright notice, full license and TradingView attribution. See `licenses/` and Settings → Open source notices. The application has no ads, telemetry, external JavaScript, or order API allowlist. Saved financial records stay in the app sandbox; selected evidence is sent directly to Google only for user-initiated AI requests as described above. Android automatic cloud backup and screenshots are disabled. Exported backups are ordinary private files under the user's control, not encrypted by the app. Uninstalling deletes the app's records and credentials.
 
 This is an unofficial personal app, unaffiliated with HAL, NSE or Upstox.
+

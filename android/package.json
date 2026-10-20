@@ -1,7 +1,12 @@
 {
   "name": "hal-upstox-android-private",
-  "version": "2.1.0",
+  "version": "2.7.0",
   "private": true,
-  "scripts": { "test": "node tests/core.test.js && node --test tests/analytics.test.js tests/hedge.test.js && node tests/ui.test.js" },
-  "devDependencies": { "playwright": "1.51.1" }
+  "scripts": {
+    "test": "node tests/core.test.js && node --test tests/analytics.test.js tests/hedge.test.js tests/intelligence.test.js tests/desk.test.js",
+    "test:ui": "node tests/ui.test.js && node tests/ai-ui.test.js && node tests/intelligence-ui.test.js && node tests/desk-ui.test.js"
+  },
+  "devDependencies": {
+    "playwright": "1.51.1"
+  }
 }
