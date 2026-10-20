@@ -43,11 +43,15 @@ jobs:
       - run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
       - run: HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash android/build.sh
       - run: bash android/tests/test-native-ai.sh
-      - name: Store unsigned HAL 2.8 for offline matching-certificate signing
+      - name: Copy official Android build-tools signer for offline use
+        run: cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" android/build/apksigner.jar
+      - name: Store unsigned APK and official signer for local certificate signing
         uses: actions/upload-artifact@v4
         with:
-          name: hal-2.8-unsigned
-          path: android/build/aligned.apk
+          name: hal-2.8-offline-signing-inputs
+          path: |
+            android/build/aligned.apk
+            android/build/apksigner.jar
           retention-days: 1
           if-no-files-found: error
 
