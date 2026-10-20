@@ -43,4 +43,11 @@ jobs:
       - run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
       - run: HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash android/build.sh
       - run: bash android/tests/test-native-ai.sh
+      - name: Store unsigned HAL 2.8 for offline matching-certificate signing
+        uses: actions/upload-artifact@v4
+        with:
+          name: hal-2.8-unsigned
+          path: android/build/aligned.apk
+          retention-days: 1
+          if-no-files-found: error
 
