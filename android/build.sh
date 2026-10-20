@@ -34,5 +34,5 @@ if [ ! -f signing/personal.jks ]; then
  keytool -genkeypair -keystore signing/personal.jks -storepass:file signing/password.txt -keypass:file signing/password.txt -alias hal-personal -dname 'CN=HAL Upstox Personal App' -keyalg RSA -keysize 3072 -validity 10000 >/dev/null 2>&1
 fi
 "$bt/apksigner" sign --ks signing/personal.jks --ks-pass file:signing/password.txt --out build/HAL-Desk-v2.8.apk build/aligned.apk
-"$bt/apksigner" verify --verbose --print-certs build/HAL-Desk-v2.7.apk
+"$bt/apksigner" verify --verbose --print-certs build/HAL-Desk-v2.8.apk
 
