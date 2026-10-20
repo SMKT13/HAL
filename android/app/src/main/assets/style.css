@@ -20,6 +20,8 @@
 @media(max-width:350px){.ai-connection{align-items:flex-start;flex-direction:column}.bottom-nav button{font-size:.6rem}#ai-modes{gap:0}#ai-modes button{font-size:.72rem}}
 
 #ai-stop[hidden]{display:none}
+#ai-modes{display:flex;flex-wrap:wrap;gap:6px}#ai-modes button{flex:1 1 42%;min-width:0}
+.agent-report{margin-top:10px}.agent-report summary{overflow-wrap:anywhere}.agent-intro{padding:6px 2px}
 
 .ai-consent{margin:16px 0;line-height:1.6}.ai-consent input{flex-shrink:0}
 
