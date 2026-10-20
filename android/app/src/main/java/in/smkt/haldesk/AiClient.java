@@ -22,14 +22,14 @@ final class AiClient {
         JSONObject body=new JSONObject();
         body.put("systemInstruction",new JSONObject().put("parts",new JSONArray().put(new JSONObject().put("text",AiPolicy.INSTRUCTIONS))));
         body.put("contents",new JSONArray().put(new JSONObject().put("role","user").put("parts",new JSONArray().put(new JSONObject().put("text",prompt)))));
-        body.put("generationConfig",new JSONObject().put("maxOutputTokens",8192));
+        body.put("generationConfig",new JSONObject().put("maxOutputTokens",AiPolicy.isAgentMode(mode)?2000:8192));
         byte[] payload=body.toString().getBytes(StandardCharsets.UTF_8);
         if(payload.length>160000)throw new Failure("The AI request is too large. Shorten the question or saved book.");
         HttpsURLConnection connection=(HttpsURLConnection)new URL(AiPolicy.endpoint(model)).openConnection();
         active=connection;
         try {
             check();connection.setInstanceFollowRedirects(false);connection.setRequestMethod("POST");
-            connection.setConnectTimeout(20000);connection.setReadTimeout(120000);connection.setUseCaches(false);
+            connection.setConnectTimeout(20000);connection.setReadTimeout(AiPolicy.isAgentMode(mode)?50000:120000);connection.setUseCaches(false);
             connection.setRequestProperty("x-goog-api-key",key);connection.setRequestProperty("Content-Type","application/json; charset=utf-8");
             connection.setRequestProperty("Accept","application/json");connection.setDoOutput(true);connection.setFixedLengthStreamingMode(payload.length);
             check();try(OutputStream out=connection.getOutputStream()){check();out.write(payload);}
