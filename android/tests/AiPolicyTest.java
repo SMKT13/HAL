@@ -24,11 +24,13 @@ public final class AiPolicyTest {
         String max=new String(new char[8192]).replace('\0','x');check(AiPolicy.pastedKey(max).equals(max));
         rejects(()->AiPolicy.pastedKey(max+"x"));rejects(()->AiPolicy.pastedKey(new String(new char[32769]).replace('\0','x')));
         rejects(()->AiPolicy.pastedKey("incomplete"));rejects(()->AiPolicy.pastedKey(standard+"\u0000"));rejects(()->AiPolicy.pastedKey(standard+"\u00e9"));
-        for(String mode:new String[]{"copilot","deliberate","research"}){
+        for(String mode:new String[]{"copilot","deliberate","research","agent_technical","agent_business","agent_derivatives","agent_bull","agent_bear","agent_risk"}){
             String prompt=AiPolicy.prompt(mode,"Explain the evidence","{\"quoteAsOf\":null,\"quoteFreshness\":\"stale\",\"pnl\":20000}");
             check(prompt.contains("\"quoteAsOf\":null")&&prompt.contains("stale")&&prompt.contains("20000"));
         }
         check(AiPolicy.prompt("deliberate","","{}").contains("six headings"));
+        check(AiPolicy.isAgentMode("agent_risk"));check(!AiPolicy.isAgentMode("copilot"));
+        check(AiPolicy.prompt("agent_bear","Evaluate risk","{}").contains("BEAR researcher"));
         check(AiPolicy.prompt("research","HAL research","{}").contains("cannot search the web"));
         rejects(()->AiPolicy.prompt("execute","buy","{}"));rejects(()->AiPolicy.prompt("copilot"," ","{}"));
         rejects(()->AiPolicy.prompt("copilot",new String(new char[2001]),"{}"));rejects(()->AiPolicy.prompt("research","news",new String(new char[24001])));
