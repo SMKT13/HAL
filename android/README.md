@@ -1,3 +1,13 @@
+## v2.8 — Experimental direct Gemini multi-agent review
+
+The existing Android v2.7 Position Desk is preserved. In Research → AI review, select **Agent desk** and explicitly consent to the selected evidence. Six *sequential* Gemini API calls analyze technicals, business/news, saved F&O position, bull case, bear case and final risk-chair review. Each role is a distinct prompt with role-specific evidence, but all calls use the **same selected Gemini model**: this is not a set of independent model providers and it does not install or run upstream Python TradingAgents/LangGraph on Android.
+
+Each role sees a bounded subset of the app-provided data. The final risk review is shown first; the five underlying analyst responses are expandable. The review makes no Upstox order calls, does not alter holdings, never retrieves live prices, and cannot replace deterministic P&L, expiry or hedge computations. Quotes must be refreshed in the app; stale/missing data remains a limitation. No report is saved in backups.
+
+**Cost and privacy:** One explicit run makes up to six paid/quota-limited Google API calls instead of one. No background or automatic AI call is added. The Gemini key remains in native encrypted storage, only selected consented evidence goes to Google and progress/errors are visible. Stop can cancel future calls but cannot reverse completed provider requests or incurred charges. A fully successful six-stage run is required before final findings display. The existing Copilot and six-perspective single-call modes remain available.
+
+The Android version is **2.8 (code 11)**, package `in.smkt.haldesk`. For an in-place upgrade from 2.7 preserve the original signing key; do not remove your existing app or clear its storage. GitHub CI creates only an unsigned APK. Live provider access, API billing and device installation require independent verification.
+
 ## v2.7 — Held-contract quotes and position context
 
 The position desk now refreshes full put quotes for every active expiry in the saved book, using the existing read-only Upstox full-quote feed. One shared valuation feeds Today, My Position, the ledger, scenarios and AI. The regular market snapshot still supplies spot and futures; a newer full-feed futures quote can update the same verified contract. Per-contract quote/trade/retrieval clocks remain intact, and a newer spot/basic chain cannot relabel an old put quote as fresh. Missing strikes, mismatched lot sizes, failed/pending requests and clock errors retain explicit unavailable/saved states. Full held-quote refreshes reuse the existing endpoint and observe a 15-second retry cooldown.
