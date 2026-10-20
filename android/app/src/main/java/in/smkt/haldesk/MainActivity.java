@@ -105,7 +105,7 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return prefs.getString("mode","direct");}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.5");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.8");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
@@ -128,7 +128,7 @@ public final class MainActivity extends Activity {
             if(!secrets.has("gemini"))throw new Exception("Enter your Gemini API key in AI settings first.");
             JSONObject evidence=args.optJSONObject("evidence");if(evidence==null)throw new Exception("Refresh the app evidence before running a review.");
             final String mode=args.optString("mode"),question=args.optString("message");
-            AiPolicy.prompt(mode,question,evidence.toString());
+            if("agents".equals(mode))AgentDesk.validate(question,evidence);else AiPolicy.prompt(mode,question,evidence.toString());
             final String key;
             try{key=secrets.get("gemini");}catch(Exception error){throw new Exception("Secure key storage is unavailable. Unlock your phone and check AI settings.");}
             if(!AiPolicy.validKey(key))throw new Exception("Enter a valid Gemini API key in AI settings.");
@@ -138,7 +138,12 @@ public final class MainActivity extends Activity {
             aiExecutor.execute(()->{
                 try {
                     if(current!=aiGeneration)return;
-                    JSONObject result=client.generate(key,model,mode,question,evidence);
+                    JSONObject result="agents".equals(mode)?AgentDesk.run(client,key,model,question,evidence,(step,title)->{
+                        if(current!=aiGeneration)return;
+                        JSONObject progress=object("id",id);
+                        try{progress.put("step",step);progress.put("title",title);progress.put("total",6);}catch(Exception ignored){}
+                        send("ai_progress",progress);
+                    }):client.generate(key,model,mode,question,evidence);
                     JSONObject event=object("id",id);event.put("data",result);if(current==aiGeneration)send("ai_result",event);
                 }catch(Exception error){
                     JSONObject event=object("id",id);
