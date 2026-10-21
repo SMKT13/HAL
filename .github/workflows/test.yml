@@ -48,7 +48,7 @@ jobs:
       - name: Upload unsigned candidate (no signing secrets)
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v2.9-unsigned-and-apksigner
+          name: HAL-Desk-v3.0-unsigned-and-apksigner
           path: |
             android/build/aligned.apk
             android/build/apksigner.jar
