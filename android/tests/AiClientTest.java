@@ -35,12 +35,21 @@ public final class AiClientTest {
         next=new Mock(answer("STOP",parts));JSONObject result=run(new AiClient());
         check(result.getBoolean("direct"));check(result.getString("reply").equals("App P&L 20000; [redacted]"));check(!result.getBoolean("grounded"));check(result.isNull("dataAsOf"));
         check(KEY.equals(next.getRequestProperty("x-goog-api-key")));check(!next.getInstanceFollowRedirects());check("POST".equals(next.getRequestMethod()));check(next.getConnectTimeout()==20000&&next.getReadTimeout()==120000);check(!next.getUseCaches());check(next.disconnected);
-        String payload=next.sent.toString("UTF-8");check(!payload.contains(KEY));JSONObject body=new JSONObject(payload);check(body.has("systemInstruction"));check(!body.has("tools"));check(payload.contains("20000")&&body.getJSONArray("contents").getJSONObject(0).getJSONArray("parts").getJSONObject(0).getString("text").contains("\"spot\":null"));
+        String payload=next.sent.toString("UTF-8");check(!payload.contains(KEY));JSONObject body=new JSONObject(payload);check(body.has("systemInstruction"));
+        JSONObject config=body.getJSONObject("generationConfig");
+        check(config.getInt("maxOutputTokens")==8192);
+        check(config.getJSONObject("thinkingConfig").getString("thinkingLevel").equals("low"));
+        next=new Mock(answer("STOP",text("Technical view, evidence limited.")));
+        JSONObject agentReply=new AiClient().generate(KEY,AiPolicy.DEFAULT_MODEL,"agent_technical","Review",evidence());
+        check(agentReply.getString("reply").startsWith("Technical view"));
+        JSONObject agentConfig=new JSONObject(next.sent.toString("UTF-8")).getJSONObject("generationConfig");
+        check(agentConfig.getInt("maxOutputTokens")==8192);
+        check(agentConfig.getJSONObject("thinkingConfig").getString("thinkingLevel").equals("low"));check(!body.has("tools"));check(payload.contains("20000")&&body.getJSONArray("contents").getJSONObject(0).getJSONArray("parts").getJSONObject(0).getString("text").contains("\"spot\":null"));
         for(int code:new int[]{403,429,302,404,503}){
             next=new Mock("untrusted provider error "+KEY);next.code=code;
             try{run(new AiClient());throw new AssertionError("Accepted HTTP error");}catch(AiClient.Failure error){check(error.getMessage().equals(AiPolicy.httpError(code)));check(!error.getMessage().contains(KEY));check(!next.errorBodyRead);check(next.disconnected);}
         }
-        failure(answer("MAX_TOKENS",text("partial reply")),"answer limit");failure(answer("SAFETY",text("unsafe")),"usable answer");
+        failure(answer("MAX_TOKENS",text("partial reply")),"output tokens");failure(answer("SAFETY",text("unsafe")),"usable answer");
         failure("{\"promptFeedback\":{\"blockReason\":\"SAFETY\"}}","declined");failure("{\"candidates\":[]}","no answer");failure("not JSON","Could not read");
         failure(answer("STOP",text(" ")),"no usable text");failure(answer("STOP",new JSONArray().put(new JSONObject().put("thought",true).put("text","hidden"))),"no usable text");
         failure(answer("STOP",text(new String(new char[24001]).replace('\0','x'))),"answer limit");failure(new String(new char[512001]).replace('\0','x'),"too much data");
