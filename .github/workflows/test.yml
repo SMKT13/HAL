@@ -32,6 +32,16 @@ jobs:
         working-directory: android
       - run: node tests/desk-ui.test.js
         working-directory: android
+      - name: Capture QA previews of HAL redesigned screens
+        uses: actions/upload-artifact@v4
+        with:
+          name: HAL-Desk-v3.0-design-preview
+          path: |
+            android/tests/.output/overview-dark.png
+            android/tests/.output/risk-dark.png
+            android/tests/.output/gemini-ai-light.png
+          retention-days: 3
+          if-no-files-found: error
   android-build:
     runs-on: ubuntu-latest
     steps:
@@ -48,7 +58,7 @@ jobs:
       - name: Upload unsigned candidate (no signing secrets)
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v2.9-unsigned-and-apksigner
+          name: HAL-Desk-v3.0-unsigned-and-apksigner
           path: |
             android/build/aligned.apk
             android/build/apksigner.jar

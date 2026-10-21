@@ -9,7 +9,7 @@ book.journal=[{kind:'fee',date:'2026-10-18',amount:15,note:'PRIVATE JOURNAL NOTE
 const answer={success:true,direct:true,source:'gemini-synthetic-test',grounded:false,generatedAt:stamp,dataAsOf:null,reply:'Synthetic Gemini interpretation. <img src=x onerror=alert(1)>',sources:[{title:'Saved disclosure fixture',url:'https://www.nseindia.com/qa-only'},{title:'Unsafe',url:'javascript:alert(1)'}]};
 (async()=>{
  fs.mkdirSync('tests/.output',{recursive:true});
- const names=['index.html','style.css','core.js','analytics.js','desk.js','desk-ui.js','hedge.js','hedge-ui.js','intelligence.js','intelligence-ui.js','ai-ui.js','trading-skills.js','charts.js','lightweight-charts.js','app.js'];
+ const names=['index.html','style.css','portfolio-ui.css','core.js','analytics.js','desk.js','desk-ui.js','hedge.js','hedge-ui.js','intelligence.js','intelligence-ui.js','ai-ui.js','trading-skills.js','charts.js','lightweight-charts.js','app.js'];
  const server=http.createServer((req,res)=>{const name=req.url.slice(1);if(!names.includes(name)){res.writeHead(404).end();return;}res.setHeader('Content-Type',name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync('app/src/main/assets/'+name));});
  await new Promise(resolve=>server.listen(8766,'127.0.0.1',resolve));let browser;
  try{

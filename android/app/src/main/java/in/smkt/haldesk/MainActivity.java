@@ -90,6 +90,7 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"charts.js")){asset="charts.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"lightweight-charts.js")){asset="lightweight-charts.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"style.css")){asset="style.css";mime="text/css";}
+                if(url.equals(ORIGIN+"portfolio-ui.css")){asset="portfolio-ui.css";mime="text/css";}
                 try { if(!asset.isEmpty())return new WebResourceResponse(mime,"UTF-8",getAssets().open(asset)); }
                 catch(Exception ignored) { }
                 return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));
@@ -106,7 +107,7 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return prefs.getString("mode","direct");}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.9");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","3.0");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
