@@ -30,7 +30,7 @@ public final class AiPolicyTest {
         }
         check(AiPolicy.prompt("deliberate","","{}").contains("six headings"));
         check(AiPolicy.prompt("skills","","{}").contains("MIT-licensed"));
-        check(AiPolicy.prompt("skills","","{}").contains("RISK"));
+        check(AiPolicy.prompt("skills","","{}").contains("CHECKED"));
         rejects(()->AiPolicy.prompt("unknown-skill","buy","{}"));
         check(AiPolicy.isAgentMode("agent_risk"));check(!AiPolicy.isAgentMode("copilot"));
         check(AiPolicy.preferLowThinking("gemini-3.8-flash"));
