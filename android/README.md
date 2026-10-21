@@ -1,3 +1,21 @@
+## v3.0 — Portfolio-first HAL UI redesign
+
+HAL Desk 3.0 refreshes the Android presentation with a broker-inspired clean
+dashboard, a four-tile quick-navigation row (My position, Risk, Find a hedge,
+Rollover), underlined sub-tabs, minimal cards and clearer bottom navigation.
+The redesigned dark/light palettes honour the user's previously saved theme.
+It is an independent HAL Desk design inspired by general Groww UI patterns,
+not affiliated with Groww and not a copy of Groww assets or source. Review
+[PORTFOLIO_REDESIGN_AUDIT.md](PORTFOLIO_REDESIGN_AUDIT.md) for references, scope
+and test/fidelity limits.
+
+All contracts, book data, hedge/rollover engines, quote freshness, AI and
+Skills Coach remain unchanged; no new broker order controls or API calls were
+introduced. Same package in.smkt.haldesk, Android versionCode 14/versionName
+3.0. Use the matching HAL signing identity to install over your current app.
+Export a backup before updating.
+
+
 ## v2.9 — Trading Skills Coach for HAL NSE futures & options
 
 Research → AI review → **Skills Coach** now runs a local, free checklist adapted from the
