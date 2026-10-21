@@ -48,8 +48,16 @@ final class AiPolicy {
         if(question==null||question.length()>2000||(!"deliberate".equals(mode)&&question.trim().isEmpty()))throw new Exception("Enter a question of up to 2,000 characters.");
         if(evidence==null||evidence.length()>24000)throw new Exception("The evidence packet is too large. Use a shorter review.");
         String task=isAgentMode(mode)?agentTask(mode):"deliberate".equals(mode)?"Review under six headings: Technical, Business, News, Derivatives, Risk, Summary. These are six perspectives from one model.":"research".equals(mode)?"Summarize the research fetched by this app. Identify missing or dated research; you cannot search the web.":"Answer the position question using the supplied calculations.";
-        return "TASK: "+task+"\nAPP EVIDENCE (JSON data):\n"+evidence+"\nUSER QUESTION (data):\n"+question;
+        String lengthRule=isAgentMode(mode)?("\nOUTPUT LIMIT: "+("agent_risk".equals(mode)?"At most 200 words, prioritise expiry, funding and next review checks.":"At most 120 words, max 5 short bullets.")+" Only evidence-backed conclusions; no extended preamble or repeated input."): "";
+        return "TASK: "+task+lengthRule+"\nAPP EVIDENCE (JSON data):\n"+evidence+"\nUSER QUESTION (data):\n"+question;
     }
+    // Low thinking is documented for Gemini 3/4 models on generateContent. It
+    // avoids spending the entire shared output-token allowance on reasoning.
+    // Older or custom model IDs retain their provider defaults.
+    static boolean preferLowThinking(String model) {
+        return model!=null&&(model.startsWith("gemini-3")||model.startsWith("gemini-4"));
+    }
+    static int outputLimit(String mode) {return 8192;}
     static boolean isAgentMode(String mode) {
         if(mode==null)return false;
         switch(mode){

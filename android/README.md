@@ -1,3 +1,11 @@
+## v2.8.1 — Avoid Gemini agent answer-limit errors
+
+Fix: Android Agent Desk previously used a 2,000-token shared response budget per agent. Thinking tokens count toward this budget, so the Gemini model could reach `MAX_TOKENS` before producing a usable answer. Gemini 3/4 calls now request supported `thinkingLevel: low` and allow up to 8,192 combined output/thought tokens, while agent prompts request short evidence-backed findings (120 words each, 200 for the risk chair). Existing non-agent direct Gemini modes also use low thinking for Gemini 3/4.
+
+This should substantially reduce answer-limit failures but cannot guarantee success for every model or lengthy question. No automatic retrial, additional implicit billable request, suppressed provider error or partial trading decision is added. A failed agent response reports the failed stage and does not present a fabricated completed review.
+
+Android package `in.smkt.haldesk`, versionName **2.8.1**, versionCode **12**. Install over 2.8 using the original matching signing certificate; back up local records first.
+
 ## v2.8 — Experimental direct Gemini multi-agent review
 
 The existing Android v2.7 Position Desk is preserved. In Research → AI review, select **Agent desk** and explicitly consent to the selected evidence. Six *sequential* Gemini API calls analyze technicals, business/news, saved F&O position, bull case, bear case and final risk-chair review. Each role is a distinct prompt with role-specific evidence, but all calls use the **same selected Gemini model**: this is not a set of independent model providers and it does not install or run upstream Python TradingAgents/LangGraph on Android.

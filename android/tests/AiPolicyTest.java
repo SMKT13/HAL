@@ -30,6 +30,12 @@ public final class AiPolicyTest {
         }
         check(AiPolicy.prompt("deliberate","","{}").contains("six headings"));
         check(AiPolicy.isAgentMode("agent_risk"));check(!AiPolicy.isAgentMode("copilot"));
+        check(AiPolicy.preferLowThinking("gemini-3.8-flash"));
+        check(AiPolicy.preferLowThinking("gemini-4-argon"));
+        check(!AiPolicy.preferLowThinking("gemini-2.5-flash"));
+        check(AiPolicy.outputLimit("agent_risk")==8192);
+        check(AiPolicy.prompt("agent_risk","Review","{}").contains("At most 200 words"));
+        check(AiPolicy.prompt("agent_business","Review","{}").contains("At most 120 words"));
         check(AiPolicy.prompt("agent_bear","Evaluate risk","{}").contains("BEAR researcher"));
         check(AiPolicy.prompt("research","HAL research","{}").contains("cannot search the web"));
         rejects(()->AiPolicy.prompt("execute","buy","{}"));rejects(()->AiPolicy.prompt("copilot"," ","{}"));

@@ -22,7 +22,9 @@ final class AiClient {
         JSONObject body=new JSONObject();
         body.put("systemInstruction",new JSONObject().put("parts",new JSONArray().put(new JSONObject().put("text",AiPolicy.INSTRUCTIONS))));
         body.put("contents",new JSONArray().put(new JSONObject().put("role","user").put("parts",new JSONArray().put(new JSONObject().put("text",prompt)))));
-        body.put("generationConfig",new JSONObject().put("maxOutputTokens",AiPolicy.isAgentMode(mode)?2000:8192));
+        JSONObject generation=new JSONObject().put("maxOutputTokens",AiPolicy.outputLimit(mode));
+        if(AiPolicy.preferLowThinking(model))generation.put("thinkingConfig",new JSONObject().put("thinkingLevel","low"));
+        body.put("generationConfig",generation);
         byte[] payload=body.toString().getBytes(StandardCharsets.UTF_8);
         if(payload.length>160000)throw new Failure("The AI request is too large. Shorten the question or saved book.");
         HttpsURLConnection connection=(HttpsURLConnection)new URL(AiPolicy.endpoint(model)).openConnection();
@@ -47,7 +49,7 @@ final class AiClient {
             JSONObject candidate=candidates==null?null:candidates.optJSONObject(0);
             if(candidate==null)throw new Failure("Gemini returned no answer. Try a different question.");
             String finish=candidate.optString("finishReason");
-            if("MAX_TOKENS".equals(finish))throw new Failure("Gemini reached its answer limit. Ask a shorter or more focused question.");
+            if("MAX_TOKENS".equals(finish))throw new Failure("Gemini ran out of output tokens while reasoning or answering. Its incomplete response was discarded. Try a concise Copilot question or a different Gemini model.");
             if(!"STOP".equals(finish))throw new Failure("Gemini could not finish a usable answer. Rephrase the question and retry.");
             JSONObject content=candidate.optJSONObject("content");JSONArray parts=content==null?null:content.optJSONArray("parts");StringBuilder text=new StringBuilder();
             if(parts!=null)for(int i=0;i<parts.length();i++){

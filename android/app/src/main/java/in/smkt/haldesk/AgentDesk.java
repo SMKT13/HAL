@@ -62,7 +62,11 @@ final class AgentDesk {
             progress.announce(i+1,LABELS[i]);
             JSONObject packet=stageEvidence(MODES[i],evidence,findings);
             if(packet.toString().length()>24000)throw new Exception("An agent's evidence exceeds the request limit.");
-            JSONObject result=client.generate(key,model,MODES[i],focus,packet);
+            JSONObject result;
+            try { result=client.generate(key,model,MODES[i],focus,packet); }
+            catch(AiClient.Failure error) {
+                throw new AiClient.Failure(LABELS[i]+" (stage "+(i+1)+"/6): "+error.getMessage());
+            }
             String reply=result.optString("reply","").trim();
             if(reply.isEmpty())throw new Exception("An agent returned no usable analysis.");
             findings.put(new JSONObject().put("role",LABELS[i]).put("reply",reply));
