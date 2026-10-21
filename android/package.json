@@ -1,6 +1,6 @@
 {
   "name": "hal-upstox-android-private",
-  "version": "2.8.0",
+  "version": "2.8.1",
   "private": true,
   "scripts": {
     "test": "node tests/core.test.js && node --test tests/analytics.test.js tests/hedge.test.js tests/intelligence.test.js tests/desk.test.js",
