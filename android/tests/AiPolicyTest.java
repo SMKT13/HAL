@@ -24,11 +24,14 @@ public final class AiPolicyTest {
         String max=new String(new char[8192]).replace('\0','x');check(AiPolicy.pastedKey(max).equals(max));
         rejects(()->AiPolicy.pastedKey(max+"x"));rejects(()->AiPolicy.pastedKey(new String(new char[32769]).replace('\0','x')));
         rejects(()->AiPolicy.pastedKey("incomplete"));rejects(()->AiPolicy.pastedKey(standard+"\u0000"));rejects(()->AiPolicy.pastedKey(standard+"\u00e9"));
-        for(String mode:new String[]{"copilot","deliberate","research","agent_technical","agent_business","agent_derivatives","agent_bull","agent_bear","agent_risk"}){
+        for(String mode:new String[]{"copilot","deliberate","research","skills","agent_technical","agent_business","agent_derivatives","agent_bull","agent_bear","agent_risk"}){
             String prompt=AiPolicy.prompt(mode,"Explain the evidence","{\"quoteAsOf\":null,\"quoteFreshness\":\"stale\",\"pnl\":20000}");
             check(prompt.contains("\"quoteAsOf\":null")&&prompt.contains("stale")&&prompt.contains("20000"));
         }
         check(AiPolicy.prompt("deliberate","","{}").contains("six headings"));
+        check(AiPolicy.prompt("skills","","{}").contains("MIT-licensed"));
+        check(AiPolicy.prompt("skills","","{}").contains("RISK"));
+        rejects(()->AiPolicy.prompt("unknown-skill","buy","{}"));
         check(AiPolicy.isAgentMode("agent_risk"));check(!AiPolicy.isAgentMode("copilot"));
         check(AiPolicy.preferLowThinking("gemini-3.8-flash"));
         check(AiPolicy.preferLowThinking("gemini-4-argon"));
