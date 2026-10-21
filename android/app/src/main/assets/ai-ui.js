@@ -31,6 +31,7 @@ function aiEvidence(mode){
   e.positions=C.mtm(book.legs,effective).rows.map(l=>({type:l.type,expiry:l.expiry,lots:l.lots,lotSize:l.lotSize,entry:l.entry,strike:l.strike,mark:l.price,pnl:l.pnl,markSource:l.source,markTime:l.stamp||null}));
   const desk=deskReview();e.positionContext=deskContext();e.positionContext.items=e.positionContext.items.slice(0,4);e.positionDesk={status:desk.status,confirmed:desk.confirmed,dataMode:desk.dataMode,limits:{capital:desk.profile.capital,maxLoss:desk.profile.maxLoss,hedgeBudget:desk.profile.hedgeBudget,reserve:desk.profile.reserve,reviewBelow:desk.profile.reviewBelow,reviewAbove:desk.profile.reviewAbove},triggers:desk.events.slice(0,8),stress:desk.scenarios,stressAssumptions:"Instant price shocks, same time and IV; model-to-model change. Futures cash stress excludes option sale proceeds and additional margin. Not a loss floor."};e.ledger=A.ledger(book,effective);e.funding=book.funding;e.hedgeSettings=book.hedge;
   e.risk={futureUnits:risk.futureUnits,putUnits:risk.putUnits,coverage:risk.coverage,delta:risk.delta,theta:risk.theta,nextExpiry:risk.nextExpiry,warnings:risk.warnings.slice(0,6).map(w=>cut(w.title+': '+w.detail,200))};
+  if(mode==='skills')e.tradingSkillReview=HALTradeSkills.review(book,desk);
   if(hedgeResult?.validUntil>Date.now()&&!hedgeResult.errors.length)e.hedgeComparisons={validUntil:hedgeResult.validUntil,warnings:hedgeResult.warnings,shortlist:hedgeResult.shortlist.map(c=>({expiry:c.expiry,strike:c.strike,lots:c.lots,lotSize:c.lotSize,grossCost:c.grossCost,netOutlay:c.netOutlay,stressLoss:c.stressLoss,expiryGap:c.expiryGap,badges:c.badges})),notes:'Largest sampled scenario loss is not a guaranteed maximum.'};
  }
  if(JSON.stringify(e).length>22000){e.news=e.news.slice(0,4);e.sources=e.sources.slice(0,4);e.contextNotes.push('News reduced to retain position and plan evidence.');}
@@ -46,8 +47,8 @@ function runAI(){
  if(aiState.request)return;
  if(!aiState.configured||!aiState.config?.aiEnabled||aiState.config.direct!==true){aiState.error='Enter your Gemini API key in AI settings first.';renderAI();return;}
  if(!$('ai-consent').checked){aiState.error='Confirm sharing this question and its evidence with Gemini.';renderAI();return;}
- const message=$('ai-question').value.trim();
- if(message.length>2000||(!message&&!['deliberate','agents'].includes(aiState.mode))){aiState.error='Enter a question of up to 2,000 characters.';renderAI();return;}
+ const message=$('ai-question').value.trim()||(aiState.mode==='skills'?'Review my saved HAL futures and protective puts through the Trading Skills discipline framework.': '');
+ if(message.length>2000||(!message&&!['deliberate','agents','skills'].includes(aiState.mode))){aiState.error='Enter a question of up to 2,000 characters.';renderAI();return;}
  const request={id:aiId(),revision:aiState.revision,mode:aiState.mode,fingerprint:aiFingerprint(),started:Date.now()};
  const evidence=aiEvidence(request.mode);
  if(JSON.stringify(evidence).length>24000){aiState.error='The evidence packet is too large. Shorten the saved book before asking.';renderAI();return;}
@@ -70,18 +71,28 @@ function aiResultHTML(response){
  if(sources.length)html+=`<article class="card"><h3>App research sources</h3><div class="ai-sources">${sources.map(s=>`<button class="text-button source-link" data-url="${esc(A.safeURL(s.url))}">${esc(String(s.title||s.url).slice(0,300))} ↗</button>`).join('')}</div><p class="fine">Sources supplied by the app, not independently verified model citations.</p></article>`;
  return html;
 }
+function renderSkillsGate(){
+ const report=HALTradeSkills.review(book,deskReview());
+ const status={'LIMIT_ALERT':'LIMIT ALERT','REVIEW_REQUIRED':'REVIEW NEEDED','STRUCTURAL_CHECKS_ONLY':'STRUCTURAL CHECKS ONLY'}[report.status];
+ return '<span class="eyebrow">TRADERMONTY · MIT WORKFLOW ADAPTATION</span><h3>Trading Skills pre-check</h3>'+
+  '<p class="small muted">Local rules from your saved position. This is not a buy/sell signal and never permits order placement.</p>'+
+  '<div class="skill-rows">'+report.checks.map(c=>'<div class="skill-row"><b>'+esc(c.label)+'</b><small>'+esc(c.status==='CHECKED'?'Recorded':c.status==='LIMIT'?'Limit alert':'Review needed')+'</small><p class="fine">'+esc(c.detail)+'</p></div>').join('')+'</div>'+
+  '<p class="small"><strong>'+esc(status)+'</strong> · '+esc(report.note)+'</p>'+
+  '<p class="fine">Frameworks: Options Strategy Advisor, Pre-Trade Discipline Gate, Position Sizer and Trader Memory. US data APIs and Python skills are not run. One Gemini API call only when you press Run.</p>';
+}
 function renderAI(){
  if(!$('view-ai'))return;
- const research=aiState.mode==='research',review=aiState.mode==='deliberate',agents=aiState.mode==='agents',busy=!!aiState.request;
+ const research=aiState.mode==='research',review=aiState.mode==='deliberate',agents=aiState.mode==='agents',skills=aiState.mode==='skills',busy=!!aiState.request;
  document.querySelectorAll('[data-ai-mode]').forEach(b=>{b.classList.toggle('selected',b.dataset.aiMode===aiState.mode);b.setAttribute('aria-pressed',b.dataset.aiMode===aiState.mode?'true':'false');});
  $('ai-connection-label').textContent=aiState.configured?'API key saved on this phone · checked when you run':'Add your Gemini API key';
  $('ai-model').textContent=aiState.configId?'Reading saved API settings…':aiState.config?.aiEnabled?`${aiState.config.model} · Direct Google API`:'Enter a Gemini API key in settings. No model download is needed.';
- $('ai-description').textContent=agents?'Six sequential Gemini agent calls: technical, fundamentals/news, F&O, bull, bear and final risk chair. Each role sees selected evidence; the risk chair critiques prior findings. Read-only, paid API quota may apply.':review?'One Gemini model reviews technicals, fundamentals, app news, derivatives, risk and synthesis. These are six perspectives from one model.':research?'Explain the HAL news, fundamentals and technical indicators already fetched by this app. Refresh Research for newer evidence.':'Explain your saved futures, puts, hedge costs and expiry gaps using app-calculated metrics.';
- $('ai-question-label').textContent=research?'Question about app research':(review||agents)?'Focus for the review · optional':'Your position question';
+ $('ai-description').textContent=skills?'Structured MIT-adapted research review: saved futures and puts, evidence freshness, risk limits, hedge coverage, funding, rollover discipline and thesis checks. One Gemini call with consent.':agents?'Six sequential Gemini agent calls: technical, fundamentals/news, F&O, bull, bear and final risk chair. Each role sees selected evidence; the risk chair critiques prior findings. Read-only, paid API quota may apply.':review?'One Gemini model reviews technicals, fundamentals, app news, derivatives, risk and synthesis. These are six perspectives from one model.':research?'Explain the HAL news, fundamentals and technical indicators already fetched by this app. Refresh Research for newer evidence.':'Explain your saved futures, puts, hedge costs and expiry gaps using app-calculated metrics.';
+ $('ai-question-label').textContent=research?'Question about app research':(review||agents||skills)?'Focus for the review · optional':'Your position question';
  $('ai-book-context').textContent=research?'Shared with Gemini: app research and your question. Positions, journal, funding and rollover plans are excluded.':`Shared with Gemini: ${book.legs.length} saved open legs, computed P&L, funding, position limits, review triggers, hedge settings, risk, research and any active rollover or pattern comparison. Private notes and broker tokens are excluded.`;
- $('ai-quick-prompts').hidden=research||review||agents;
+ $('ai-quick-prompts').hidden=research||review||agents||skills;
+ $('ai-skills-review').hidden=!skills;if(skills)$('ai-skills-review').innerHTML=renderSkillsGate();
  $('ai-run').disabled=busy||!aiState.configured||!aiState.config?.aiEnabled||aiState.config?.direct!==true||!$('ai-consent').checked;
- $('ai-run').textContent=busy?'Running AI…':agents?'Run six-agent review':review?'Run six-perspective review':research?'Ask about research':'Ask Copilot';
+ $('ai-run').textContent=busy?'Running AI…':skills?'Run Skills Coach':agents?'Run six-agent review':review?'Run six-perspective review':research?'Ask about research':'Ask Copilot';
  $('ai-stop').hidden=!busy;$('ai-check').disabled=!!aiState.configId||busy;
  $('ai-consent').disabled=busy;
  $('ai-status').textContent=aiState.error||(busy?(agents?('Agent '+(aiState.progress?.step||1)+'/6: '+(aiState.progress?.title||'Preparing')+'. Six API calls may cost more than a normal review.'): 'Sending the selected evidence directly to Google. You can stop waiting at any time.'):'');

@@ -9,7 +9,7 @@ book.journal=[{kind:'fee',date:'2026-10-18',amount:15,note:'PRIVATE JOURNAL NOTE
 const answer={success:true,direct:true,source:'gemini-synthetic-test',grounded:false,generatedAt:stamp,dataAsOf:null,reply:'Synthetic Gemini interpretation. <img src=x onerror=alert(1)>',sources:[{title:'Saved disclosure fixture',url:'https://www.nseindia.com/qa-only'},{title:'Unsafe',url:'javascript:alert(1)'}]};
 (async()=>{
  fs.mkdirSync('tests/.output',{recursive:true});
- const names=['index.html','style.css','core.js','analytics.js','desk.js','desk-ui.js','hedge.js','hedge-ui.js','intelligence.js','intelligence-ui.js','ai-ui.js','charts.js','lightweight-charts.js','app.js'];
+ const names=['index.html','style.css','core.js','analytics.js','desk.js','desk-ui.js','hedge.js','hedge-ui.js','intelligence.js','intelligence-ui.js','ai-ui.js','trading-skills.js','charts.js','lightweight-charts.js','app.js'];
  const server=http.createServer((req,res)=>{const name=req.url.slice(1);if(!names.includes(name)){res.writeHead(404).end();return;}res.setHeader('Content-Type',name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync('app/src/main/assets/'+name));});
  await new Promise(resolve=>server.listen(8766,'127.0.0.1',resolve));let browser;
  try{
@@ -71,13 +71,28 @@ const answer={success:true,direct:true,source:'gemini-synthetic-test',grounded:f
   await page.locator('[data-ai-mode="research"]').click();await page.locator('#ai-question').fill('Summarize the saved HAL research');
   assert.equal(await page.locator('#ai-quick-prompts').isHidden(),true);const research=await ask();assert.equal(research.evidence.positions,undefined);assert.equal(research.evidence.ledger,undefined);
   await send({...answer,grounded:true});assert.match(await page.locator('#ai-results').textContent(),/No AI web search/);assert.doesNotMatch(await page.locator('#ai-results').textContent(),/Search sources returned/);
+  await page.locator('[data-ai-mode="skills"]').click();
+  assert.equal(await page.locator('#ai-skills-review').isVisible(),true);
+  assert.match(await page.locator('#ai-skills-review').textContent(),/Trading Skills pre-check/);
+  assert.match(await page.locator('#ai-skills-review').textContent(),/Put protection and expiry/);
+  assert.equal(await page.locator('#ai-run').textContent(),'Run Skills Coach');
+  await page.locator('#ai-question').fill('');
+  const skill=await ask();
+  assert.equal(skill.mode,'skills');
+  assert.equal(skill.evidence.tradingSkillReview.status,'REVIEW_REQUIRED');
+  assert.ok(skill.evidence.tradingSkillReview.checks.length>=5);
+  assert.ok(!JSON.stringify(skill).includes('PRIVATE'));
+  assert.ok(!JSON.stringify(skill).includes('token'));
+  await send({...answer,reply:'Skills research: review documented put coverage and funding.'});
+  await page.getByText(/Skills research: review documented put coverage and funding/).waitFor();
+  assert.equal(await page.locator('#ai-results img').count(),0);
   await page.clock.fastForward(5000);
   for(const width of [320,390,768]){await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`AI overflow ${width}`);}
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:'tests/.output/gemini-ai-dark.png',fullPage:true});
   await page.evaluate(()=>{saveBook({...book,preferences:{...book.preferences,theme:'light'}});applyTheme();});await page.screenshot({path:'tests/.output/gemini-ai-light.png',fullPage:true});
   await page.setViewportSize({width:320,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='18px');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Large-text AI overflow');
   await ask();await send('Gemini quota or rate limit reached.','ai_error');assert.match(await page.locator('#ai-status').textContent(),/quota/);assert.equal(await page.locator('#ai-results').textContent(),'');
-  await page.locator('[data-ai-mode="copilot"]').click();const stopped=await ask();await page.locator('#ai-stop').click();assert.ok((await page.evaluate(()=>cancelledReviews)).includes(stopped.id));await send('AI request cancelled.','ai_error');assert.equal(await page.locator('#ai-results').textContent(),'');
+  await page.locator('[data-ai-mode="copilot"]').click();await page.locator('#ai-question').fill('Explain my saved HAL risk');const stopped=await ask();await page.locator('#ai-stop').click();assert.ok((await page.evaluate(()=>cancelledReviews)).includes(stopped.id));await send('AI request cancelled.','ai_error');assert.equal(await page.locator('#ai-results').textContent(),'');
   const timed=await ask();await send(answer,'ai_result','unknown-request');await page.clock.fastForward(151000);assert.match(await page.locator('#ai-status').textContent(),/timed out/);assert.ok((await page.evaluate(()=>cancelledReviews)).includes(timed.id));await send(answer,'ai_result',timed.id);assert.equal(await page.locator('#ai-results').textContent(),'');
   await ask();await send({...answer,direct:false});assert.match(await page.locator('#ai-status').textContent(),/no usable answer/);assert.equal(await page.locator('#ai-results').textContent(),'');
   const beforeChange=await ask();

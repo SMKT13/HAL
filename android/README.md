@@ -1,3 +1,25 @@
+## v2.9 — Trading Skills Coach for HAL NSE futures & options
+
+Research → AI review → **Skills Coach** now runs a local, free checklist adapted from the
+MIT-licensed [TraderMonty / dr-pabs Claude Trading Skills](TRADING_SKILLS_ATTRIBUTION.md).
+It highlights saved-contract verification, quote freshness, user-defined loss
+thresholds, funding freshness, futures-versus-put contract units, protection
+expiry gaps, and rollover review. It never grants broker trade permission or
+executes trades. The app's existing deterministic risk, hedge and rollover
+engines remain authoritative; CHECKED simply means local evidence was present.
+
+Optionally check the Gemini evidence-sharing consent and press **Run Skills
+Coach** for **one** direct Gemini analysis (not the six-agent workflow). The
+AI can explain documented assumptions and a thesis/invalidation checklist but
+cannot invent lot sizes, fills, Greeks, margin or live prices. Your private
+notes, journal memo text and broker credentials remain excluded from its
+evidence packet. No US FMP/Alpaca API, Python runtime, or additional backend is
+installed. The user must refresh and verify Upstox data for time-sensitive use.
+
+Version code 13, versionName 2.9, same Android package `in.smkt.haldesk`.
+Install only an APK signed with the previous HAL signing key over your existing
+installation, and export a backup first.
+
 ## v2.8.1 — Avoid Gemini agent answer-limit errors
 
 Fix: Android Agent Desk previously used a 2,000-token shared response budget per agent. Thinking tokens count toward this budget, so the Gemini model could reach `MAX_TOKENS` before producing a usable answer. Gemini 3/4 calls now request supported `thinkingLevel: low` and allow up to 8,192 combined output/thought tokens, while agent prompts request short evidence-backed findings (120 words each, 200 for the risk chair). Existing non-agent direct Gemini modes also use low thinking for Gemini 3/4.

@@ -80,6 +80,7 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"intelligence.js")){asset="intelligence.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"intelligence-ui.js")){asset="intelligence-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"ai-ui.js")){asset="ai-ui.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"trading-skills.js")){asset="trading-skills.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"core.js")){asset="core.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"analytics.js")){asset="analytics.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"desk.js")){asset="desk.js";mime="application/javascript";}
@@ -105,7 +106,7 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return prefs.getString("mode","direct");}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.8");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","2.9");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
