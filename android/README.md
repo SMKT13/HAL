@@ -1,3 +1,13 @@
+## v3.1 — Position-first MVP update (23 October 2026)
+
+HAL Desk 3.1 preserves the original v3.0 Android app identity, book, ledger, funding, protective puts, market data, news, technical/fundamental research and direct Gemini AI. Navigation retains **Today / My Position / Plan / Research**. Research now has **Markets / Company & Analysis / News / Insights / AI Desk**, with checkpoints and historical patterns in Insights. Plan offers **Stress test / Find a hedge**.
+
+The user-approved removals are: (1) the Today four-tile quick-action row, (2) the detailed paper futures/puts rollover planner, and (3) its route-specific cash/funding/cost projections. Separate features retained: simple listed-futures carry spread in My Position → Risk; expiry-gap warnings; manual funding snapshots; scenario stress tests; put hedge comparisons (including gross cost, bid sale proceeds and net cash outlay); journal close accounting; and the archived October position template.
+
+Old `rollover` preference fields remain validated in historical local books and backups for compatibility; the UI no longer edits them or provides route results to Gemini. Gemini remains the only native AI provider: **no OpenAI GPT API or additional AI integration** was added. Gemini can still consume quota or incur provider charges.
+
+Version `3.1` / `versionCode 15` keeps Android application ID `in.smkt.haldesk` and the existing local storage origin. Export a private backup before updating. CI verifies an unsigned Android candidate; in-place upgrade requires the existing signing certificate. UI regressions use synthetic fixtures and do not verify physical-device, live broker or Google API access.
+
 ## v3.0 — Portfolio-first HAL UI redesign
 
 HAL Desk 3.0 refreshes the Android presentation with a broker-inspired clean
