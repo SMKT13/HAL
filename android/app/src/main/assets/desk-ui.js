@@ -13,9 +13,10 @@ function renderDeskContext(){
 }
 function syncDeskProfile(){for(const k of deskFields)$('desk-'+k).value=book.riskProfile[k]??'';}
 function deskPlan(which='scenario'){
- switchTab('plan');
- for(const name of ['scenario','hedge','rollover']){const el=$(name==='rollover'?'rollover-workspace':'position-'+name);el.classList.toggle('active',name===which);el.hidden=name!==which;if(name==='rollover'&&name===which)el.open=true;}
- document.querySelectorAll('[data-plan-panel]').forEach(b=>{b.classList.toggle('selected',b.dataset.planPanel===which);b.setAttribute('aria-pressed',String(b.dataset.planPanel===which));});
+  if(!['scenario','hedge'].includes(which))which='scenario';
+  switchTab('plan');
+  for(const name of ['scenario','hedge']){const el=$('position-'+name);el.classList.toggle('active',name===which);el.hidden=name!==which;}
+  document.querySelectorAll('[data-plan-panel]').forEach(b=>{b.classList.toggle('selected',b.dataset.planPanel===which);b.setAttribute('aria-pressed',String(b.dataset.planPanel===which));});
 }
 function deskAction(action){
  if(['profile','funding','book','risk'].includes(action)){switchTab('positions');panel('position',action==='risk'?'risk':'book');const id={profile:'desk-profile',funding:'funding-card',book:'position-editor',risk:'risk-metrics'}[action];if(action==='profile'||action==='book')$(id).open=true;$(id).scrollIntoView({block:'start'});}
@@ -44,18 +45,18 @@ function renderDesk(){
  $('desk-stress-note').textContent=(d.dataMode==='saved'?'Saved-snapshot planning. ':'')+'Instant price shocks at unchanged time and IV; changes compare two Black–Scholes model values, not the quoted premium. Cash loss assumes futures move with spot, no put sale proceeds and no extra margin. Cash headroom requires funding saved within 24 hours. Not a loss cap or forecast.';
  $('desk-quotes-refresh').disabled=book.legs.filter(l=>l.type==='PE').some(l=>pending.has(key('hedges',l.expiry)));
  $('desk-health-rows').innerHTML=dataRow('Spot',d.spotCurrent?'Recent quote and trade timestamps':'Older, missing, failed or pending')+dataRow('Quote time',when(snapshot?.spot?.quote_as_of))+dataRow('Last spot trade',when(snapshot?.spot?.last_trade_at))+d.states.map(l=>`<div class="desk-feed-row"><b>${l.type==='PE'?fmt(l.strike,0)+' PE':'Futures'} · ${esc(shortDate(l.expiry))}</b><span class="pill">${esc(l.status.toUpperCase())}</span><p>${esc(l.reason)}</p><p>Quote ${esc(when(l.quoteAt))} · Trade ${esc(when(l.tradeAt))}${l.source==='Manual mark'?' · Manual mark '+esc(when(l.manualAt)):''}</p></div>`).join('')+['candles','fundamentals','news','filings'].map(section=>dataRow(section[0].toUpperCase()+section.slice(1),researchStatus(section))).join('');
- $('desk-plan-context').textContent=book.legs.length?`${book.legs.length} saved legs · ${fmt(d.risk.futureUnits,0)} futures units · Next expiry ${shortDate(d.risk.nextExpiry)}. ${d.dataMode==='current'?'Check each planner’s executable-quote requirements.':'Saved context only; fresh full quotes are required for hedge and rollover comparisons.'}`:'Add your current open book in My Position first.';
+ $('desk-plan-context').textContent=book.legs.length?`${book.legs.length} saved legs · ${fmt(d.risk.futureUnits,0)} futures units · Next expiry ${shortDate(d.risk.nextExpiry)}. ${d.dataMode==='current'?'Check each planner’s executable-quote requirements.':'Saved context only; fresh full quotes are required for hedge comparisons.'}`:'Add your current open book in My Position first.';
  renderDeskContext();
- $('desk-limits-summary').textContent='Strategy loss limit '+money(p.maxLoss)+' · New hedge budget '+money(p.hedgeBudget)+' · Cash reserve '+money(p.reserve)+'. Planner values are reviewed separately before comparison.';
+ $('desk-limits-summary').textContent='Strategy loss limit '+money(p.maxLoss)+' · New hedge budget '+money(p.hedgeBudget)+' · Cash reserve '+money(p.reserve)+'. Hedge comparison limits are reviewed separately.';
 }
 function bindDesk(){
  // Move the existing tested engines into Plan without duplicating their forms or IDs.
- for(const id of ['position-scenario','position-hedge','rollover-workspace']){$('desk-plan-workspace').appendChild($(id));$(id).classList.remove('subpanel');}
- $('position-scenario').classList.add('active');$('position-hedge').hidden=true;$('rollover-workspace').hidden=true;
+ for(const id of ['position-scenario','position-hedge']){$('desk-plan-workspace').appendChild($(id));$(id).classList.remove('subpanel');}
+ $('position-scenario').classList.add('active');$('position-hedge').hidden=true;
  syncDeskProfile();$('desk-refresh').onclick=()=>{refresh();refreshHeldQuotes(true);};$('desk-quotes-refresh').onclick=()=>refreshHeldQuotes(true);
  $('desk-save-profile').onclick=()=>{try{const profile=A.riskProfile({...book.riskProfile,...Object.fromEntries(deskFields.map(k=>[k,C.value($('desk-'+k).value)]))});saveBook({...book,riskProfile:profile});renderDesk();toast('Position limits saved. Planner settings stay explicit.');}catch(e){toast(e.message);}};
  $('desk-confirm').onclick=()=>{try{saveBook({...book,riskProfile:{...book.riskProfile,confirmedAt:new Date().toISOString(),confirmedBook:HALDesk.bookKey(book.legs)}});renderDesk();toast('Saved book confirmed for this review.');}catch(e){toast(e.message);}};
  $('desk-ai').onclick=()=>{switchTab('ai');aiState.mode='copilot';$('ai-question').value='Review my open HAL position first: data gaps, triggered limits, protection strikes and expiry gaps, futures cash stress, then alternatives to compare. Use the desk calculations. Separate facts, assumptions and unknowns. Do not invent a price target or a best trade.';invalidateAI();renderAI();};
- $('desk-use-limits').onclick=()=>{const p=book.riskProfile;if(p.hedgeBudget!==null)$('hedge-budget').value=p.hedgeBudget;if(p.hedgeBudget!==null)$('plan-budget').value=p.hedgeBudget;if(p.reserve!==null)$('plan-cashReserve').value=p.reserve;for(const id of ['hedge-budget','plan-budget','plan-cashReserve'])$(id).dispatchEvent(new Event('input',{bubbles:true}));toast('Budget and reserve copied. Check all planner assumptions before comparing.');};
+  $('desk-use-limits').onclick=()=>{const p=book.riskProfile;if(p.hedgeBudget!==null){$('hedge-budget').value=p.hedgeBudget;$('hedge-budget').dispatchEvent(new Event('input',{bubbles:true}));toast('Hedge budget copied. Enter a separate sampled-loss limit and review assumptions.');}else toast('Set a hedge budget in My Position before copying.');};
  document.addEventListener('click',e=>{const action=e.target.closest('[data-desk-action]'),plan=e.target.closest('[data-plan-panel]');if(action)deskAction(action.dataset.deskAction);if(plan)deskPlan(plan.dataset.planPanel);if(e.target.closest('[data-desk-business]')){switchTab('research');panel('research','fundamental');}});
 }
