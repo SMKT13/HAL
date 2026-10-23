@@ -1,6 +1,6 @@
 'use strict';
-const I=HALIntelligence,planFields=['from','to','putExpiry','lots','budget','maxLoss','cashAvailable','requiredMargin','cashReserve','exitFees','entryFees','slippage','optionSlippage','maxSpread'];
-let intelligenceCheckpoint=null,patternResult=null,patternSignature='',rollResult=null,planActive=false;
+const I=HALIntelligence;
+let intelligenceCheckpoint=null,patternResult=null,patternSignature='';
 try{const p=JSON.parse(localStorage.getItem('hal_checkpoint_v1')||'null');if(p?.version===1&&JSON.stringify(p).length<30000)intelligenceCheckpoint=p;}catch(e){}
 function currentCheckpoint(){return I.checkpoint(book,effectiveSnapshot(),technical('D'),allNews);}
 function currentChanges(){return I.changes(intelligenceCheckpoint,currentCheckpoint(),allNews);}
@@ -25,52 +25,18 @@ function renderPatterns(){
  if(!r)return;
  $('pattern-results').innerHTML=r.stats?patternChart(r)+'<div class="metric-grid">'+tile('SELECTED MATCHES',String(r.stats.count),'Non-overlapping full windows')+tile('MEDIAN RETURN',fmt(r.stats.median)+'%',r.horizon+' sessions later')+tile('RETURN RANGE',fmt(r.stats.worst)+'% to '+fmt(r.stats.best)+'%','Selected historical closes')+tile('POSITIVE OUTCOMES',fmt(r.stats.positivePct,0)+'%','Historical sample frequency, not probability')+'</div><div class="table-wrap"><table><thead><tr><th>Pattern ended</th><th>Distance ↓</th><th>Later return</th><th>Worst excursion</th><th>Close drawdown</th></tr></thead><tbody>'+r.matches.map(m=>'<tr><td>'+esc(dateText(A.istDate(m.date)))+'</td><td>'+fmt(m.distance,3)+'</td><td>'+fmt(m.returnPct)+'%</td><td>'+fmt(m.adversePct)+'%</td><td>'+fmt(m.drawdownPct)+'%</td></tr>').join('')+'</tbody></table></div><p class="fine">'+esc(r.method)+' No holdout performance or trading win rate is claimed. Drawdown uses daily closes; excursions use daily highs/lows. Corporate actions and regime shifts can distort comparisons.</p>':empty(r.reason);
 }
-function readPlan(){return I.rollPreferences(Object.fromEntries(planFields.map(k=>[k,['from','to','putExpiry'].includes(k)?$('plan-'+k).value||null:C.value($('plan-'+k).value)])));}
-function syncPlan(force=false){
- const saved=book.rollover||I.rollPreferences(),futures=snapshot?.futures||[],dates=[...new Set([...book.legs.filter(l=>l.type==='FUT').map(l=>l.expiry),...futures.map(f=>f.expiry)])].sort();
- const fill=(field,options,fallback)=>{const el=$('plan-'+field),old=force?saved[field]:el.value;el.innerHTML=options.map(d=>'<option value="'+esc(d)+'">'+esc(dateText(d))+'</option>').join('')||'<option value="">Load contracts first</option>';el.value=options.includes(old)?old:options.includes(fallback)?fallback:options[0]||'';};
- fill('from',dates,book.legs.find(l=>l.type==='FUT')?.expiry);const later=futures.map(f=>f.expiry).filter(d=>d>$('plan-from').value).sort();fill('to',later,later.at(-1));fill('putExpiry',(snapshot?.available_expiries||[]).filter(d=>d>$('plan-from').value).sort(),$('plan-to').value);
- if(force)for(const k of planFields.filter(k=>!['from','to','putExpiry'].includes(k)))$('plan-'+k).value=saved[k]??'';
- if(!$('plan-lots').value){const size=futures.find(f=>f.expiry===$('plan-to').value)?.lot_size,units=book.legs.filter(l=>l.type==='FUT').reduce((n,l)=>n+l.lots*l.lotSize,0);if(size>0&&units>0&&units%size===0)$('plan-lots').value=units/size;}
-}
-function planDates(s){return [...new Set([s.putExpiry,...book.legs.filter(l=>l.type==='PE').map(l=>l.expiry)])].filter(C.validDate);}
-function evaluatePlan(s){
- const dates=planDates(s),unavailable=dates.filter(d=>pending.has(key('hedges',d))||failed.has(key('hedges',d))),chains=Object.fromEntries(dates.map(d=>[d,getResearch('hedges',d)?.data]));
- const packets=[snapshot,...dates.map(d=>chains[d])].filter(Boolean).sort((a,b)=>Date.parse(b.spot?.quote_as_of)-Date.parse(a.spot?.quote_as_of)||Date.parse(b.fetched_at_iso)-Date.parse(a.fetched_at_iso));
- return I.rollover(book,packets[0]?{...packets[0],researchUnavailable:lastFailed}:null,chains,s,Date.now(),unavailable);
-}
-function renderPlan(){
- let s;try{s=readPlan();}catch(e){$('plan-status').textContent=e.message;rollResult=null;$('plan-results').innerHTML='';return;}
- const gap=s.to&&s.putExpiry&&s.putExpiry<s.to?Math.round((A.expiryTime(s.to)-A.expiryTime(s.putExpiry))/86400000):0;
- if(!planActive){$('plan-status').textContent=gap?'Protection would end '+gap+' calendar days before futures. Later protection and its cost are unknown.':'Save your plan and refresh full quotes to compare. Missing limits remain unknown.';return;}
- try{
-  const r=evaluatePlan(s);rollResult=r;$('plan-status').textContent=[...r.errors,...r.warnings].join(' ')||'Current quoted depth and entered assumptions; no broker approval or fill is guaranteed.';$('plan-refresh').disabled=planDates(s).some(d=>pending.has(key('hedges',d)));
-  if(r.errors.length){$('plan-results').innerHTML=empty('Price-dependent choices are withheld. Source snapshot: '+when(r.sourceTime));return;}
-  $('plan-results').innerHTML='<div class="metric-grid">'+tile('OLD BASKET EXIT P&L',money(r.oldExitPnl),'Hypothetical bid/slippage exit, before fees')+tile('OLD PUT SALE PROCEEDS',money(r.oldPutProceeds),'Sale cash, not new profit')+tile('CARRY SPREAD',money(r.futuresCarryPoints),'Destination ask − current bid')+tile('PROTECTION GAP',Math.round(r.gapDays)+' days','Review expiry alignment')+'</div>'+r.routes.map(route=>{
-   if(!route.lots)return '<article class="card roll-route"><span class="eyebrow">EXIT COMPARISON</span><h3>'+esc(route.label)+'</h3>'+dataRow('Exit friction from current bid baseline',money(route.additionalLoss))+dataRow('Hypothetical strategy net after closing',money(route.netStrategy))+'</article>';
-   const chosen=route.recommended,shown=[...new Map([...(chosen?[chosen]:[]),...route.candidates.slice(0,6)].map(c=>[c.id,c])).values()];
-   return '<article class="card roll-route"><span class="eyebrow">PAPER COMPARISON · '+route.units+' UNITS</span><h3>'+esc(route.label)+'</h3>'+dataRow('Assumed futures entry',money(route.futureEntry))+dataRow('Carry-point equivalent (not cash debit)',money(route.carryEquivalent))+(route.errors?'<p class="notice">'+esc(route.errors.join('; '))+'</p>':'')+(chosen?'<p class="roll-qualifies">Lowest premium within entered limits: '+fmt(chosen.strike,0)+' PE · '+esc(shortDate(chosen.expiry))+'</p>':'<p class="fine">No verified choice meets all entered limits. Review exclusions and funding assumptions.</p>')+shown.map(c=>'<details class="roll-candidate"><summary>'+fmt(c.strike,0)+' PE · '+c.putLots+' × '+c.lotSize+' units · '+money(c.newHedgeCost)+'</summary>'+dataRow('Additional expiry payoff loss',money(c.additionalLoss))+dataRow('New premium + entered entry fees',money(c.newHedgeCost))+dataRow('Cash needed after old-basket exit',money(c.cashNeeded))+dataRow('Strategy net at matched-expiry floor',money(c.netStrategyAtFloor))+'<p class="fine">'+esc(c.limits.join('; ')||'Within entered limits; funding still requires broker verification.')+'</p><div class="table-wrap"><table><thead><tr><th>HAL shock</th><th>Scenario spot</th><th>Additional P&L at put expiry</th></tr></thead><tbody>'+c.scenarios.map(v=>'<tr><td>'+v.shock+'%</td><td>'+money(v.price)+'</td><td>'+money(v.pnl)+'</td></tr>').join('')+'</tbody></table></div><p class="fine">'+(s.putExpiry!==s.to?'Expiry mismatch: values stop at put expiry, with constant futures basis as an assumption. No later loss floor is claimed.':'Shared-expiry terminal payoff; interim marks, funding and margin calls are outside this payoff.')+' Quote '+esc(when(c.quoteAsOf))+'</p></details>').join('')+'<p class="fine">'+route.excluded.length+' contracts excluded for quote quality, depth or quantity mismatch. '+route.candidates.length+' priced candidates; at most seven shown.</p></article>';
-  }).join('');
- }catch(e){rollResult=null;$('plan-status').textContent=e.message;$('plan-results').innerHTML='';}
-}
-function intelligenceReview(kind){const questions={briefing:'Explain what changed since my saved comparison point. Separate market movement from edits and missing or stale evidence.',patterns:'Explain the selected historical pattern matches, sample limitations, drawdowns and what they do and do not imply for my HAL exposure.',rollover:'Compare my proposed rollover routes using the calculated costs, additional expiry loss, funding assumptions and protection gaps. Explain why a route qualifies or is withheld. Do not invent a best put.'};aiState.mode='copilot';$('ai-question').value=questions[kind];invalidateAI();switchTab('ai');$('ai-question').scrollIntoView({block:'center'});}
+function intelligenceReview(kind){const questions={briefing:'Explain what changed since my saved comparison point. Separate market movement from edits and missing or stale evidence.',patterns:'Explain selected historical pattern matches, limitations and drawdowns; do not turn sample outcomes into forecasts.'};aiState.mode='copilot';$('ai-question').value=questions[kind]||questions.briefing;invalidateAI();switchTab('ai');$('ai-question').scrollIntoView({block:'center'});}
 function intelligenceEvidence(mode){
  const e={};if(usablePattern())e.historicalPatterns={ready:patternResult.ready,window:patternResult.window,horizon:patternResult.horizon,asOf:patternResult.asOf,stats:patternResult.stats,reason:patternResult.reason,method:patternResult.method,matches:patternResult.matches.slice(0,5).map(({closes,...m})=>m)};
- if(mode!=='research'){
-  const b=currentChanges();e.changes={...b,newNews:b.newNews?.map(n=>({title:String(n.title).slice(0,160),url:A.safeURL(n.url),published:n.published}))};
-  if(planActive)try{const r=evaluatePlan(readPlan());e.rollover={settings:r.settings,sourceTime:r.sourceTime,validUntil:r.validUntil,errors:r.errors,warnings:r.warnings,gapDays:r.gapDays,closeFriction:r.closeFriction,oldExitPnl:r.oldExitPnl,routes:r.routes.map(route=>({label:route.label,lots:route.lots,units:route.units,errors:route.errors,futureEntry:route.futureEntry,additionalLoss:route.additionalLoss,candidates:[...new Map([...(route.recommended?[route.recommended]:[]),...route.candidates.slice(0,2)].map(c=>[c.id,c])).values()]}))};}catch(error){e.rollover={unavailable:error.message};}
- }return e;
+ if(mode!=='research'){const b=currentChanges();e.changes={...b,newNews:b.newNews?.map(n=>({title:String(n.title).slice(0,160),url:A.safeURL(n.url),published:n.published}))};}
+ return e;
 }
-function renderIntelligence(){renderBriefing();renderPatterns();renderPlan();}
+function renderIntelligence(){renderBriefing();renderPatterns();}
 function bindIntelligence(){
- syncPlan(true);$('briefing-save').onclick=()=>{try{const next=currentCheckpoint();if(!C.finite(next.spot)||!next.quoteAsOf)throw Error('Load a timestamped market snapshot before saving a comparison point.');localStorage.setItem('hal_checkpoint_v1',JSON.stringify(next));intelligenceCheckpoint=next;invalidateAI();renderBriefing();toast('Comparison point saved. AI replies are not saved.');}catch(e){toast(e.message);}};
- $('briefing-ai').onclick=()=>intelligenceReview('briefing');$('pattern-ai').onclick=()=>{if(!usablePattern()||!patternResult?.stats){toast('Compare historical patterns first.');return;}intelligenceReview('patterns');};$('plan-ai').onclick=()=>intelligenceReview('rollover');
- $('intelligence-roll-open').onclick=()=>{deskPlan('rollover');$('rollover-workspace').open=true;$('rollover-workspace').scrollIntoView({block:'start'});};
+ $('briefing-save').onclick=()=>{try{const next=currentCheckpoint();if(!C.finite(next.spot)||!next.quoteAsOf)throw Error('Load a timestamped market snapshot before saving a comparison point.');localStorage.setItem('hal_checkpoint_v1',JSON.stringify(next));intelligenceCheckpoint=next;invalidateAI();renderBriefing();toast('Comparison point saved. AI replies are not saved.');}catch(e){toast(e.message);}};
+ $('briefing-ai').onclick=()=>intelligenceReview('briefing');$('pattern-ai').onclick=()=>{if(!usablePattern()||!patternResult?.stats){toast('Compare historical patterns first.');return;}intelligenceReview('patterns');};
  $('pattern-refresh').onclick=()=>{requestResearch('patterns','D',true);invalidateAI();renderPatterns();};$('pattern-scan').onclick=()=>{try{const d=patternData();if(patternUnavailable())throw Error('Wait for a successful history refresh before scanning.');patternResult=I.patterns(d.raw,{window:Number($('pattern-window').value),horizon:Number($('pattern-horizon').value)});patternSignature=currentPatternSignature();invalidateAI();renderPatterns();}catch(e){$('pattern-status').textContent=e.message;}};
  for(const k of ['window','horizon'])$('pattern-'+k).onchange=()=>{patternResult=null;$('pattern-results').innerHTML='';invalidateAI();renderPatterns();};
- for(const k of planFields)$('plan-'+k).addEventListener('input',()=>{rollResult=null;planActive=false;$('plan-results').innerHTML='';if(k==='from')syncPlan();invalidateAI();renderPlan();});
- $('plan-compare').onclick=()=>{try{const s=readPlan();saveBook({...book,rollover:s});planActive=true;renderPlan();}catch(e){$('plan-status').textContent=e.message;}};
- $('plan-refresh').onclick=()=>{try{const s=readPlan();if(!s.putExpiry||!s.from||!s.to||!s.lots)throw Error('Select the futures and put expiries and target lots first.');if(!configured){native('settings');return;}saveBook({...book,rollover:s});planActive=true;for(const d of planDates(s))requestResearch('hedges',d,true);renderPlan();}catch(e){$('plan-status').textContent=e.message;}};
- setInterval(()=>{if(['ai','positions','plan'].includes(tab))renderIntelligence();},30000);
+ setInterval(()=>{if(['insights','ai'].includes(tab))renderIntelligence();},30000);
 }
 

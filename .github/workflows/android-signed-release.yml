@@ -43,8 +43,8 @@ jobs:
       - name: Upload signed APK for private download
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v2.8-signed
-          path: android/build/HAL-Desk-v2.8.apk
+          name: HAL-Desk-v3.1-signed
+          path: android/build/HAL-Desk-v3.1.apk
           retention-days: 3
           if-no-files-found: error
       - name: Remove temporary signing files
