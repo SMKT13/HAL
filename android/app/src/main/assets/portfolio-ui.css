@@ -192,25 +192,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 }
 .bottom-nav button.selected span{color:var(--accent)}
 .page-footer{padding-top:10px;font-size:.61rem}
-#groww-inspired-quick-access{margin:4px 0 22px}
-#groww-inspired-quick-access h2{font-size:1rem;margin-bottom:9px}
-.quick-tools{
- display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px
-}
-.quick-tools button{
- border:1px solid var(--line);background:var(--surface);
- min-width:0;min-height:89px;border-radius:13px;
- display:flex;flex-direction:column;align-items:center;justify-content:center;
- gap:9px;padding:8px 4px;font-size:.69rem;font-weight:690;
- text-align:center;color:var(--text);white-space:normal
-}
-.quick-tools button .quick-symbol{
- width:34px;height:34px;border-radius:12px;
- background:var(--accent-bg);color:var(--accent);
- display:flex;align-items:center;justify-content:center
-}
-.quick-tools button svg{height:19px;width:19px}
-.quick-tools button:active{background:var(--accent-bg)}
 .market-overview-badge{
  padding:9px 12px;background:var(--surface2);border:1px solid var(--line);
  border-radius:12px;color:var(--muted);font-size:.75rem;margin-bottom:12px;
@@ -222,8 +203,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
  .app-header{padding-left:12px;padding-right:12px}
  .read-only{font-size:.52rem;padding:5px 7px}
  .card{padding:15px}
- .quick-tools{gap:5px}
- .quick-tools button{min-height:81px;font-size:.61rem;padding:7px 2px}
  .basket-overview .big-value{font-size:2.02rem}
  #ai-modes{gap:10px}
 }
@@ -231,9 +210,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
  main{padding-left:24px;padding-right:24px}
  .app-header{padding-left:max(24px,calc((100vw - 720px)/2));padding-right:max(24px,calc((100vw - 720px)/2))}
  .quick-tools{grid-template-columns:repeat(4,minmax(0,1fr))}
- .quick-tools button{min-height:97px}
 }
 @media(prefers-reduced-motion:reduce){
  .view{animation:none}
  *{scroll-behavior:auto!important}
 }
+
+/* Five Research sections remain reachable on narrow screens. */
+#desk-research-nav{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:12px}
+#desk-research-nav button{flex:0 0 auto;white-space:nowrap}
+#desk-research-nav::-webkit-scrollbar{display:none}
