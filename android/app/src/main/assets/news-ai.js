@@ -29,7 +29,7 @@ const HALNewsAI = (() => {
     btn.textContent = state === 'error' ? 'Retry download' : 'Install offline model';
   }
   function maybeScore(news) {
-    if (state !== 'ready' || !Array.isArray(news)) return;
+    if (state !== 'ready' || !Array.isArray(news) || (typeof tab !== 'undefined' && tab !== 'news')) return;
     const items = news.filter(n=>n.url && n.title && typeof n.title==='string')
       .slice(0,12).map(n=>({id:n.url,title:n.title.slice(0,480)}));
     const signature = JSON.stringify(items);
