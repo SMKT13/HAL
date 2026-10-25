@@ -26,6 +26,8 @@ jobs:
       - run: npm run test:ui
       - run: node tests/ui.test.js
         working-directory: android
+      - run: node tests/news-ai.test.js
+        working-directory: android
       - run: node tests/ai-ui.test.js
         working-directory: android
       - run: node tests/intelligence-ui.test.js
@@ -35,7 +37,7 @@ jobs:
       - name: Capture QA previews of HAL redesigned screens
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v3.1-design-preview
+          name: HAL-Desk-v3.2-design-preview
           path: |
             android/tests/.output/overview-dark.png
             android/tests/.output/risk-dark.png
@@ -50,6 +52,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
       - run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
       - run: HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash android/build.sh
       - run: bash android/tests/test-native-ai.sh
@@ -58,7 +63,7 @@ jobs:
       - name: Upload unsigned candidate (no signing secrets)
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v3.1-unsigned-and-apksigner
+          name: HAL-Desk-v3.2-unsigned-and-apksigner
           path: |
             android/build/aligned.apk
             android/build/apksigner.jar

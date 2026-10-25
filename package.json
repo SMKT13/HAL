@@ -9,7 +9,7 @@
     "lint": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:python": "python3 -m unittest discover -s tests -v",
-    "test:android": "node android/tests/core.test.js && node --test android/tests/analytics.test.js android/tests/hedge.test.js android/tests/intelligence.test.js android/tests/desk.test.js android/tests/trading-skills.test.js",
+    "test:android": "node android/tests/news-ai.test.js && node android/tests/core.test.js && node --test android/tests/analytics.test.js android/tests/hedge.test.js android/tests/intelligence.test.js android/tests/desk.test.js android/tests/trading-skills.test.js",
     "test:ui": "node tests/ui.mjs"
   },
   "dependencies": {
