@@ -10,7 +10,7 @@ if ! command -v gradle >/dev/null 2>&1; then
  echo "Gradle 8.10+ is required for the offline ONNX Android build." >&2
  exit 1
 fi
-mkdir -p build
+mkdir -p build signing
 gradle --no-daemon :app:assembleRelease
 unsigned="app/build/outputs/apk/release/app-release-unsigned.apk"
 test -f "$unsigned" || { echo "Gradle did not produce an unsigned release APK" >&2; exit 1; }
