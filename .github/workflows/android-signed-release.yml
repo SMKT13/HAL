@@ -17,6 +17,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
       - name: Install Android SDK 35 build tools
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
       - name: Restore original private signing identity
@@ -43,8 +46,8 @@ jobs:
       - name: Upload signed APK for private download
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v3.1-signed
-          path: android/build/HAL-Desk-v3.1.apk
+          name: HAL-Desk-v3.2-signed
+          path: android/build/HAL-Desk-v3.2.apk
           retention-days: 3
           if-no-files-found: error
       - name: Remove temporary signing files
