@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict');
-const fs=require('node:fs'),vm=require('node:vm');
-const source=fs.readFileSync('app/src/main/assets/news-ai.js','utf8');
+const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const source=fs.readFileSync(path.join(__dirname,'../app/src/main/assets/news-ai.js'),'utf8');
 const status={textContent:''},button={hidden:false,disabled:true,textContent:'',onclick:null};
 const nativeCalls=[],ctx={
   document:{getElementById(id){return {'finbert-status':status,'finbert-install':button}[id]||null;}},
