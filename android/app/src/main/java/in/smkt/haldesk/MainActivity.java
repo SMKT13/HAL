@@ -24,6 +24,7 @@ import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -42,6 +43,8 @@ public final class MainActivity extends Activity {
     private final ExecutorService executor=Executors.newSingleThreadExecutor();
     private final ExecutorService researchExecutor=Executors.newFixedThreadPool(2);
     private final ExecutorService aiExecutor=Executors.newSingleThreadExecutor();
+    private final ExecutorService offlineExecutor=Executors.newSingleThreadExecutor();
+    private FinbertClassifier offlineFinbert;
     private volatile AiClient activeAi;
     private volatile String activeAiId="";
     private final AtomicReference<Object> aiWorking=new AtomicReference<>();
@@ -60,6 +63,7 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         secrets=new SecretStore(this);prefs=getSharedPreferences("connection",MODE_PRIVATE);
+        offlineFinbert=new FinbertClassifier(getFilesDir());
         try{secrets.remove("ai_viewer");prefs.edit().remove("ai_origin").apply();}catch(Exception ignored){}
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(11,16,32));
         root.setOnApplyWindowInsetsListener((view,insets)->{ view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom()); return insets.consumeSystemWindowInsets(); });
@@ -282,6 +286,41 @@ public final class MainActivity extends Activity {
             });
         });dialog.show();
     }
+    private void offlineStatus() {
+        JSONObject info = new JSONObject();
+        try { info.put("state", offlineFinbert.ready() ? "ready" : offlineFinbert.isInstalling() ? "downloading" : "not_installed");
+              info.put("model", FinbertClassifier.MODEL_NAME); } catch (Exception ignored) {}
+        send("finbert_status", info);
+    }
+    private void installOfflineFinbert() {
+        if (offlineFinbert.ready()) { offlineStatus(); return; }
+        offlineExecutor.execute(() -> {
+            try {
+                offlineFinbert.install(percent -> {
+                    JSONObject data = object("progress", percent);
+                    try { data.put("state", "downloading"); } catch (Exception ignored) {}
+                    send("finbert_status", data);
+                });
+                offlineStatus();
+            } catch (Exception error) {
+                send("finbert_status", object("state", "error"));
+                send("finbert_error", object("message", "Model download failed: " + error.getMessage()));
+            }
+        });
+    }
+    private void classifyOffline(String json) {
+        if (json == null || json.length() > 15000) return;
+        offlineExecutor.execute(() -> {
+            try {
+                if (!offlineFinbert.ready()) { offlineStatus(); return; }
+                JSONArray items = new JSONArray(json);
+                JSONArray results = offlineFinbert.score(items);
+                send("finbert_results", object("items", results));
+            } catch (Exception error) {
+                send("finbert_error", object("message", "Offline classification unavailable: " + error.getMessage()));
+            }
+        });
+    }
     private final class Bridge {
         @JavascriptInterface public void minimize(){runOnUiThread(()->moveTaskToBack(true));}
         @JavascriptInterface public void ready(){runOnUiThread(()->{pageReady=true;status();});}
@@ -291,6 +330,9 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void aiConfig(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,true));}
         @JavascriptInterface public void ai(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,false));}
         @JavascriptInterface public void aiSettings(){runOnUiThread(()->showAiSettings());}
+        @JavascriptInterface public void finbertStatus(){offlineStatus();}
+        @JavascriptInterface public void finbertInstall(){installOfflineFinbert();}
+        @JavascriptInterface public void finbertScore(String json){classifyOffline(json);}
         @JavascriptInterface public void aiCancel(String id){runOnUiThread(()->{if(id!=null&&id.equals(activeAiId))cancelAi();});}
         @JavascriptInterface public void openLink(String url){runOnUiThread(()->MainActivity.this.openLink(url));}
         @JavascriptInterface public void exportBackup(String json){runOnUiThread(()->exportDocument(json,false));}
@@ -307,7 +349,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onPause(){super.onPause();web.onPause();web.pauseTimers();}
     @Override protected void onResume(){super.onResume();if(web!=null){web.onResume();web.resumeTimers();}}
-    @Override protected void onDestroy(){generation++;aiGeneration++;cancelAi();executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}super.onDestroy();}
+    @Override protected void onDestroy(){generation++;aiGeneration++;cancelAi();executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();offlineExecutor.shutdownNow();if (offlineFinbert!=null)offlineFinbert.close();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}super.onDestroy();}
     @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp.back()",null);else super.onBackPressed();}
 }
 
