@@ -220,3 +220,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 #desk-research-nav{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:12px}
 #desk-research-nav button{flex:0 0 auto;white-space:nowrap}
 #desk-research-nav::-webkit-scrollbar{display:none}
+
+/* Optional offline NLP labels: informational, not direction or trading advice. */
+#finbert-panel .title-row { align-items:center; gap:12px; flex-wrap:wrap; }
+#finbert-panel button { flex-shrink:0; }
+.news-card .hal-sentiment { display:inline-block; margin:4px 0 8px; padding:3px 9px; border:1px solid currentColor; border-radius:999px; font-size:0.75rem; font-weight:600; }
+.hal-sentiment-positive { color:#328665; }
+.hal-sentiment-negative { color:#bd6b65; }
+.hal-sentiment-neutral { color:var(--muted,#8894a5); }
