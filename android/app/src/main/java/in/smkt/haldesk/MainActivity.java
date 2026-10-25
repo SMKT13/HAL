@@ -84,6 +84,7 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"intelligence.js")){asset="intelligence.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"intelligence-ui.js")){asset="intelligence-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"ai-ui.js")){asset="ai-ui.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"news-ai.js")){asset="news-ai.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"trading-skills.js")){asset="trading-skills.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"core.js")){asset="core.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"analytics.js")){asset="analytics.js";mime="application/javascript";}
