@@ -1,5 +1,4 @@
 plugins { id 'com.android.application' }
-def privateSigningAvailable = rootProject.file('signing/personal.jks').exists() && rootProject.file('signing/password.txt').exists()
 android {
     namespace 'in.smkt.haldesk'
     compileSdk 35
@@ -14,15 +13,7 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
-    signingConfigs {
-        if (privateSigningAvailable) personal {
-            storeFile rootProject.file('signing/personal.jks')
-            storePassword rootProject.file('signing/password.txt').text.trim()
-            keyAlias 'hal-personal'
-            keyPassword storePassword
-        }
-    }
-    buildTypes { release { if (privateSigningAvailable) signingConfig signingConfigs.personal; minifyEnabled false } }
+    buildTypes { release { minifyEnabled false } }
 }
 
 
