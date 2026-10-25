@@ -190,5 +190,5 @@ final class FinbertClassifier {
         }
         return output;
     }
-    synchronized void close() { if (session != null) { session.close(); session = null; } }
+    synchronized void close() { if (session != null) { try { session.close(); } catch (Exception ignored) {} finally { session = null; } } }
 }
