@@ -1,3 +1,11 @@
+## v3.2 — Opt-in offline Hugging Face FinBERT (25 October 2026)
+
+Newsroom supports a **user-triggered**, private download of a SHA-256-verified 111 MB quantized ONNX FinBERT checkpoint and accompanying WordPiece vocabulary from [Xenova/finbert](https://huggingface.co/Xenova/finbert) (ONNX conversion of ProsusAI/finbert). Once downloaded, selected fetched English headlines are classified entirely on-device using ONNX Runtime, showing Positive/Negative/Neutral and a model confidence score. Sentiment is not an expected HAL stock return or advice. Model binaries are not included in the APK or backups. Do not enable the feature without the download, which uses mobile data unless on Wi-Fi. No Gemini change or new hosted AI service. The signed APK retains package `in.smkt.haldesk`, with versionCode 16. Use the existing keystore to upgrade.
+
+The older hand-assembled Android APK script has been replaced by a Gradle 8.10+ release build so the ONNX Runtime Android native libraries are packaged. GitHub CI produces an **unsigned** candidate that cannot overwrite a previously signed install. Signed release requires the same existing key and the configured secrets; never generate a replacement signing identity for an in-place update.
+
+This is **phase 1 only**: Qwen offline language-model generation and BGE embeddings/document search are not installed. The app's existing deterministic position, expiry, hedge, funding and stress calculations remain authoritative, and Gemini remains available separately. No automatic AI-triggered trading action has been added. The selected English headline text is processed on-device and is not sent to Hugging Face after model download; model download contacts Hugging Face/CDN. Classifier coverage and accuracy on HAL/NSE headlines have not been established by physical-device benchmark.
+
 ## v3.1 — Position-first MVP update (23 October 2026)
 
 HAL Desk 3.1 preserves the original v3.0 Android app identity, book, ledger, funding, protective puts, market data, news, technical/fundamental research and direct Gemini AI. Navigation retains **Today / My Position / Plan / Research**. Research now has **Markets / Company & Analysis / News / Insights / AI Desk**, with checkpoints and historical patterns in Insights. Plan offers **Stress test / Find a hedge**.
