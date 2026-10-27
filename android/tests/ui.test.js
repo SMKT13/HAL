@@ -7,7 +7,7 @@ const candles=Array.from({length:230},(_,i)=>[new Date(Date.parse('2026-10-16T03
 const funds={income:{type:'consolidated',income_statement:[{category:'revenue',history:[{period:'Synthetic Q1',value:5000,change:'10%'}]},{category:'net_profit',history:[{period:'Synthetic Q1',value:1000,change:'5%'}]}]},annual:{income_statement:[{category:'net_profit',history:[{period:'Synthetic FY',value:8000}]}]},cash:{cash_flow:[{category:'operating',history:[{period:'Synthetic FY',value:9000}]}]},ratios:[{name:'P/E',company_value:'25',sector_value:'30'}],shareholding:[{category:'promoters',history:[{value:71,period:'Synthetic quarter'}]}],balance:{history:[{total_asset:70000,total_liability:20000,period:'Synthetic FY'}]},profile:{sector:'Aerospace',company_profile:'Synthetic QA company description.'},actions:[],peers:[]};
 (async()=>{
  fs.mkdirSync('tests/.output',{recursive:true});const http=require('node:http');
- const server=http.createServer((req,res)=>{const name=req.url.split('?')[0].slice(1);if(!['index.html','style.css','portfolio-ui.css','market-pulse.css','derivative-participation.css','option-intelligence.css','held-greeks.css','stream-preview.css','core.js','analytics.js','desk.js','desk-ui.js','hedge.js','hedge-ui.js','intelligence.js','intelligence-ui.js','ai-ui.js','news-ai.js','market-pulse.js','derivative-participation.js','option-intelligence.js','held-greeks.js','stream-preview.js','trading-skills.js','charts.js','lightweight-charts.js','app.js'].includes(name)){res.writeHead(404).end();return;}res.setHeader('Content-Type',name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync('app/src/main/assets/'+name));});
+ const server=http.createServer((req,res)=>{const name=req.url.split('?')[0].slice(1);if(!['index.html','style.css','portfolio-ui.css','market-pulse.css','derivative-participation.css','option-intelligence.css','held-greeks.css','stream-preview.css','source-readiness.css','core.js','analytics.js','desk.js','desk-ui.js','hedge.js','hedge-ui.js','intelligence.js','intelligence-ui.js','ai-ui.js','news-ai.js','market-pulse.js','derivative-participation.js','option-intelligence.js','held-greeks.js','stream-preview.js','source-readiness.js','trading-skills.js','charts.js','lightweight-charts.js','app.js'].includes(name)){res.writeHead(404).end();return;}res.setHeader('Content-Type',name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync('app/src/main/assets/'+name));});
  await new Promise(r=>server.listen(8765,'127.0.0.1',r));
  let browser;
  try{
@@ -19,7 +19,7 @@ const funds={income:{type:'consolidated',income_statement:[{category:'revenue',h
   window.HALNative={ready:()=>setTimeout(()=>HALApp.receive('connection',{mode:'direct',configured:false}),0),streamStart:()=>{window.streamStarts=(window.streamStarts||0)+1},streamStop:()=>{window.streamStops=(window.streamStops||0)+1},settings:()=>{window.settingsOpened=true},refresh:e=>{window.requestedExpiry=e},research:r=>{(window.researchRequests??=[]).push(JSON.parse(r))},openLink:u=>{window.openedLink=u},exportBackup:x=>{window.backupJSON=x},exportCSV:x=>{window.csv=x},importBackup:()=>{},minimize:()=>{}};
  },oldBook);
  await page.goto('http://127.0.0.1:8765/index.html');await page.clock.runFor(20);await page.locator('#welcome').waitFor({state:'visible'});
- assert.equal(await page.locator('#spot').textContent(),'₹—');assert.equal(await page.evaluate(()=>JSON.parse(localStorage.hal_desk_v2).legs.length),3);
+ assert.match(await page.locator('#source-readiness').textContent(),/Not connected/);assert.equal(await page.locator('#spot').textContent(),'₹—');assert.equal(await page.evaluate(()=>JSON.parse(localStorage.hal_desk_v2).legs.length),3);
  await page.locator('#connect').click();assert.equal(await page.evaluate(()=>window.settingsOpened),true);
  await page.evaluate(data=>{HALApp.receive('connection',{mode:'direct',configured:true});HALApp.receive('snapshot',data);},fixture);
  const send=async(section,data,frame='D',type='consolidated')=>page.evaluate(x=>HALApp.receive('research',x),{section,frame,type,key:`${section}:${frame}:${type}`,data,errors:{},fetched_at_iso:'2026-10-16T05:00:00Z',source:'SYNTHETIC QA DATA'});
@@ -45,6 +45,9 @@ const funds={income:{type:'consolidated',income_statement:[{category:'revenue',h
   assert.match(await page.locator('#option-intel-markets').textContent(),/matched strikes/);assert.match(await page.locator('#option-intel-markets').textContent(),/7,000/);
   await page.evaluate(()=>switchTab('overview'));
   assert.equal(await page.locator('#spot').textContent(),'₹5,000.00');
+  assert.match(await page.locator('#source-readiness').textContent(),/Saved contract marks/);
+  assert.match(await page.locator('#source-readiness').textContent(),/Not confirmed/);
+  assert.match(await page.locator('#settings-source-readiness').textContent(),/Last trade/);
   await page.locator('#stream-start').click();
   assert.equal(await page.evaluate(()=>window.streamStarts),1);
   await page.evaluate(()=>HALApp.receive('stream',{state:'binary_frames_received',frames:4,instruments:5,decoded:false}));
@@ -58,6 +61,7 @@ const funds={income:{type:'consolidated',income_statement:[{category:'revenue',h
   assert.match(await page.locator('#stream-prices').textContent(),/INDIA VIX/);
   assert.equal(await page.locator('#spot').textContent(),'₹5,000.00','Streaming preview must not overwrite spot');
   assert.equal(await page.locator('#home-pnl').textContent(),'−₹28,095.00','Streaming preview must not mutate portfolio P&L');
+   assert.match(await page.locator('#source-readiness').textContent(),/Upstox direct/);
   await page.locator('#stream-stop').click();
   assert.equal(await page.evaluate(()=>window.streamStops),1);
   await page.evaluate(()=>HALApp.receive('stream',{state:'stopped',frames:0,instruments:0}));
