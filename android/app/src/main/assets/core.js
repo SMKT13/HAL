@@ -1,7 +1,7 @@
 (function(root){
 'use strict';
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
-const value=x=>x===''||x===null||x===undefined?null:(Number.isFinite(Number(x))?Number(x):null);
+const value=x=>x===null||x===undefined||(typeof x==='string'&&!x.trim())?null:(Number.isFinite(Number(x))?Number(x):null);
 const validDate=s=>{if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;const d=new Date(s+'T00:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===s;};
 function validate(legs){
  if(!Array.isArray(legs)||!legs.length)throw Error('Add at least one long futures or put position.');
@@ -46,10 +46,11 @@ function lotFor(leg,snapshot){
 }
 function freshness(snapshot,now=Date.now()){
  if(!snapshot)return 'No quote yet';
- const times=[snapshot.spot?.quote_as_of,snapshot.spot?.last_trade_at].map(t=>Date.parse(t)).filter(Number.isFinite);
- if(!times.length)return 'Provider time unavailable';
+ // An HTTP quote update does not prove the exchange recorded a recent trade.
+ const times=[snapshot.spot?.quote_as_of,snapshot.spot?.last_trade_at].map(t=>typeof t==='string'&&t.trim()?Date.parse(t):NaN);
+ if(times.some(t=>!Number.isFinite(t)||t<=0))return 'Provider time unavailable';
  if(times.some(t=>t>now+60000))return 'Check device/provider clock';
- return now-Math.min(...times)>120000?'Older market quote':'Recent market quote';
+ return times.some(t=>now-t>120000)?'Older market quote':'Recent market quote';
 }
 const api={finite,value,validDate,validate,mark,mtm,payoff,lotFor,freshness};
 if(typeof module!=='undefined'&&typeof require==='function')module.exports=api;root.HALCore=api;
