@@ -18,8 +18,8 @@
       const last=valid(q.last_price)&&q.last_price>0?q.last_price:null;
       const previous=valid(q.prev_close_price)&&q.prev_close_price>0?q.prev_close_price:null;
       const time=tradeTime(q.last_trade_time);
-      const age=time===null?null:Math.max(0,now-time);
-      const state=last===null?'unavailable':time===null?'unknown-time':age>120000?'older':'recent';
+      const age=time===null?null:now-time;
+      const state=last===null?'unavailable':time===null?'unknown-time':age< -60000?'clock-error':age>120000?'older':'recent';
       return {label,last,previous,time,age,state,change:last!==null&&previous!==null?(last/previous-1)*100:null};
     });
     return {rows, fetchedAt:packet?.fetched_at_iso||null, source:packet?.source||'Upstox', error:packet?.errors?.indices||null};
@@ -32,7 +32,7 @@
     const m=inspect(packet,now);
     const tiles=m.rows.map(r=>{
       const ch=r.change===null?'Previous close unavailable':(r.change>=0?'+':'')+number(r.change)+'% vs previous close';
-      const q=r.state==='recent'?'Recent trade':r.state==='older'?'Older trade':r.state==='unknown-time'?'Trade time unknown':'No quote';
+      const q=r.state==='recent'?'Recent trade':r.state==='older'?'Older trade':r.state==='unknown-time'?'Trade time unknown':r.state==='clock-error'?'Check provider/device clock':'No quote';
       return '<div class="market-pulse-tile"><span>'+esc(r.label)+'</span><strong>'+esc(number(r.last))+'</strong><small>'+esc(ch)+'</small><small>'+esc(q)+' · '+esc(at(r.time))+'</small></div>';
     }).join('');
     return '<div class="market-pulse-grid">'+tiles+'</div>'+
