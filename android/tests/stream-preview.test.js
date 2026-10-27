@@ -14,5 +14,7 @@ assert.equal(S.inspect({...valid,rows:[{key:'NSE_FO|42',price:NaN}]},now).length
 assert.equal(S.inspect({...valid,rows:[{key:'NSE_FO|42',price:0}]},now).length,0);
 assert.equal(S.inspect({...valid,rows:[{key:'NSE_FO|42',price:20}]},now)[0].clock,'Trade time missing');
 assert.equal(S.inspect({...valid,state:'stopped'},now).length,0);
+assert.match(S.markup({...valid,rows:[{key:'NSE_INDEX|India VIX',price:17.5,last_trade_ts:now-1000}]},now),/INDIA VIX<\/small><b>17.50<\/b>/);
+assert.match(S.inspect({...valid,rows:[{key:'NSE_FO|41',price:5000,last_trade_ts:now+120000}]},now)[0].clock,/Future clock/);
 assert.ok(!S.markup({...valid,rows:[{key:'NSE_FO|<img>',price:23}]},now).includes('<img>'));
 console.log('WebSocket LTPC preview unit checks passed');
