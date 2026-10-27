@@ -1,4 +1,4 @@
-plugins { id 'com.android.application' }
+plugins { id 'com.android.application'; id 'com.google.protobuf' }
 android {
     namespace 'in.smkt.haldesk'
     compileSdk 35
@@ -17,7 +17,16 @@ android {
 }
 
 
+protobuf {
+    protoc { artifact = 'com.google.protobuf:protoc:3.25.5' }
+    generateProtoTasks {
+        all().configureEach { task ->
+            task.builtins { java { option 'lite' } }
+        }
+    }
+}
 dependencies {
+    implementation 'com.google.protobuf:protobuf-javalite:3.25.5'
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
