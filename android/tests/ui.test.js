@@ -7,7 +7,7 @@ const candles=Array.from({length:230},(_,i)=>[new Date(Date.parse('2026-10-16T03
 const funds={income:{type:'consolidated',income_statement:[{category:'revenue',history:[{period:'Synthetic Q1',value:5000,change:'10%'}]},{category:'net_profit',history:[{period:'Synthetic Q1',value:1000,change:'5%'}]}]},annual:{income_statement:[{category:'net_profit',history:[{period:'Synthetic FY',value:8000}]}]},cash:{cash_flow:[{category:'operating',history:[{period:'Synthetic FY',value:9000}]}]},ratios:[{name:'P/E',company_value:'25',sector_value:'30'}],shareholding:[{category:'promoters',history:[{value:71,period:'Synthetic quarter'}]}],balance:{history:[{total_asset:70000,total_liability:20000,period:'Synthetic FY'}]},profile:{sector:'Aerospace',company_profile:'Synthetic QA company description.'},actions:[],peers:[]};
 (async()=>{
  fs.mkdirSync('tests/.output',{recursive:true});const http=require('node:http');
- const server=http.createServer((req,res)=>{const name=req.url.split('?')[0].slice(1);if(!['index.html','style.css','portfolio-ui.css','market-pulse.css','derivative-participation.css','option-intelligence.css','held-greeks.css','core.js','analytics.js','desk.js','desk-ui.js','hedge.js','hedge-ui.js','intelligence.js','intelligence-ui.js','ai-ui.js','news-ai.js','market-pulse.js','derivative-participation.js','option-intelligence.js','held-greeks.js','trading-skills.js','charts.js','lightweight-charts.js','app.js'].includes(name)){res.writeHead(404).end();return;}res.setHeader('Content-Type',name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync('app/src/main/assets/'+name));});
+ const server=http.createServer((req,res)=>{const name=req.url.split('?')[0].slice(1);if(!['index.html','style.css','portfolio-ui.css','market-pulse.css','derivative-participation.css','option-intelligence.css','held-greeks.css','stream-preview.css','core.js','analytics.js','desk.js','desk-ui.js','hedge.js','hedge-ui.js','intelligence.js','intelligence-ui.js','ai-ui.js','news-ai.js','market-pulse.js','derivative-participation.js','option-intelligence.js','held-greeks.js','stream-preview.js','trading-skills.js','charts.js','lightweight-charts.js','app.js'].includes(name)){res.writeHead(404).end();return;}res.setHeader('Content-Type',name.endsWith('.js')?'application/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync('app/src/main/assets/'+name));});
  await new Promise(r=>server.listen(8765,'127.0.0.1',r));
  let browser;
  try{
@@ -48,9 +48,16 @@ const funds={income:{type:'consolidated',income_statement:[{category:'revenue',h
   await page.locator('#stream-start').click();
   assert.equal(await page.evaluate(()=>window.streamStarts),1);
   await page.evaluate(()=>HALApp.receive('stream',{state:'binary_frames_received',frames:4,instruments:5,decoded:false}));
-  assert.match(await page.locator('#stream-state').textContent(),/not decoded/);
+  assert.match(await page.locator('#stream-state').textContent(),/awaiting validated price/);
   assert.match(await page.locator('#stream-detail').textContent(),/4 binary frame/);
-  assert.equal(await page.locator('#spot').textContent(),'₹5,000.00','Streaming transport must never overwrite verified quote data');
+  await page.evaluate(()=>HALApp.receive('stream',{state:'decoded_quotes',frames:5,instruments:5,feed_ts:Date.parse('2026-10-16T05:00:00Z'),rows:[
+    {key:'NSE_EQ|INE123456789',price:5050,prev_close:4950,last_trade_ts:Date.parse('2026-10-16T05:00:00Z')},
+    {key:'NSE_INDEX|India VIX',price:16,prev_close:15,last_trade_ts:Date.parse('2026-10-16T04:55:00Z')}
+  ]}));
+  assert.match(await page.locator('#stream-prices').textContent(),/₹5,050.00/);
+  assert.match(await page.locator('#stream-prices').textContent(),/INDIA VIX/);
+  assert.equal(await page.locator('#spot').textContent(),'₹5,000.00','Streaming preview must not overwrite spot');
+  assert.equal(await page.locator('#home-pnl').textContent(),'−₹28,095.00','Streaming preview must not mutate portfolio P&L');
   await page.locator('#stream-stop').click();
   assert.equal(await page.evaluate(()=>window.streamStops),1);
   await page.evaluate(()=>HALApp.receive('stream',{state:'stopped',frames:0,instruments:0}));

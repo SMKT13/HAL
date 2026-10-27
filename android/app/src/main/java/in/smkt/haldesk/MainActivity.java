@@ -91,6 +91,7 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"derivative-participation.js")){asset="derivative-participation.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"option-intelligence.js")){asset="option-intelligence.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"held-greeks.js")){asset="held-greeks.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"stream-preview.js")){asset="stream-preview.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"trading-skills.js")){asset="trading-skills.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"core.js")){asset="core.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"analytics.js")){asset="analytics.js";mime="application/javascript";}
@@ -106,6 +107,7 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"derivative-participation.css")){asset="derivative-participation.css";mime="text/css";}
                 if(url.equals(ORIGIN+"option-intelligence.css")){asset="option-intelligence.css";mime="text/css";}
                 if(url.equals(ORIGIN+"held-greeks.css")){asset="held-greeks.css";mime="text/css";}
+                if(url.equals(ORIGIN+"stream-preview.css")){asset="stream-preview.css";mime="text/css";}
                 try { if(!asset.isEmpty())return new WebResourceResponse(mime,"UTF-8",getAssets().open(asset)); }
                 catch(Exception ignored) { }
                 return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));

@@ -1,0 +1,5 @@
+.stream-quote-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.stream-quote{padding:12px;background:var(--surface2);border:1px solid var(--line);border-radius:10px;min-width:0}
+.stream-quote b{display:block;font-size:1.15rem;font-variant-numeric:tabular-nums;margin:6px 0}
+.stream-quote small{display:block;font-size:.66rem;color:var(--muted);overflow-wrap:anywhere}
+@media(max-width:350px){.stream-quote-grid{grid-template-columns:1fr}}

@@ -1,0 +1,18 @@
+const assert=require('node:assert/strict');
+const S=require('../app/src/main/assets/stream-preview.js');
+const now=Date.parse('2026-10-27T05:10:00Z');
+const valid={state:'decoded_quotes',feed_ts:now-1000,rows:[{key:'NSE_EQ|INE999999999',price:5000,prev_close:4900,last_trade_ts:now-20000},{key:'NSE_FO|12345',price:5012,prev_close:5010,last_trade_ts:now-150000}]};
+const rows=S.inspect(valid,now);
+assert.equal(rows.length,2);
+assert.equal(rows[0].clock,'Recent trade');
+assert.equal(rows[1].clock,'Older trade / after-hours');
+assert.equal(rows[0].name,'HAL EQUITY');
+assert.match(S.markup(valid,now),/₹5,000.00/);
+assert.match(S.markup(valid,now),/Preview only/);
+assert.equal(S.inspect({...valid,rows:[{key:'BSE_EQ|FOO',price:4}]},now).length,0);
+assert.equal(S.inspect({...valid,rows:[{key:'NSE_FO|42',price:NaN}]},now).length,0);
+assert.equal(S.inspect({...valid,rows:[{key:'NSE_FO|42',price:0}]},now).length,0);
+assert.equal(S.inspect({...valid,rows:[{key:'NSE_FO|42',price:20}]},now)[0].clock,'Trade time missing');
+assert.equal(S.inspect({...valid,state:'stopped'},now).length,0);
+assert.ok(!S.markup({...valid,rows:[{key:'NSE_FO|<img>',price:23}]},now).includes('<img>'));
+console.log('WebSocket LTPC preview unit checks passed');
