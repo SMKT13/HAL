@@ -155,7 +155,10 @@ final class MarketClient {
         if(raw==null)return null;
         JSONObject q=new JSONObject(),ohlc=raw.optJSONObject("ohlc");
         q.put("last_price",num(raw,"last_price"));q.put("volume",num(raw,"volume"));q.put("open_interest",num(raw,"oi"));
-        q.put("prev_close",num(ohlc,"close"));for(String f:new String[]{"open","high","low"})q.put(f,num(ohlc,f));
+        q.put("prev_close",raw.has("prev_close_price")?num(raw,"prev_close_price"):num(ohlc,"close"));
+         q.put("previous_oi",num(raw,"previous_oi"));q.put("year_high",num(raw,"year_high"));q.put("year_low",num(raw,"year_low"));
+         q.put("total_buy_quantity",num(raw,"total_buy_quantity"));q.put("total_sell_quantity",num(raw,"total_sell_quantity"));
+         for(String f:new String[]{"open","high","low"})q.put(f,num(ohlc,f));
         JSONObject depth=raw.optJSONObject("depth");
         JSONArray buy=depth==null?null:depth.optJSONArray("buy"),sell=depth==null?null:depth.optJSONArray("sell");
         q.put("bid",num(buy==null?null:buy.optJSONObject(0),"price"));q.put("ask",num(sell==null?null:sell.optJSONObject(0),"price"));
@@ -225,6 +228,34 @@ final class MarketClient {
         result.put("connection_mode","direct");result.put("fetched_at_iso",OffsetDateTime.now().toString());result.put("cache_status","fresh_fetch");
         result.put("spot",spot);result.put("futures",futures);result.put("available_expiries",new JSONArray(dates));
         result.put("option_expiry",selected);result.put("option_rows",rows);result.put("chain_error",chainError);return result;
+    }
+    synchronized JSONObject derivativeParticipation(String token) throws Exception {
+        // Additional strictly read-only V3 quote enrichment. This never substitutes for the
+        // verified-contract marks used by the existing P&L and hedge engines.
+        discover(token);
+        JSONArray entries=new JSONArray();
+        if(contracts.length()==0)throw new Failure("no_hal_futures_contracts");
+        StringBuilder keys=new StringBuilder();
+        for(int i=0;i<contracts.length();i++) {
+            if(keys.length()>0) keys.append(",");
+            keys.append(contracts.getJSONObject(i).getString("instrument_key"));
+        }
+        Object raw=apiData("/v3/market-quote/quotes","instrument_key="+enc(keys.toString()),token);
+        if(!(raw instanceof JSONObject))throw new Failure("bad_response");
+        JSONObject source=(JSONObject)raw;
+        for(int i=0;i<contracts.length();i++) {
+            JSONObject c=contracts.getJSONObject(i),item=new JSONObject();
+            item.put("expiry",c.getString("expiry"));
+            item.put("instrument_key",c.getString("instrument_key"));
+            item.put("trading_symbol",c.optString("trading_symbol"));
+            item.put("lot_size",num(c,"lot_size"));
+            item.put("quote",quote(source,c.getString("instrument_key")));
+            entries.put(item);
+        }
+        JSONObject result=new JSONObject();
+        result.put("futures",entries);
+        result.put("coverage","Listed HAL futures; additional V3 quote evidence, not portfolio marks or an order-flow forecast.");
+        return result;
     }
     JSONObject hedgeSnapshot(String token,String expiry) throws Exception {
         JSONObject result=load("direct",token,expiry);
