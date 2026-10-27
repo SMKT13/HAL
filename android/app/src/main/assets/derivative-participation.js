@@ -33,9 +33,10 @@
     });
     return {rows,errors:packet?.errors||{},fetched:stamp(packet?.fetched_at_iso)};
   }
-  function markup(packet,saved=[],now=Date.now()){
+  function markup(packet,saved=[],now=Date.now(),compact=false){
     const info=inspect(packet,now);
-    const entries=info.rows.map(r=>{
+    const relevant=compact?(info.rows.filter(r=>saved.some(x=>x?.type==='FUT'&&x.expiry===r.expiry)).slice(0,2).length?info.rows.filter(r=>saved.some(x=>x?.type==='FUT'&&x.expiry===r.expiry)).slice(0,2):info.rows.slice(0,1)):info.rows;
+    const entries=relevant.map(r=>{
       const owned=saved.some(x=>x?.type==='FUT'&&x.expiry===r.expiry);
       const detail=r.pricePct===null||r.oiPct===null?'Cannot classify: price or previous-day OI unavailable':r.pattern;
       return '<article class="participation-entry">'+
@@ -53,7 +54,7 @@
   }
   function renderInto(id,packet,saved,now=Date.now()){
     const el=typeof document==='undefined'?null:document.getElementById(id);
-    if(el)el.innerHTML=markup(packet,saved,now);
+    if(el)el.innerHTML=markup(packet,saved,now,id==='participation-home');
   }
   const API={inspect,markup,renderInto,pattern};
   root.HALParticipation=API;
