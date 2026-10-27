@@ -47,6 +47,12 @@ public final class StreamDecoderTest {
             Collections.singleton("NSE_INDEX|India VIX"),NOW);
         assertTrue(result.getJSONArray("rows").getJSONObject(0).isNull("last_trade_ts"));
     }
+    @Test public void missingOrOlderTickCannotReplaceVerifiedTrade() {
+        assertFalse(StreamDecoder.shouldReplace(1793000000000L,0));
+        assertFalse(StreamDecoder.shouldReplace(1793000000000L,1792999999999L));
+        assertTrue(StreamDecoder.shouldReplace(1793000000000L,1793000000001L));
+        assertTrue(StreamDecoder.shouldReplace(0,1793000000001L));
+    }
     @Test public void marketStatusNotAPrice() throws Exception {
         byte[] bytes=MarketDataFeedV3.FeedResponse.newBuilder()
             .setType(MarketDataFeedV3.Type.market_info).setCurrentTs(NOW).build().toByteArray();
