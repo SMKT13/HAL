@@ -43,11 +43,31 @@ jobs:
         run: |
           set -euo pipefail
           HAL_UNSIGNED_ONLY=0 ANDROID_SDK_ROOT="$ANDROID_HOME" bash android/build.sh
+      - name: Validate upgrade package identity and signer
+        shell: bash
+        env:
+          EXPECTED_CERT_SHA256: ${{ secrets.HAL_EXPECTED_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          apk="android/build/HAL-Desk-v3.3.apk"
+          test -s "$apk"
+          badge="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | sed -n '1p')"
+          [[ "$badge" == *"name='in.smkt.haldesk'"* ]] || { echo "Unexpected package ID" >&2; exit 1; }
+          [[ "$badge" == *"versionCode='17'"* ]] || { echo "Unexpected versionCode; confirm installed app is older" >&2; exit 1; }
+          [[ "$badge" == *"versionName='3.3'"* ]] || { echo "Unexpected versionName" >&2; exit 1; }
+          cert="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          [[ "${#cert}" -eq 64 ]] || { echo "Could not read APK signer fingerprint" >&2; exit 1; }
+          if [[ -n "$EXPECTED_CERT_SHA256" ]]; then
+            expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+            [[ "$cert" == "$expected" ]] || { echo "Certificate differs from expected installed-app fingerprint. Refusing to publish update." >&2; exit 1; }
+          else
+            echo "No HAL_EXPECTED_CERT_SHA256 secret: signed APK built, but installer must verify old/new signer fingerprints before upgrade."
+          fi
       - name: Upload signed APK for private download
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v3.2-signed
-          path: android/build/HAL-Desk-v3.2.apk
+          name: HAL-Desk-v3.3-signed
+          path: android/build/HAL-Desk-v3.3.apk
           retention-days: 3
           if-no-files-found: error
       - name: Remove temporary signing files

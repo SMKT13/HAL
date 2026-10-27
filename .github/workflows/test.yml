@@ -16,6 +16,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+      - run: python3 android/tests/check_release_identity.py
       - run: npm ci
       - run: npm run lint
       - run: npm run test:python
