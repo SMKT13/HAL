@@ -63,7 +63,7 @@ final class MarketClient {
         } else {
             String path=url.getPath();
             boolean research=path.equals("/v2/news") || path.equals("/v2/market/status/NSE") || path.matches("/v2/fundamentals/[A-Z0-9]{12}/(profile|income-statement|balance-sheet|cash-flow|share-holdings|key-ratios|corporate-actions|competitors)") || path.matches("/v3/historical-candle/(intraday/)?NSE_(EQ|INDEX)[^/]+/(days|minutes|hours)/(1|15)(/\\d{4}-\\d{2}-\\d{2}/\\d{4}-\\d{2}-\\d{2})?");
-            if(!"api.upstox.com".equals(url.getHost()) || !(research || path.equals("/v2/instruments/search") || path.equals("/v2/market-quote/quotes") || path.equals("/v2/option/chain") || path.equals("/v2/option/contract"))) throw new Failure("invalid_destination");
+            if(!"api.upstox.com".equals(url.getHost()) || !(research || path.equals("/v2/instruments/search") || path.equals("/v2/market-quote/quotes") || path.equals("/v3/market-quote/quotes") || path.equals("/v2/option/chain") || path.equals("/v2/option/contract"))) throw new Failure("invalid_destination");
         }
         if(secret.isEmpty()) throw new Failure("credential_missing");
         HttpsURLConnection connection=(HttpsURLConnection)url.openConnection();

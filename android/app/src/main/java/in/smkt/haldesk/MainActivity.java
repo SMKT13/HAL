@@ -85,6 +85,7 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"intelligence-ui.js")){asset="intelligence-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"ai-ui.js")){asset="ai-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"news-ai.js")){asset="news-ai.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"market-pulse.js")){asset="market-pulse.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"trading-skills.js")){asset="trading-skills.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"core.js")){asset="core.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"analytics.js")){asset="analytics.js";mime="application/javascript";}
@@ -96,6 +97,7 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"lightweight-charts.js")){asset="lightweight-charts.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"style.css")){asset="style.css";mime="text/css";}
                 if(url.equals(ORIGIN+"portfolio-ui.css")){asset="portfolio-ui.css";mime="text/css";}
+                if(url.equals(ORIGIN+"market-pulse.css")){asset="market-pulse.css";mime="text/css";}
                 try { if(!asset.isEmpty())return new WebResourceResponse(mime,"UTF-8",getAssets().open(asset)); }
                 catch(Exception ignored) { }
                 return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));
@@ -250,16 +252,16 @@ public final class MainActivity extends Activity {
         if(settingsShowing)return;settingsShowing=true;
         LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(24),dp(8),dp(24),dp(16));
         RadioGroup choice=new RadioGroup(this);RadioButton direct=new RadioButton(this),server=new RadioButton(this);
-        direct.setId(101);server.setId(102);direct.setText("Direct Upstox token");server.setText("Existing Render server");choice.addView(direct);choice.addView(server);
+        direct.setId(101);server.setId(102);direct.setText("Upstox Analytics Token (recommended)");server.setText("Legacy Render server");choice.addView(direct);choice.addView(server);
         choice.check("server".equals(mode())?102:101);form.addView(choice);
         TextView explanation=text("");form.addView(explanation);
         EditText credential=new EditText(this);credential.setSingleLine(false);credential.setMaxLines(4);credential.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         credential.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);form.addView(credential);
-        TextView details=text("Credentials are encrypted with Android Keystore. They never enter the page or the APK. Market data only; no orders or broker holdings are accessed.");details.setTextSize(13);form.addView(details);
+        TextView details=text("Credentials are encrypted with Android Keystore. They never enter the page or the APK. Market data only. Broker holdings, account funds and trade history are not accessed; those require a whitelisted static IP and a separate opt-in implementation. This app never places orders.");details.setTextSize(13);form.addView(details);
         Runnable labels=()->{
             boolean isServer=choice.getCheckedRadioButtonId()==102;String selected=isServer?"server":"direct";
-            explanation.setText(isServer?"Uses hal-dashboard.onrender.com. Enter HAL_VIEWER_KEY. Your Upstox token remains on Render as UPSTOX_ACCESS_TOKEN.":"Paste an Upstox token here. The read-only Analytics Token is recommended for research and has one-year validity. Standard OAuth tokens expire daily. Your token is sent only to api.upstox.com.");
-            credential.setHint(secrets.has(selected)?"Saved securely — leave blank to keep":(isServer?"HAL_VIEWER_KEY":"Upstox access token"));credential.setText("");
+            explanation.setText(isServer?"Uses hal-dashboard.onrender.com. Enter HAL_VIEWER_KEY. Your Upstox token remains on Render as UPSTOX_ACCESS_TOKEN.":"Paste an Upstox token here. Use a free, read-only Analytics Token from Upstox Developer Apps (Analytics tab). It works for market data for one year, cannot trade, and needs no static IP for public market feeds. Standard OAuth tokens also work but expire daily. Sent only to api.upstox.com.");
+            credential.setHint(secrets.has(selected)?"Saved securely — leave blank to keep":(isServer?"HAL_VIEWER_KEY":"Paste Upstox Analytics Token"));credential.setText("");
         };
         choice.setOnCheckedChangeListener((group,id)->labels.run());labels.run();
         ScrollView scroll=new ScrollView(this);scroll.addView(form);
