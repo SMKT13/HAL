@@ -37,7 +37,7 @@ jobs:
       - name: Capture QA previews of HAL redesigned screens
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v3.2-design-preview
+          name: HAL-Desk-v3.3-design-preview
           path: |
             android/tests/.output/overview-dark.png
             android/tests/.output/risk-dark.png
@@ -65,7 +65,7 @@ jobs:
       - name: Upload unsigned candidate (no signing secrets)
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v3.2-unsigned-and-apksigner
+          name: HAL-Desk-v3.3-unsigned-and-apksigner
           path: |
             android/build/aligned.apk
             android/build/apksigner.jar
