@@ -5,6 +5,10 @@ import org.json.JSONObject;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Iterator;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -13,8 +17,8 @@ import okhttp3.WebSocketListener;
 import okio.ByteString;
 
 /**
- * Upstox WebSocket V3 **transport** only; intentionally does NOT interpret Protobuf
- * frames as quote or Greeks values until the official V3 proto decoder is bundled.
+ * Upstox WebSocket V3 read-only LTPC preview with pinned vendor Protobuf schema.
+ * Decoded quotes never change market snapshot P&L or held-contract price marks.
  * One user-initiated foreground connection; no retries or background subscriptions.
  */
 final class MarketStream {
@@ -25,6 +29,8 @@ final class MarketStream {
     private WebSocket socket;
     private long generation=0, messages=0, lastStatus=0;
     private boolean enabled=false;
+    private final LinkedHashMap<String,JSONObject> latestQuotes=new LinkedHashMap<>();
+    private long lastQuotePublish=0;
     MarketStream(Sink sink){this.sink=sink;}
     private static JSONObject status(String state,long frames,int keys) {
         JSONObject s=new JSONObject();
@@ -56,12 +62,14 @@ final class MarketStream {
         final long id;
         synchronized(this){
             if(enabled)return;
-            enabled=true;id=++generation;messages=0;lastStatus=0;
+            enabled=true;id=++generation;messages=0;lastStatus=0;lastQuotePublish=0;latestQuotes.clear();
         }
         sink.publish(status("authorizing",0,0));
         try {
             JSONArray keys=market.streamKeys(token);
             if(keys.length()==0||keys.length()>5)throw new MarketClient.Failure("invalid_stream_keys");
+            final Set<String> allowed=new HashSet<>();
+            for(int i=0;i<keys.length();i++) allowed.add(keys.getString(i));
             JSONObject auth=market.streamAuthorize(token);
             URI endpoint=validateEndpoint(auth.optString("authorized_redirect_uri"));
             synchronized(this){if(!enabled||id!=generation)return;}
@@ -90,10 +98,42 @@ final class MarketStream {
                     synchronized(MarketStream.this){
                         if(!enabled||id!=generation)return;
                         messages++;
-                        // Binary Protobuf must NOT be passed to JavaScript or used as JSON.
-                        // Throttle UI so fast ticks cannot saturate WebView.
-                        long now=System.currentTimeMillis();
-                        if(now-lastStatus>=2000){lastStatus=now;announce("binary_frames_received",keys.length());}
+                        final long now=System.currentTimeMillis();
+                        try {
+                            JSONObject packet=StreamDecoder.decode(bytes.toByteArray(),allowed,now);
+                            if("market_info".equals(packet.optString("type"))){
+                                if(now-lastStatus>=2000){lastStatus=now;announce("market_info",keys.length());}
+                                return;
+                            }
+                            JSONArray rows=packet.optJSONArray("rows");
+                            if(rows!=null)for(int i=0;i<rows.length();i++){
+                                JSONObject quote=rows.optJSONObject(i);
+                                if(quote==null)continue;
+                                String key=quote.optString("key");
+                                if(!allowed.contains(key))continue;
+                                JSONObject old=latestQuotes.get(key);
+                                long oldTrade=old==null?0:old.optLong("last_trade_ts",0);
+                                long nextTrade=quote.optLong("last_trade_ts",0);
+                                // An older exchange trade must never displace a newer observation.
+                                if(old!=null&&nextTrade>0&&oldTrade>0&&nextTrade<oldTrade)continue;
+                                latestQuotes.put(key,quote);
+                            }
+                            if(!latestQuotes.isEmpty()&&now-lastQuotePublish>=1000){
+                                lastQuotePublish=now;
+                                JSONObject update=status("decoded_quotes",messages,keys.length());
+                                JSONArray all=new JSONArray();
+                                for(JSONObject row:latestQuotes.values())all.put(row);
+                                update.put("rows",all);
+                                update.put("feed_ts",packet.opt("feed_ts"));
+                                update.put("frame_type",packet.optString("type"));
+                                sink.publish(update);
+                            } else if(now-lastStatus>=4000){
+                                lastStatus=now;announce("binary_frames_received",keys.length());
+                            }
+                        }catch(Exception decodeError){
+                            // Never log raw feed packets, secrets or vendor content.
+                            if(now-lastStatus>=5000){lastStatus=now;announce("decode_failed",keys.length());}
+                        }
                     }
                 }
                 @Override public void onMessage(WebSocket ws,String text){
@@ -128,7 +168,7 @@ final class MarketStream {
     }
     synchronized void stop(){
         generation++;enabled=false;
-        WebSocket old=socket;socket=null;messages=0;
+        WebSocket old=socket;socket=null;messages=0;lastQuotePublish=0;latestQuotes.clear();
         if(old!=null)old.close(1000,"Stopped");
         sink.publish(status("stopped",0,0));
     }
