@@ -14,6 +14,10 @@ final class StreamDecoder {
     private StreamDecoder(){}
     private static final int MAX_FRAME_BYTES=2097152;
     private static boolean price(double value){return Double.isFinite(value)&&value>0&&value<100000000;}
+    /** Do not let an out-of-order or timestamp-less tick replace a verified trade. */
+    static boolean shouldReplace(long previousTradeMs,long incomingTradeMs){
+        return previousTradeMs<=0 || (incomingTradeMs>0 && incomingTradeMs>=previousTradeMs);
+    }
     static JSONObject decode(byte[] bytes,Set<String> allowed,long now) throws Exception {
         if(bytes==null||bytes.length<1||bytes.length>MAX_FRAME_BYTES)
             throw new InvalidProtocolBufferException("Invalid frame length");
