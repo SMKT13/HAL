@@ -85,6 +85,7 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"intelligence-ui.js")){asset="intelligence-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"ai-ui.js")){asset="ai-ui.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"news-ai.js")){asset="news-ai.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"market-pulse.js")){asset="market-pulse.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"trading-skills.js")){asset="trading-skills.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"core.js")){asset="core.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"analytics.js")){asset="analytics.js";mime="application/javascript";}
@@ -96,6 +97,7 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"lightweight-charts.js")){asset="lightweight-charts.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"style.css")){asset="style.css";mime="text/css";}
                 if(url.equals(ORIGIN+"portfolio-ui.css")){asset="portfolio-ui.css";mime="text/css";}
+                if(url.equals(ORIGIN+"market-pulse.css")){asset="market-pulse.css";mime="text/css";}
                 try { if(!asset.isEmpty())return new WebResourceResponse(mime,"UTF-8",getAssets().open(asset)); }
                 catch(Exception ignored) { }
                 return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));
