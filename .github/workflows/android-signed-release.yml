@@ -51,7 +51,7 @@ jobs:
           set -euo pipefail
           apk="android/build/HAL-Desk-v3.3.apk"
           test -s "$apk"
-          badge="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | head -n 1)"
+          badge="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | sed -n '1p')"
           [[ "$badge" == *"name='in.smkt.haldesk'"* ]] || { echo "Unexpected package ID" >&2; exit 1; }
           [[ "$badge" == *"versionCode='17'"* ]] || { echo "Unexpected versionCode; confirm installed app is older" >&2; exit 1; }
           [[ "$badge" == *"versionName='3.3'"* ]] || { echo "Unexpected versionName" >&2; exit 1; }
