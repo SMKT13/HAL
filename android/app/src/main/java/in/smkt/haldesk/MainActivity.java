@@ -304,7 +304,7 @@ public final class MainActivity extends Activity {
             });
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
                 new AlertDialog.Builder(this).setTitle("Forget market credentials?").setMessage("Remove the Upstox and market-server credentials. Your AI connection and manual positions stay on this phone.")
-                    .setPositiveButton("Forget",(a,b)->{try{generation++;secrets.remove("direct");secrets.remove("server");client=new MarketClient();lastRequest=0;dialog.dismiss();status();send("reset",new JSONObject());}catch(Exception error){credential.setError("Could not remove the saved market credentials.");}})
+                    .setPositiveButton("Forget",(a,b)->{try{generation++;secrets.remove("direct");secrets.remove("server");client=new MarketClient();lastRequest=0;stream.stop();dialog.dismiss();status();send("reset",new JSONObject());}catch(Exception error){credential.setError("Could not remove the saved market credentials.");}})
                     .setNegativeButton("Cancel",null).show();
             });
         });dialog.show();
