@@ -16,7 +16,7 @@ const funds={income:{type:'consolidated',income_statement:[{category:'revenue',h
  await page.clock.install({time:new Date('2026-10-16T05:00:00Z')});
  await page.addInitScript(old=>{
   if(!localStorage.getItem('qa-seeded')){localStorage.setItem('hal_positions_v1',JSON.stringify(old));localStorage.setItem('qa-seeded','1');}
-  window.HALNative={ready:()=>setTimeout(()=>HALApp.receive('connection',{mode:'direct',configured:false}),0),settings:()=>{window.settingsOpened=true},refresh:e=>{window.requestedExpiry=e},research:r=>{(window.researchRequests??=[]).push(JSON.parse(r))},openLink:u=>{window.openedLink=u},exportBackup:x=>{window.backupJSON=x},exportCSV:x=>{window.csv=x},importBackup:()=>{},minimize:()=>{}};
+  window.HALNative={ready:()=>setTimeout(()=>HALApp.receive('connection',{mode:'direct',configured:false}),0),streamStart:()=>{window.streamStarts=(window.streamStarts||0)+1},streamStop:()=>{window.streamStops=(window.streamStops||0)+1},settings:()=>{window.settingsOpened=true},refresh:e=>{window.requestedExpiry=e},research:r=>{(window.researchRequests??=[]).push(JSON.parse(r))},openLink:u=>{window.openedLink=u},exportBackup:x=>{window.backupJSON=x},exportCSV:x=>{window.csv=x},importBackup:()=>{},minimize:()=>{}};
  },oldBook);
  await page.goto('http://127.0.0.1:8765/index.html');await page.clock.runFor(20);await page.locator('#welcome').waitFor({state:'visible'});
  assert.equal(await page.locator('#spot').textContent(),'₹—');assert.equal(await page.evaluate(()=>JSON.parse(localStorage.hal_desk_v2).legs.length),3);
@@ -44,7 +44,17 @@ const funds={income:{type:'consolidated',income_statement:[{category:'revenue',h
   assert.equal(await page.locator('#market-options').evaluate(e=>e.classList.contains('active')),true);
   assert.match(await page.locator('#option-intel-markets').textContent(),/matched strikes/);assert.match(await page.locator('#option-intel-markets').textContent(),/7,000/);
   await page.evaluate(()=>switchTab('overview'));
-  assert.equal(await page.locator('#spot').textContent(),'₹5,000.00');assert.equal(await page.locator('#home-pnl').textContent(),'−₹28,095.00');assert.match(await page.locator('#held-greeks-home').textContent(),/33.50%/);assert.match(await page.locator('#held-greeks-home').textContent(),/incomplete/);assert.match(await page.locator('#held-greeks-home').textContent(),/No per-contract Greek quote timestamp/);
+  assert.equal(await page.locator('#spot').textContent(),'₹5,000.00');
+  await page.locator('#stream-start').click();
+  assert.equal(await page.evaluate(()=>window.streamStarts),1);
+  await page.evaluate(()=>HALApp.receive('stream',{state:'binary_frames_received',frames:4,instruments:5,decoded:false}));
+  assert.match(await page.locator('#stream-state').textContent(),/not decoded/);
+  assert.match(await page.locator('#stream-detail').textContent(),/4 binary frame/);
+  assert.equal(await page.locator('#spot').textContent(),'₹5,000.00','Streaming transport must never overwrite verified quote data');
+  await page.locator('#stream-stop').click();
+  assert.equal(await page.evaluate(()=>window.streamStops),1);
+  await page.evaluate(()=>HALApp.receive('stream',{state:'stopped',frames:0,instruments:0}));
+  assert.equal(await page.locator('#stream-stop').isDisabled(),true);assert.equal(await page.locator('#home-pnl').textContent(),'−₹28,095.00');assert.match(await page.locator('#held-greeks-home').textContent(),/33.50%/);assert.match(await page.locator('#held-greeks-home').textContent(),/incomplete/);assert.match(await page.locator('#held-greeks-home').textContent(),/No per-contract Greek quote timestamp/);
  assert.equal(await page.locator('#groww-inspired-quick-access').count(),0);
   assert.equal(await page.locator('.bottom-nav button').count(),4);
   assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()),'#0c0f11');
