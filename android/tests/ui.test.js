@@ -38,11 +38,11 @@ const funds={income:{type:'consolidated',income_statement:[{category:'revenue',h
   assert.match(await page.locator('#participation-home').textContent(),/11,000/);
   await send('filings',{items:[{title:'Synthetic HAL results disclosure',summary:'Synthetic filing fixture.',url:'https://nsearchives.nseindia.com/test-only.pdf',published:'Fri, 16 Oct 2026 04:00:00 GMT',official:true}]});
  assert.match(await page.locator('#option-intel-home').textContent(),/OI PUT\/CALL RATIO/);
-  assert.match(await page.locator('#option-intel-home').textContent(),/7,000/);
+  assert.match(await page.locator('#option-intel-home').textContent(),/1\.35/);
   assert.match(await page.locator('#option-intel-home').textContent(),/Individual option trade and quote clocks/);
   await page.locator('[data-option-view]').click();
   assert.equal(await page.locator('#market-options').evaluate(e=>e.classList.contains('active')),true);
-  assert.match(await page.locator('#option-intel-markets').textContent(),/matched strikes/);
+  assert.match(await page.locator('#option-intel-markets').textContent(),/matched strikes/);assert.match(await page.locator('#option-intel-markets').textContent(),/7,000/);
   await page.evaluate(()=>switchTab('overview'));
   assert.equal(await page.locator('#spot').textContent(),'₹5,000.00');assert.equal(await page.locator('#home-pnl').textContent(),'−₹28,095.00');assert.match(await page.locator('#held-greeks-home').textContent(),/33.50%/);assert.match(await page.locator('#held-greeks-home').textContent(),/incomplete/);assert.match(await page.locator('#held-greeks-home').textContent(),/No per-contract Greek quote timestamp/);
  assert.equal(await page.locator('#groww-inspired-quick-access').count(),0);
