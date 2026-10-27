@@ -1,0 +1,7 @@
+.option-intel-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 10px;margin:1px 0 14px}
+.option-intel-metrics>div{border-radius:10px;border:1px solid var(--line);background:var(--surface2);padding:12px;min-width:0}
+.option-intel-metrics small{display:block;font-size:.62rem;color:var(--muted);line-height:1.4;overflow-wrap:anywhere}
+.option-intel-metrics strong{display:block;font-size:1.15rem;letter-spacing:-.03em;margin:5px 0;font-variant-numeric:tabular-nums}
+#option-intel-home>.fine,#option-intel-markets>.fine{margin-top:11px}
+#option-intel-home>.warning,#option-intel-markets>.warning{margin:13px 0}
+@media(max-width:350px){.option-intel-metrics{grid-template-columns:1fr}}
