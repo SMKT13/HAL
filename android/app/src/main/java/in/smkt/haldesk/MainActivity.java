@@ -88,6 +88,7 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"market-pulse.js")){asset="market-pulse.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"derivative-participation.js")){asset="derivative-participation.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"option-intelligence.js")){asset="option-intelligence.js";mime="application/javascript";}
+                if(url.equals(ORIGIN+"held-greeks.js")){asset="held-greeks.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"trading-skills.js")){asset="trading-skills.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"core.js")){asset="core.js";mime="application/javascript";}
                 if(url.equals(ORIGIN+"analytics.js")){asset="analytics.js";mime="application/javascript";}
@@ -102,6 +103,7 @@ public final class MainActivity extends Activity {
                 if(url.equals(ORIGIN+"market-pulse.css")){asset="market-pulse.css";mime="text/css";}
                 if(url.equals(ORIGIN+"derivative-participation.css")){asset="derivative-participation.css";mime="text/css";}
                 if(url.equals(ORIGIN+"option-intelligence.css")){asset="option-intelligence.css";mime="text/css";}
+                if(url.equals(ORIGIN+"held-greeks.css")){asset="held-greeks.css";mime="text/css";}
                 try { if(!asset.isEmpty())return new WebResourceResponse(mime,"UTF-8",getAssets().open(asset)); }
                 catch(Exception ignored) { }
                 return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));
@@ -226,11 +228,12 @@ public final class MainActivity extends Activity {
         if(request==null||request.length()>1000)return;
         final JSONObject args;try{args=new JSONObject(request);}catch(Exception e){return;}
         final String section=args.optString("section"),frame=args.optString("frame","D"),type=args.optString("type","consolidated"),id=section+":"+frame+":"+type;
+        final JSONArray strikeHints=args.optJSONArray("strikes");
         final int current=generation;final String selectedMode=mode();final MarketClient active=client;
         Long previous=researchRequests.put(id,System.currentTimeMillis());
         if(previous!=null&&System.currentTimeMillis()-previous<15000){JSONObject result=object("key",id);try{result.put("code","refresh_too_soon");}catch(Exception ignored){}send("research_error",result);return;}
         researchExecutor.execute(()->{
-            try{String token=secrets.get(selectedMode);JSONObject result=new ResearchClient(active).load(selectedMode,token,section,frame,type);result.put("key",id);if(current==generation)send("research",result);}
+            try{String token=secrets.get(selectedMode);JSONObject result=new ResearchClient(active).load(selectedMode,token,section,frame,type,strikeHints);result.put("key",id);if(current==generation)send("research",result);}
             catch(Exception e){JSONObject result=object("key",id);try{result.put("code",e instanceof MarketClient.Failure?((MarketClient.Failure)e).code:"network_unavailable");}catch(Exception ignored){}if(current==generation)send("research_error",result);}
         });
     }
