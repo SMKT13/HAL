@@ -53,6 +53,7 @@ public final class MainActivity extends Activity {
     private byte[] pendingExport;
     private final AtomicBoolean working=new AtomicBoolean(false);
     private volatile MarketClient client=new MarketClient();
+    private MarketStream stream;
     private volatile int generation=0;
     private volatile long lastRequest=0;
     private static final String ORIGIN="https://appassets.androidplatform.net/";
@@ -64,6 +65,7 @@ public final class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         secrets=new SecretStore(this);prefs=getSharedPreferences("connection",MODE_PRIVATE);
         offlineFinbert=new FinbertClassifier(getFilesDir());
+        stream=new MarketStream(s->send("stream",s));
         try{secrets.remove("ai_viewer");prefs.edit().remove("ai_origin").apply();}catch(Exception ignored){}
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(11,16,32));
         root.setOnApplyWindowInsetsListener((view,insets)->{ view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom()); return insets.consumeSystemWindowInsets(); });
@@ -204,6 +206,17 @@ public final class MainActivity extends Activity {
             });
         });dialog.show();
     }
+    private void startStream() {
+        if(!"direct".equals(mode())||!secrets.has("direct")){
+            send("stream",object("state","direct_connection_required"));return;
+        }
+        if(stream.isEnabled())return;
+        final MarketClient active=client;
+        executor.execute(()->{
+            try{String token=secrets.get("direct");stream.start(active,token);}
+            catch(Exception error){send("stream",object("state","stream_connection_failed"));}
+        });
+    }
     private void refresh(String expiry) {
         if(expiry==null || expiry.length()>10 || (!expiry.isEmpty() && !expiry.matches("\\d{4}-\\d{2}-\\d{2}"))) {send("error",object("code","invalid_expiry"));return;}
         if(!working.compareAndSet(false,true))return;
@@ -285,7 +298,7 @@ public final class MainActivity extends Activity {
                 try {
                     if(!value.isEmpty())secrets.set(selected,value);
                     prefs.edit().putString("mode",selected).commit();generation++;client=new MarketClient();lastRequest=0;researchRequests.clear();
-                    dialog.dismiss();status();send("reset",new JSONObject());
+                    stream.stop();dialog.dismiss();status();send("reset",new JSONObject());
                     if(working.get())send("error",object("code","connection_changed"));else refresh("");
                 }catch(Exception error){credential.setError("Secure storage unavailable. Unlock your phone and try again.");}
             });
@@ -332,6 +345,8 @@ public final class MainActivity extends Activity {
         });
     }
     private final class Bridge {
+        @JavascriptInterface public void streamStart(){MainActivity.this.startStream();}
+        @JavascriptInterface public void streamStop(){stream.stop();}
         @JavascriptInterface public void minimize(){runOnUiThread(()->moveTaskToBack(true));}
         @JavascriptInterface public void ready(){runOnUiThread(()->{pageReady=true;status();});}
         @JavascriptInterface public void settings(){runOnUiThread(()->showSettings());}
@@ -357,9 +372,9 @@ public final class MainActivity extends Activity {
             catch(Exception error){send("error",object("code","browser_unavailable"));}
         });}
     }
-    @Override protected void onPause(){super.onPause();web.onPause();web.pauseTimers();}
+    @Override protected void onPause(){stream.stop();super.onPause();web.onPause();web.pauseTimers();}
     @Override protected void onResume(){super.onResume();if(web!=null){web.onResume();web.resumeTimers();}}
-    @Override protected void onDestroy(){generation++;aiGeneration++;cancelAi();executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();offlineExecutor.shutdownNow();if (offlineFinbert!=null)offlineFinbert.close();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}super.onDestroy();}
+    @Override protected void onDestroy(){stream.shutdown();generation++;aiGeneration++;cancelAi();executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();offlineExecutor.shutdownNow();if (offlineFinbert!=null)offlineFinbert.close();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}super.onDestroy();}
     @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp.back()",null);else super.onBackPressed();}
 }
 
