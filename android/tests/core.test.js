@@ -21,9 +21,13 @@ test('Fractional lots rejected',()=>assert.throws(()=>C.validate([{...f,lots:0.5
 test('Invalid date rejected',()=>assert.throws(()=>C.validate([{...f,expiry:'2026-02-30'}])));
 test('Invalid month rejected',()=>assert.throws(()=>C.validate([{...f,expiry:'2026-99-30'}])));
 test('Blank number is not zero',()=>assert.equal(C.value(''),null));
+test('Whitespace-only number is not zero',()=>assert.equal(C.value('   \t'),null));
 test('Older quote labelled stale',()=>assert.equal(C.freshness(fixture,Date.parse('2026-10-15T11:00:00Z')),'Older market quote'));
 test('Recent quote uses provider and trade time',()=>assert.equal(C.freshness(fixture,Date.parse('2026-10-15T10:00:30Z')),'Recent market quote'));
 test('Unknown timestamps are not fresh',()=>assert.equal(C.freshness({spot:{}}),'Provider time unavailable'));
+test('Missing last trade cannot masquerade as a fresh quote',()=>assert.equal(C.freshness({...fixture,spot:{...fixture.spot,last_trade_at:null}},Date.parse('2026-10-15T10:00:30Z')),'Provider time unavailable'));
+test('Missing quote timestamp blocks freshness',()=>assert.equal(C.freshness({...fixture,spot:{...fixture.spot,quote_as_of:null}},Date.parse('2026-10-15T10:00:30Z')),'Provider time unavailable'));
+test('Older last trade prevents fresh quote label',()=>assert.equal(C.freshness({...fixture,spot:{...fixture.spot,last_trade_at:'2026-10-15T09:00:00Z'}},Date.parse('2026-10-15T10:00:30Z')),'Older market quote'));
 test('Future timestamp flags clock error',()=>assert.equal(C.freshness(fixture,Date.parse('2026-10-14T10:00:00Z')),'Check device/provider clock'));
 test('Options lot lookup is exact expiry',()=>assert.equal(C.lotFor({...p1,expiry:'2026-11-24'},fixture),null));
 test('Zero provider LTP is not a usable mark',()=>assert.equal(C.mark(f,{futures:[{expiry:f.expiry,lot_size:100,quote:{last_price:0}}]}).price,null));
