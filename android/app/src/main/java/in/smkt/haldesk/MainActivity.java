@@ -226,11 +226,12 @@ public final class MainActivity extends Activity {
         if(request==null||request.length()>1000)return;
         final JSONObject args;try{args=new JSONObject(request);}catch(Exception e){return;}
         final String section=args.optString("section"),frame=args.optString("frame","D"),type=args.optString("type","consolidated"),id=section+":"+frame+":"+type;
+        final JSONArray strikeHints=args.optJSONArray("strikes");
         final int current=generation;final String selectedMode=mode();final MarketClient active=client;
         Long previous=researchRequests.put(id,System.currentTimeMillis());
         if(previous!=null&&System.currentTimeMillis()-previous<15000){JSONObject result=object("key",id);try{result.put("code","refresh_too_soon");}catch(Exception ignored){}send("research_error",result);return;}
         researchExecutor.execute(()->{
-            try{String token=secrets.get(selectedMode);JSONObject result=new ResearchClient(active).load(selectedMode,token,section,frame,type);result.put("key",id);if(current==generation)send("research",result);}
+            try{String token=secrets.get(selectedMode);JSONObject result=new ResearchClient(active).load(selectedMode,token,section,frame,type,strikeHints);result.put("key",id);if(current==generation)send("research",result);}
             catch(Exception e){JSONObject result=object("key",id);try{result.put("code",e instanceof MarketClient.Failure?((MarketClient.Failure)e).code:"network_unavailable");}catch(Exception ignored){}if(current==generation)send("research_error",result);}
         });
     }
