@@ -13,7 +13,7 @@
     return packet.rows.slice(0,5).filter(q=>q&&key(q.key)&&valid(q.price)).map(q=>{
       const trade=stamp(q.last_trade_ts),feed=stamp(packet.feed_ts),close=valid(q.prev_close)?q.prev_close:null;
       const fresh=trade!==null&&feed!==null&&trade<=now+60000&&feed<=now+60000&&now-trade<=120000&&now-feed<=120000;
-      const clock=trade===null?'Trade time missing':feed===null?'Feed time missing':fresh?'Recent trade':'Older trade / after-hours';
+      const clock=trade===null?'Trade time missing':feed===null?'Feed time missing':trade>now+60000||feed>now+60000?'Future clock: verify device/provider':fresh?'Recent trade':'Older trade / after-hours';
       return {key:q.key,name:display(q.key),price:q.price,trade,feed,close,clock,change:close===null?null:(q.price/close-1)*100};
     });
   }
@@ -21,7 +21,7 @@
     const quotes=inspect(packet,now);
     if(!quotes.length)return '<p class="small muted">No validated LTPC prices yet. HTTP snapshots remain available.</p>';
     return '<div class="stream-quote-grid">'+quotes.map(q=>'<div class="stream-quote">'+
-      '<small>'+safe(q.name)+'</small><b>₹'+safe(fmt(q.price))+'</b>'+
+      '<small>'+safe(q.name)+'</small><b>'+(q.key.startsWith('NSE_INDEX|')?'':'₹')+safe(fmt(q.price))+'</b>'+
       '<small>'+safe(q.change===null?'Previous close missing':(q.change>=0?'+':'')+q.change.toFixed(2)+'% vs previous close')+'</small>'+
       '<small>'+safe(q.clock)+'</small>'+
       '<small>Trade '+safe(at(q.trade))+'</small></div>').join('')+'</div>'+
