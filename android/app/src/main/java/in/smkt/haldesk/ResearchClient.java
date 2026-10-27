@@ -27,11 +27,12 @@ final class ResearchClient {
         catch(Exception e){String code=error(e);if(code.equals("token_expired_or_unauthorized")||code.equals("upstox_rate_limited")||code.equals("credential_missing"))throw e;errors.put(name,code);if(code.equals("network_unavailable")&&errors.length()>1)throw e;}
     }
     JSONObject load(String mode,String token,String section,String frame,String type)throws Exception{
-        if(!section.matches("candles|patterns|news|fundamentals|filings|status|context|chain|hedges"))throw new MarketClient.Failure("invalid_research_request");
+        if(!section.matches("candles|patterns|news|fundamentals|filings|status|context|participation|chain|hedges"))throw new MarketClient.Failure("invalid_research_request");
         if(!type.matches("consolidated|standalone"))throw new MarketClient.Failure("invalid_research_request");
         if(section.equals("chain")||section.equals("hedges")){if(!frame.matches("\\d{4}-\\d{2}-\\d{2}"))throw new MarketClient.Failure("invalid_expiry");LocalDate.parse(frame);}
         else if(!frame.matches("D|15m|1h"))throw new MarketClient.Failure("invalid_research_request");
         if(section.equals("patterns")&&!frame.equals("D"))throw new MarketClient.Failure("invalid_research_request");
+        if(section.equals("participation") && mode.equals("server"))throw new MarketClient.Failure("analytics_direct_only");
         if(mode.equals("server"))return market.request(MarketClient.SERVER+"/api/upstox/research?section="+section+"&frame="+enc(frame)+"&type="+type,token,true);
         JSONObject out=new JSONObject(),data=new JSONObject(),errors=new JSONObject();
         out.put("section",section);out.put("frame",frame);out.put("type",type);out.put("source",section.equals("filings")?"NSE corporate RSS":"Upstox official API");
@@ -41,6 +42,7 @@ final class ResearchClient {
         else if(section.equals("chain")){data=market.load(mode,token,frame);}
         else if(section.equals("hedges")){data=market.hedgeSnapshot(token,frame);}
         else if(section.equals("status")){field(data,errors,"market","/v2/market/status/NSE","",token);}
+        else if(section.equals("participation")){data=market.derivativeParticipation(token);}
         else if(section.equals("context")){
             // Fixed, official NSE index keys. No user-controlled destination or token exposure.
             // Each quote retains the provider's last_trade_time and timestamp separately.
