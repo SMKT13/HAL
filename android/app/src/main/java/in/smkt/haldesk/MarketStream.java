@@ -115,7 +115,7 @@ final class MarketStream {
                                 long oldTrade=old==null?0:old.optLong("last_trade_ts",0);
                                 long nextTrade=quote.optLong("last_trade_ts",0);
                                 // An older exchange trade must never displace a newer observation.
-                                if(old!=null&&nextTrade>0&&oldTrade>0&&nextTrade<oldTrade)continue;
+                                if(old!=null&&!StreamDecoder.shouldReplace(oldTrade,nextTrade))continue;
                                 latestQuotes.put(key,quote);
                             }
                             if(!latestQuotes.isEmpty()&&now-lastQuotePublish>=1000){

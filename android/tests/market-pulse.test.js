@@ -9,6 +9,8 @@ const input={source:'Upstox official API',fetched_at_iso:'2026-10-27T05:10:01Z',
 const summary=pulse.inspect(input,now);
 assert.equal(summary.rows[0].state,'recent');
 assert.equal(summary.rows[1].state,'older');
+assert.equal(pulse.inspect({data:{indices:{'NSE_INDEX:Nifty 50':{last_price:24500,last_trade_time:String(now+120000)}}}},now).rows[0].state,'clock-error');
+assert.match(pulse.markup({data:{indices:{'NSE_INDEX:Nifty 50':{last_price:24500,last_trade_time:String(now+120000)}}}},'',now),/Check provider\/device clock/);
 assert.ok(summary.rows[0].change>0);
 assert.ok(summary.rows[1].change<0);
 assert.equal(pulse.inspect(null,now).rows[0].state,'unavailable');
