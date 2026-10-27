@@ -3,7 +3,7 @@
   "version": "3.2.0",
   "private": true,
   "scripts": {
-    "test": "node tests/core.test.js && node tests/market-pulse.test.js && node --test tests/analytics.test.js tests/hedge.test.js tests/intelligence.test.js tests/desk.test.js tests/trading-skills.test.js",
+    "test": "node tests/core.test.js && node tests/market-pulse.test.js && node tests/derivative-participation.test.js && node --test tests/analytics.test.js tests/hedge.test.js tests/intelligence.test.js tests/desk.test.js tests/trading-skills.test.js",
     "test:ui": "node tests/news-ai.test.js && node tests/ui.test.js && node tests/ai-ui.test.js && node tests/intelligence-ui.test.js && node tests/desk-ui.test.js"
   },
   "devDependencies": {
