@@ -63,7 +63,7 @@ final class MarketClient {
         } else {
             String path=url.getPath();
             boolean research=path.equals("/v2/news") || path.equals("/v2/market/status/NSE") || path.matches("/v2/fundamentals/[A-Z0-9]{12}/(profile|income-statement|balance-sheet|cash-flow|share-holdings|key-ratios|corporate-actions|competitors)") || path.matches("/v3/historical-candle/(intraday/)?NSE_(EQ|INDEX)[^/]+/(days|minutes|hours)/(1|15)(/\\d{4}-\\d{2}-\\d{2}/\\d{4}-\\d{2}-\\d{2})?");
-            if(!"api.upstox.com".equals(url.getHost()) || !(research || path.equals("/v2/instruments/search") || path.equals("/v2/market-quote/quotes") || path.equals("/v3/market-quote/quotes") || path.equals("/v2/option/chain") || path.equals("/v2/option/contract"))) throw new Failure("invalid_destination");
+            if(!"api.upstox.com".equals(url.getHost()) || !(research || path.equals("/v2/instruments/search") || path.equals("/v2/market-quote/quotes") || path.equals("/v3/market-quote/quotes") || path.equals("/v3/market-quote/option-greek") || path.equals("/v2/option/chain") || path.equals("/v2/option/contract"))) throw new Failure("invalid_destination");
         }
         if(secret.isEmpty()) throw new Failure("credential_missing");
         HttpsURLConnection connection=(HttpsURLConnection)url.openConnection();
@@ -256,6 +256,78 @@ final class MarketClient {
         result.put("futures",entries);
         result.put("coverage","Listed HAL futures; additional V3 quote evidence, not portfolio marks or an order-flow forecast.");
         return result;
+    }
+    /** Read-only V3 Greeks for at most twelve user-recorded put strikes in one listed expiry.
+     * Contract keys come ONLY from Upstox metadata; the UI cannot choose arbitrary keys.
+     * V3 returns no individual quote/Greek timestamp, so it is NOT a new P&L mark.
+     */
+    synchronized JSONObject heldPutGreeks(String token,String expiry,JSONArray strikeHints) throws Exception {
+        LocalDate target;
+        try { target=LocalDate.parse(expiry); } catch(Exception ex){throw new Failure("invalid_expiry");}
+        if(target.isBefore(LocalDate.now(ZoneId.of("Asia/Kolkata"))))throw new Failure("expiry_not_listed");
+        if(strikeHints==null || strikeHints.length()<1 || strikeHints.length()>12)throw new Failure("invalid_contract_hints");
+        TreeSet<Double> strikes=new TreeSet<>();
+        for(int i=0;i<strikeHints.length();i++){
+            Object value=strikeHints.opt(i);
+            if(!(value instanceof Number))throw new Failure("invalid_contract_hints");
+            double strike=((Number)value).doubleValue();
+            if(!Double.isFinite(strike)||strike<=0||strike>1000000)throw new Failure("invalid_contract_hints");
+            strikes.add(strike);
+        }
+        discover(token);
+        ArrayList<JSONObject> matched=new ArrayList<>();TreeSet<Double> remaining=new TreeSet<>(strikes);
+        StringBuilder keys=new StringBuilder();
+        for(int i=0;i<options.length();i++){
+            JSONObject c=options.optJSONObject(i);
+            if(c==null)continue;
+            String contractKey=c.optString("instrument_key");
+            double strike=c.optDouble("strike_price",Double.NaN);
+            if(!target.toString().equals(date(c.opt("expiry"))) || !"PE".equals(c.optString("instrument_type"))
+               || !"NSE_FO".equals(c.optString("segment")) || !contractKey.matches("NSE_FO\\|[A-Za-z0-9]+")
+               || !(underlying.equals(c.optString("underlying_key")) || "HAL".equals(c.optString("underlying_symbol")))
+               || !remaining.contains(strike))continue;
+            JSONObject m=new JSONObject();
+            m.put("strike",strike);m.put("instrument_key",contractKey);m.put("lot_size",num(c,"lot_size"));
+            matched.add(m);remaining.remove(strike);
+            if(keys.length()>0)keys.append(",");
+            keys.append(contractKey);
+        }
+        JSONObject response=new JSONObject(),values=new JSONObject();
+        if(keys.length()>0){
+            Object raw=apiData("/v3/market-quote/option-greek","instrument_key="+enc(keys.toString()),token);
+            if(!(raw instanceof JSONObject))throw new Failure("bad_response");
+            values=(JSONObject)raw;
+        }
+        JSONArray greeks=new JSONArray();
+        for(JSONObject contract:matched){
+            JSONObject row=new JSONObject(contract.toString());
+            JSONObject raw=null;
+            for(Iterator<String> it=values.keys();it.hasNext();){
+                JSONObject q=values.optJSONObject(it.next());
+                if(q!=null && contract.getString("instrument_key").equals(q.optString("instrument_token"))) {
+                    raw=q;break;
+                }
+            }
+            // Never turn a missing contract response into zero exposure.
+            if(raw!=null){
+                for(String field:new String[]{"delta","gamma","theta","vega","iv","last_price","oi","volume"})
+                    row.put(field,num(raw,field));
+                row.put("has_greeks",true);
+            } else row.put("has_greeks",false);
+            greeks.put(row);
+        }
+        response.put("expiry",expiry);response.put("contracts",greeks);
+        response.put("requested_count",strikes.size());response.put("matched_count",matched.size());
+        response.put("returned_count",greeks.length()-countMissingGreeks(greeks));
+        response.put("not_found_count",remaining.size());
+        response.put("source","Upstox V3 option-greek GET; provider row timestamps unavailable");
+        response.put("iv_unit","fraction"); // e.g. 0.335 = 33.5%, unlike chain IV percent.
+        return response;
+    }
+    private static int countMissingGreeks(JSONArray rows){
+        int missing=0;
+        for(int i=0;i<rows.length();i++) if(!rows.optJSONObject(i).optBoolean("has_greeks"))missing++;
+        return missing;
     }
     JSONObject hedgeSnapshot(String token,String expiry) throws Exception {
         JSONObject result=load("direct",token,expiry);
