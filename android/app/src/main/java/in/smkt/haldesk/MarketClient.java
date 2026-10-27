@@ -63,7 +63,7 @@ final class MarketClient {
         } else {
             String path=url.getPath();
             boolean research=path.equals("/v2/news") || path.equals("/v2/market/status/NSE") || path.matches("/v2/fundamentals/[A-Z0-9]{12}/(profile|income-statement|balance-sheet|cash-flow|share-holdings|key-ratios|corporate-actions|competitors)") || path.matches("/v3/historical-candle/(intraday/)?NSE_(EQ|INDEX)[^/]+/(days|minutes|hours)/(1|15)(/\\d{4}-\\d{2}-\\d{2}/\\d{4}-\\d{2}-\\d{2})?");
-            if(!"api.upstox.com".equals(url.getHost()) || !(research || path.equals("/v2/instruments/search") || path.equals("/v2/market-quote/quotes") || path.equals("/v3/market-quote/quotes") || path.equals("/v3/market-quote/option-greek") || path.equals("/v2/option/chain") || path.equals("/v2/option/contract"))) throw new Failure("invalid_destination");
+            if(!"api.upstox.com".equals(url.getHost()) || !(research || path.equals("/v2/instruments/search") || path.equals("/v2/market-quote/quotes") || path.equals("/v3/market-quote/quotes") || path.equals("/v3/market-quote/option-greek") || path.equals("/v3/feed/market-data-feed/authorize") || path.equals("/v2/option/chain") || path.equals("/v2/option/contract"))) throw new Failure("invalid_destination");
         }
         if(secret.isEmpty()) throw new Failure("credential_missing");
         HttpsURLConnection connection=(HttpsURLConnection)url.openConnection();
@@ -228,6 +228,27 @@ final class MarketClient {
         result.put("connection_mode","direct");result.put("fetched_at_iso",OffsetDateTime.now().toString());result.put("cache_status","fresh_fetch");
         result.put("spot",spot);result.put("futures",futures);result.put("available_expiries",new JSONArray(dates));
         result.put("option_expiry",selected);result.put("option_rows",rows);result.put("chain_error",chainError);return result;
+    }
+    /** Fixed read-only WebSocket instruments, resolved from official Upstox metadata.
+     * No arbitrary WebView-supplied instrument keys and no user account APIs.
+     */
+    synchronized JSONArray streamKeys(String token) throws Exception {
+        discover(token);
+        JSONArray keys=new JSONArray();
+        keys.put(underlying);
+        for(int i=0;i<Math.min(2,contracts.length());i++){
+            JSONObject fut=contracts.optJSONObject(i);
+            if(fut!=null && fut.optString("instrument_key").matches("NSE_FO\\|[A-Za-z0-9]+"))
+                keys.put(fut.optString("instrument_key"));
+        }
+        keys.put("NSE_INDEX|Nifty 50");
+        keys.put("NSE_INDEX|India VIX");
+        return keys;
+    }
+    synchronized JSONObject streamAuthorize(String token) throws Exception {
+        Object data=apiData("/v3/feed/market-data-feed/authorize","",token);
+        if(!(data instanceof JSONObject)) throw new Failure("bad_response");
+        return (JSONObject)data;
     }
     synchronized JSONObject derivativeParticipation(String token) throws Exception {
         // Additional strictly read-only V3 quote enrichment. This never substitutes for the
