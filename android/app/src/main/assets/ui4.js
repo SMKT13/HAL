@@ -36,7 +36,7 @@ function captureReview(){
  reviewCurrent=current;reviewCaptured=true;
  }catch(_){reviewSaveFailed=true;toast('This review could not be saved. Your positions are unaffected.');}
 }
-function resumeReview(){if(hiddenAt!==null&&Date.now()-hiddenAt>=300000)beginReview();hiddenAt=null;}
+function resumeReview(awayMs){if(E.finite(awayMs)&&awayMs>=300000||hiddenAt!==null&&Date.now()-hiddenAt>=300000)beginReview();hiddenAt=null;}
 const market=()=>D.market(s),ledger=()=>E.ledger(book,market()),risk=()=>{const r=E.risk(book,market());if(book.legs.length&&!isBookConfirmed()&&!r.warnings.some(w=>w.code==='unconfirmed'))r.warnings.push({code:'unconfirmed',title:'Confirm your book',detail:'Check these positions against your broker records.'});return r;},news=()=>I.newsGroups(D.news(s));
 function technical(frame='D'){const p=D.rawCandles(s,frame),t=E.technicals(p.raw,frame,Date.now(),p.retrievedAt);if(p.error){t.stale=true;t.bias='Refresh failed';}return t;}
 function evidence(){return {book,valuation:ledger(),risk:risk(),market:market(),technical:technical(),fundamentals:I.providerFundamentals(D.packet(s,'fundamentals','D',ui.statement)),news:news(),scenarios:ui.result&&!Array.isArray(ui.result)?[ui.result]:[],funding:book.funding};}
@@ -175,7 +175,7 @@ document.addEventListener('change',ev=>{const id=ev.target.id;rememberInput(id);
 $('modal-close').onclick=$('modal-cancel').onclick=closeModal;$('modal-save').onclick=()=>{try{saveModal?.();closeModal();}catch(e){$('modal-error').textContent=e.message;}};$('refresh').onclick=()=>refresh();$('settings').onclick=settings;
 document.addEventListener('keydown',ev=>{if($('modal').hidden)return;if(ev.key==='Escape')closeModal();if(ev.key==='Tab'){const nodes=[...$('modal').querySelectorAll('button,input,select,textarea,a')].filter(x=>!x.disabled&&!x.hidden),first=nodes[0],last=nodes.at(-1);if(ev.shiftKey&&document.activeElement===first){ev.preventDefault();last.focus();}if(!ev.shiftKey&&document.activeElement===last){ev.preventDefault();first.focus();}}});
 function receive(event,data){
- if(event==='lifecycle'&&data.state==='resumed'){resumeReview();s.loading=false;for(const h of Object.values(s.health))if(h.pending){h.pending=null;h.lastAttempt=null;}invalidateCalculations();if(ui.pendingAI){ui.pendingAI=null;ui.aiError='Cancelled when the app left the foreground.';}}
+ if(event==='lifecycle'&&data.state==='resumed'){resumeReview(data.awayMs);s.loading=false;for(const h of Object.values(s.health))if(h.pending){h.pending=null;h.lastAttempt=null;}invalidateCalculations();if(ui.pendingAI){ui.pendingAI=null;ui.aiError='Cancelled when the app left the foreground.';}}
  if(event==='connection'){configured=!!data.configured;if(!started){started=true;if(configured){refresh();request('candles');request('news');request('filings');request('fundamentals');}}}
  if(event==='ai_connection'){ui.aiConfigured=!!data.configured;ui.model=data.model||'';}
  if(['snapshot','error','research','research_error'].includes(event))invalidateCalculations();

@@ -43,6 +43,7 @@ public final class MainActivity extends Activity {
     private SecretStore secrets;
     private BookStore books;
     private volatile boolean foreground;
+    private long backgroundAt=-1;
     private AlertDialog consentDialog;
     private SharedPreferences prefs;
     private final ExecutorService executor=Executors.newSingleThreadExecutor();
@@ -338,8 +339,8 @@ public final class MainActivity extends Activity {
             catch(Exception error){send("error",object("code","browser_unavailable"));}
         });}
     }
-    @Override protected void onPause(){foreground=false;generation.incrementAndGet();invalidateAi("AI review cancelled when the app left the foreground.");client.cancel();cancelOffline();stopStream();super.onPause();web.onPause();web.pauseTimers();}
-    @Override protected void onResume(){super.onResume();foreground=true;lastRequest=0;researchRequests.clear();if(web!=null){web.onResume();web.resumeTimers();if(pageReady){send("lifecycle",object("state","resumed"));offlineStatus();}}}
+    @Override protected void onPause(){backgroundAt=android.os.SystemClock.elapsedRealtime();foreground=false;generation.incrementAndGet();invalidateAi("AI review cancelled when the app left the foreground.");client.cancel();cancelOffline();stopStream();super.onPause();web.onPause();web.pauseTimers();}
+    @Override protected void onResume(){super.onResume();long awayMs=backgroundAt<0?0:Math.max(0,android.os.SystemClock.elapsedRealtime()-backgroundAt);backgroundAt=-1;foreground=true;lastRequest=0;researchRequests.clear();if(web!=null){web.onResume();web.resumeTimers();if(pageReady){send("lifecycle",object("state","resumed","awayMs",awayMs));offlineStatus();}}}
     @Override protected void onDestroy(){foreground=false;client.cancel();cancelOffline();streamGeneration.incrementAndGet();stream.shutdown();generation.incrementAndGet();invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();offlineExecutor.shutdownNow();if (offlineFinbert!=null)offlineFinbert.close();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}if(books!=null)books.close();super.onDestroy();}
     @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp && window.HALApp.back()",null);else super.onBackPressed();}
 }

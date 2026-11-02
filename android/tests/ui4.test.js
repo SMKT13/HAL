@@ -47,6 +47,7 @@ await check('daily review saves fresh observations separately and keeps the prio
  const baseline=JSON.stringify(state.review);await emit(p,'snapshot',{...snap,spot:{...snap.spot,last_price:4960}});
  A.equal(await p.evaluate(()=>JSON.stringify(reviewCache['snapshot:review'])),baseline);
  await nav(p,'position','book');await nav(p,'today');A.match(await p.locator('main').innerText(),/1,460.00/);
+ await emit(p,'lifecycle',{state:'resumed',awayMs:360000});A.match(await p.locator('main').innerText(),/₹0.00/);await emit(p,'snapshot',snap);A.equal(await p.evaluate(()=>rev),0);
  await x.context.close();
 });
 await browser.close();browser=await launch();

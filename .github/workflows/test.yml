@@ -62,11 +62,10 @@ jobs:
           path: |
             android/app/src/main/assets/desk4.js
             android/web-assets-sha256.json
+            android/node_modules/esbuild/**
+            android/node_modules/@esbuild/linux-x64/**
           retention-days: 7
           if-no-files-found: error
-      - name: Verify committed UI bundle
-        run: git diff --exit-code -- app/src/main/assets/desk4.js web-assets-sha256.json
-        working-directory: android
       - run: npm test
         working-directory: android
       - run: npx playwright install --with-deps chromium
@@ -81,6 +80,9 @@ jobs:
           path: qa/*.png
           retention-days: 7
           if-no-files-found: warn
+      - name: Verify committed UI bundle
+        run: git diff --exit-code -- app/src/main/assets/desk4.js web-assets-sha256.json
+        working-directory: android
       - run: bash android/tests/test-native-ai.sh
       - name: Install Android SDK 35
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
