@@ -62,8 +62,6 @@ jobs:
           path: |
             android/app/src/main/assets/desk4.js
             android/web-assets-sha256.json
-            android/node_modules/esbuild/**
-            android/node_modules/@esbuild/linux-x64/**
           retention-days: 7
           if-no-files-found: error
       - run: npm test

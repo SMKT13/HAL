@@ -37,7 +37,7 @@ await browser.close();browser=await launch();await check('obsolete chain selecti
 
 await browser.close();browser=await launch();
 await check('daily review saves fresh observations separately and keeps the prior visit fixed',async()=>{
- const I=require('../app/src/main/assets/insights4.js');const b={...E.emptyBook(),legs:[FUT,PUT]};
+ const I=require('../app/src/main/assets/insights4.js');const b=E.validateBook({...E.emptyBook(),legs:[FUT,PUT]});
  const previous={version:4,savedAt:new Date(now-3600000).toISOString(),quoteAsOf:new Date(now-3601000).toISOString(),bookRevision:I.materialFingerprint(b),spot:4900,open:22000,complete:true,newsURLs:[]};
  x=await pageFor({book:b,cache:{'snapshot:review':{version:1,current:previous}}});p=x.page;
  await emit(p,'connection',{configured:true});await emit(p,'snapshot',snap);
@@ -47,7 +47,7 @@ await check('daily review saves fresh observations separately and keeps the prio
  const baseline=JSON.stringify(state.review);await emit(p,'snapshot',{...snap,spot:{...snap.spot,last_price:4960}});
  A.equal(await p.evaluate(()=>JSON.stringify(reviewCache['snapshot:review'])),baseline);
  await nav(p,'position','book');await nav(p,'today');A.match(await p.locator('main').innerText(),/1,460.00/);
- await emit(p,'lifecycle',{state:'resumed',awayMs:360000});A.match(await p.locator('main').innerText(),/₹0.00/);await emit(p,'snapshot',snap);A.equal(await p.evaluate(()=>rev),0);
+ await emit(p,'lifecycle',{state:'resumed',awayMs:360000});const changed=await p.locator('section.card').filter({has:p.getByRole('heading',{name:'Since your last visit',exact:true})}).innerText();A.match(changed,/₹0.00/);A.ok(!changed.includes('1,460.00'));await emit(p,'snapshot',snap);A.equal(await p.evaluate(()=>rev),0);
  await x.context.close();
 });
 await browser.close();browser=await launch();
