@@ -1,15 +1,27 @@
-# Install HAL Desk 4.0.2
+# Install HAL Desk 4.1.0
 
-1. In your installed HAL Desk 3.3, 4.0 or 4.0.1, export your JSON book backup before updating.
-2. Open `HAL-Desk-v4.0.2-signed.apk` on the same phone. Allow installation from the app used to open it if Android asks.
-3. Choose **Update**. Do not uninstall the old app or clear its storage.
-4. Open My Position and compare every contract, expiry, quantity, entry and completed close with your broker. Use **Confirm book** after checking. Example holdings are never automatically loaded.
-5. Open Settings → Upstox connection if the token needs replacement. Enter your own Analytics Token only in the native dialog. Request market data and inspect source/trade times and data health.
-6. Optional: configure your own Gemini key. No request runs until you review evidence and explicitly send it. FinBERT is a separate opt-in download of approximately 111 MB; it is not included in backups.
+CI produces an **unsigned candidate**, not an installable update to a privately
+signed installation. First sign it with the original HAL certificate using
+`build.sh`, then verify it against the previous signed APK with
+`scripts/verify-apk.py`. No replacement signing key is generated.
 
-The release identity is `in.smkt.haldesk`, versionName 4.0.2, versionCode 20. Its signing certificate matches the previous 4.0.1 artifact: `a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382`.
+After private signing and verification:
 
-If Android reports a certificate conflict or requests uninstalling, stop and retain the existing app and exported backup. A phone with a later versionCode also cannot downgrade to 20. This build was compared with the previously delivered 4.0.1 APK (code 19), not with a remotely inspected phone installation.
+1. Export a JSON book backup from your installed HAL Desk.
+2. Open `HAL-Desk-v4.1.0-signed.apk` on the same phone and choose **Update**.
+3. Keep the existing installation and its storage. Check the exact contracts,
+   entries and completed history in My Position, then confirm against your broker.
+4. Connect Upstox in Settings if needed. Today saves its first review only after
+   all required prices are current. The next visit can then show changes.
+5. Try What if? and Compare in Plan. These calculations never record a trade.
+6. Gemini is optional and still requires reviewing and consenting to each request.
+
+The candidate identity is `in.smkt.haldesk`, versionName **4.1.0**, versionCode
+**21**. Updating an existing app requires the preserved certificate
+`a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382`.
+Certificate matching and installation must be verified on the privately signed
+artifact; source checks do not establish either. If Android requests uninstalling
+or reports a signature conflict, retain the current app and backup.
 
 ## Data quality and offline behavior
 

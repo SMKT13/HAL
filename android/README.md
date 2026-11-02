@@ -1,8 +1,10 @@
-# HAL Desk 4.0.2
+# HAL Desk 4.1.0
 
-Personal HAL research and derivatives risk desk for Android 8+. Package `in.smkt.haldesk`, versionCode 20. Read-only Upstox Analytics Token, optional direct Gemini and opt-in offline FinBERT. No server, trading, broker holdings access or money transfers.
+Personal HAL research and derivatives risk desk for Android 8+. Package `in.smkt.haldesk`, versionCode 21. Read-only Upstox Analytics Token, optional direct Gemini and opt-in offline FinBERT. No server, trading, broker holdings access or money transfers.
 
-Four workspaces: Today; My Position (Book, Performance, Risk, Journal & Funding); Plan (Stress Test, Find a Hedge); Research (Markets, Company & Analysis, News, Insights, AI Desk). New installations contain no assumed holdings.
+Four workspaces: Today; My Position (Book, Performance, Risk, Journal & Funding); Plan (What if?, Compare, Find a Hedge); Research (Markets, Business, News, Insights, AI Desk). New installations contain no assumed holdings.
+
+See [daily review behavior and validation](docs/DAILY-REVIEW-4.1.md) for automatic comparisons, question shortcuts and combined strategy planning. This source targets an unsigned 4.1.0 candidate; private signing and phone installation are separate.
 
 ## Architecture
 
@@ -11,6 +13,7 @@ The Android platform layer is Java, with a local, isolated WebView interface and
 - `engine4.js`: deterministic accounting, exact contract matching, Greeks, scenarios, hedge eligibility/ranking, indicators and historical patterns.
 - `data4.js`: provider adapters for the interface, clock provenance, per-feed failures, cache handling and legacy migration.
 - `insights4.js`: allowlisted evidence packets, checkpoints and local review prompts.
+- `workflow4.js`: daily review eligibility, combined strategy summaries, common-assumption exposure comparisons and HAL business evidence groups.
 - `ui4.js`: escaped presentation, local editing, confirmation and explicit AI evidence consent.
 - `MainActivity`, `MarketClient`, `ResearchClient`: native lifecycle and fixed HTTPS read-only operations.
 - `BookStore`: SQLite transactions with revision checks, checksums, previous snapshot and corruption quarantine. `SecretStore`: AES-GCM with Android Keystore.
