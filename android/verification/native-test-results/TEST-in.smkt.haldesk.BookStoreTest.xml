@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="in.smkt.haldesk.BookStoreTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-02T09:12:42" hostname="ad8fed60c93f" time="3.965">
+  <properties/>
+  <testcase name="survivesRestartAndRetainsPrevious[26]" classname="in.smkt.haldesk.BookStoreTest" time="2.903"/>
+  <testcase name="survivesRestartAndRetainsPrevious" classname="in.smkt.haldesk.BookStoreTest" time="0.275"/>
+  <testcase name="corruptCurrentBookRecoversWithoutDestroyingEvidence[26]" classname="in.smkt.haldesk.BookStoreTest" time="0.145"/>
+  <testcase name="corruptCurrentBookRecoversWithoutDestroyingEvidence" classname="in.smkt.haldesk.BookStoreTest" time="0.093"/>
+  <testcase name="invalidWritesDoNotEraseBook[26]" classname="in.smkt.haldesk.BookStoreTest" time="0.079"/>
+  <testcase name="invalidWritesDoNotEraseBook" classname="in.smkt.haldesk.BookStoreTest" time="0.09"/>
+  <testcase name="recoveryRejectsUnreviewedNewerRevision[26]" classname="in.smkt.haldesk.BookStoreTest" time="0.178"/>
+  <testcase name="recoveryRejectsUnreviewedNewerRevision" classname="in.smkt.haldesk.BookStoreTest" time="0.086"/>
+  <testcase name="cacheDoesNotBecomeLive[26]" classname="in.smkt.haldesk.BookStoreTest" time="0.052"/>
+  <testcase name="cacheDoesNotBecomeLive" classname="in.smkt.haldesk.BookStoreTest" time="0.044"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

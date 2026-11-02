@@ -1,7 +1,0 @@
-.market-pulse-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:2px 0 12px}
-.market-pulse-tile{border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0;background:var(--surface2)}
-.market-pulse-tile>span{display:block;font-size:.64rem;letter-spacing:.07em;color:var(--muted);font-weight:650}
-.market-pulse-tile strong{display:block;font-size:1.35rem;letter-spacing:-.03em;margin:7px 0;font-variant-numeric:tabular-nums}
-.market-pulse-tile small{display:block;color:var(--muted);font-size:.67rem;margin-top:5px;overflow-wrap:anywhere}
-.analytics-source-note{font-size:.73rem;color:var(--muted);margin:0 0 14px;line-height:1.6}
-@media(max-width:390px){.market-pulse-grid{grid-template-columns:1fr}}

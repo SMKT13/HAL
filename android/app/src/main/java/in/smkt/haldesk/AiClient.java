@@ -17,7 +17,9 @@ final class AiClient {
     void cancel(){cancelled=true;HttpsURLConnection connection=active;if(connection!=null)connection.disconnect();}
     private void check()throws Failure {if(cancelled||Thread.currentThread().isInterrupted())throw new Failure("AI request cancelled.");}
     JSONObject generate(String key,String model,String mode,String question,JSONObject evidence)throws Exception {
+        check();
         if(!AiPolicy.validKey(key))throw new Failure("Enter a valid Gemini API key in AI settings.");
+        evidence=AiPolicy.sanitizeEvidence(evidence,mode);
         String prompt=AiPolicy.prompt(mode,question,evidence.toString());
         JSONObject body=new JSONObject();
         body.put("systemInstruction",new JSONObject().put("parts",new JSONArray().put(new JSONObject().put("text",AiPolicy.INSTRUCTIONS))));
@@ -60,6 +62,8 @@ final class AiClient {
             if(reply.isEmpty()||reply.length()>24000)throw new Failure("Gemini returned no usable text within the answer limit. Try a shorter question.");
             JSONObject result=new JSONObject().put("success",true).put("direct",true).put("source",model).put("reply",reply).put("grounded",false);
             result.put("generatedAt",java.time.Instant.now().toString());result.put("dataAsOf",evidence.opt("quoteAsOf"));
+            result.put("evidenceDigest",AiPolicy.evidenceDigest(evidence));result.put("portfolioIncluded",evidence.optBoolean("portfolioIncluded",false));
+            result.put("bookRevision",evidence.opt("bookRevision"));result.put("evidenceGeneratedAt",evidence.opt("generatedAt"));
             JSONArray sources=evidence.optJSONArray("sources");result.put("sources",sources==null?new JSONArray():sources);return result;
         }catch(Failure error){throw error;}
         catch(java.net.SocketTimeoutException error){check();throw new Failure("Gemini timed out. Check your connection and retry a shorter question.");}
@@ -67,3 +71,4 @@ final class AiClient {
         finally{active=null;connection.disconnect();}
     }
 }
+

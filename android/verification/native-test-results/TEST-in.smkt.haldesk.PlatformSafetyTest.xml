@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="in.smkt.haldesk.PlatformSafetyTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-02T09:12:46" hostname="ad8fed60c93f" time="2.036">
+  <properties/>
+  <testcase name="pauseInvalidatesAllOperationTicketsAndResumeClearsThrottle[26]" classname="in.smkt.haldesk.PlatformSafetyTest" time="0.978"/>
+  <testcase name="pauseInvalidatesAllOperationTicketsAndResumeClearsThrottle" classname="in.smkt.haldesk.PlatformSafetyTest" time="0.788"/>
+  <testcase name="queuedMarketResultIsCheckedAgainAtUiDispatch[26]" classname="in.smkt.haldesk.PlatformSafetyTest" time="0.098"/>
+  <testcase name="queuedMarketResultIsCheckedAgainAtUiDispatch" classname="in.smkt.haldesk.PlatformSafetyTest" time="0.062"/>
+  <testcase name="trustedOriginAndWebViewRestrictionsSurviveLifecycle[26]" classname="in.smkt.haldesk.PlatformSafetyTest" time="0.059"/>
+  <testcase name="trustedOriginAndWebViewRestrictionsSurviveLifecycle" classname="in.smkt.haldesk.PlatformSafetyTest" time="0.049"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+]]></system-err>
+</testsuite>

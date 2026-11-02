@@ -1,0 +1,33 @@
+
+> hal-desk-android@4.0.2 test:ui
+> node tests/ui4.test.js
+
+PASS fresh empty book and every primary/subsection renders
+PASS empty scenario blocked
+PASS offline record accepts zero manual mark and exact quantity
+PASS partial close retains realised history and fees
+PASS explicit book confirmation then edit invalidation
+PASS backup export and previous-book recovery
+PASS import preview requires explicit replacement and rejects corruption
+PASS REST multi-leg accounting and missing data state
+PASS mixed-expiry scenario rejects later horizon, zero spot remains zero
+PASS failed refresh visibly retains observations
+PASS completed candles render charts and valid historical pattern dates
+PASS stream display never overwrites REST mark
+PASS news HTML remains escaped
+PASS AI exact evidence consent, research exclusion, reply and cancellation
+PASS FinBERT stays opt-in and light/dark responsive layouts fit
+PASS hedge assumptions and pattern inputs survive refresh rendering
+PASS resume clears a cancelled loading state
+PASS option chain displays nested provider volume and OI
+PASS new quote invalidates prior computed scenario
+PASS failed persistence keeps saved book intact
+PASS recovery conflicts reject rather than overwrite a newer book
+PASS stale imported confirmation cannot enable hedge ranking
+PASS unlisted saved contract identity survives manual edit
+PASS v2 migration preserves completed October history and storage keys
+PASS corrupt saved book withholds misleading zero values
+PASS both manually recorded puts recover from cached key mismatch without changing holdings
+PASS wrong saved expiry stays unavailable and shows provider dates for review
+PASS obsolete chain selection resets to listed expiry and exposes failure inline
+28 UI integration checks passed (synthetic bridge, not Android device tests).

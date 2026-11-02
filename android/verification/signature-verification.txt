@@ -1,0 +1,17 @@
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=HAL Upstox Personal App
+Signer #1 certificate SHA-256 digest: a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382
+Signer #1 certificate SHA-1 digest: 07dbe7514e9057740bd60ca36ae44fb16c17355f
+Signer #1 certificate MD5 digest: 0d8aede2c682c35df10ac447414fb52a
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 3072
+Signer #1 public key SHA-256 digest: 4f4ed126b29390d322ec6f58288525a5334efe46ad2037546e77e35eb79d03b0
+Signer #1 public key SHA-1 digest: 1248b1b310d7487ec8e492e67adec102a115fff4
+Signer #1 public key MD5 digest: cfabad19d60e113e66227486b89c131d

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="in.smkt.haldesk.StreamDecoderTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-02T09:12:48" hostname="ad8fed60c93f" time="0.052">
+  <properties/>
+  <testcase name="decodesPriceAndKeepsSeparateExchangeClocks" classname="in.smkt.haldesk.StreamDecoderTest" time="0.05"/>
+  <testcase name="outOfRangeClockNeverBecomesRecentTrade" classname="in.smkt.haldesk.StreamDecoderTest" time="0.0"/>
+  <testcase name="marketStatusNotAPrice" classname="in.smkt.haldesk.StreamDecoderTest" time="0.001"/>
+  <testcase name="refusesInvalidOrOversizedFrames" classname="in.smkt.haldesk.StreamDecoderTest" time="0.0"/>
+  <testcase name="missingOrOlderTickCannotReplaceVerifiedTrade" classname="in.smkt.haldesk.StreamDecoderTest" time="0.0"/>
+  <testcase name="unapprovedKeysCannotBeDisplayed" classname="in.smkt.haldesk.StreamDecoderTest" time="0.0"/>
+  <testcase name="noZeroOrInfinitePrices" classname="in.smkt.haldesk.StreamDecoderTest" time="0.001"/>
+  <testcase name="missingFutureAndStaleFeedEnvelopeClocksAreRejected" classname="in.smkt.haldesk.StreamDecoderTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

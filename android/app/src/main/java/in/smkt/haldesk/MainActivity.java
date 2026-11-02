@@ -35,10 +35,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 
 public final class MainActivity extends Activity {
     private WebView web;
     private SecretStore secrets;
+    private BookStore books;
+    private volatile boolean foreground;
+    private AlertDialog consentDialog;
     private SharedPreferences prefs;
     private final ExecutorService executor=Executors.newSingleThreadExecutor();
     private final ExecutorService researchExecutor=Executors.newFixedThreadPool(2);
@@ -48,13 +53,15 @@ public final class MainActivity extends Activity {
     private volatile AiClient activeAi;
     private volatile String activeAiId="";
     private final AtomicReference<Object> aiWorking=new AtomicReference<>();
-    private volatile int aiGeneration=0;
+    private final AtomicInteger aiGeneration=new AtomicInteger();
+    private final AtomicInteger streamGeneration=new AtomicInteger();
+    private final AtomicInteger offlineGeneration=new AtomicInteger();
     private final ConcurrentHashMap<String,Long> researchRequests=new ConcurrentHashMap<>();
     private byte[] pendingExport;
     private final AtomicBoolean working=new AtomicBoolean(false);
     private volatile MarketClient client=new MarketClient();
     private MarketStream stream;
-    private volatile int generation=0;
+    private final AtomicInteger generation=new AtomicInteger();
     private volatile long lastRequest=0;
     private static final String ORIGIN="https://appassets.androidplatform.net/";
     private boolean pageReady=false;
@@ -63,10 +70,9 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-        secrets=new SecretStore(this);prefs=getSharedPreferences("connection",MODE_PRIVATE);
-        offlineFinbert=new FinbertClassifier(getFilesDir());
-        stream=new MarketStream(s->send("stream",s));
-        try{secrets.remove("ai_viewer");prefs.edit().remove("ai_origin").apply();}catch(Exception ignored){}
+        books=new BookStore(this);secrets=new SecretStore(this);prefs=getSharedPreferences("connection",MODE_PRIVATE);
+        offlineFinbert=new FinbertClassifier(getNoBackupFilesDir());
+        stream=new MarketStream(data->{final int ticket=streamGeneration.get();sendIf("stream",data,()->ticket==streamGeneration.get()&&(foreground||"stopped".equals(data.optString("state"))));});
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(11,16,32));
         root.setOnApplyWindowInsetsListener((view,insets)->{ view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom()); return insets.consumeSystemWindowInsets(); });
         web=new WebView(this);web.setBackgroundColor(Color.rgb(11,16,32));
@@ -74,42 +80,14 @@ public final class MainActivity extends Activity {
         WebSettings settings=web.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setAllowFileAccessFromFileURLs(false);settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setSupportMultipleWindows(false);
-        settings.setJavaScriptCanOpenWindowsAutomatically(false);settings.setMediaPlaybackRequiresUserGesture(true);
+        settings.setSafeBrowsingEnabled(true);settings.setSaveFormData(false);settings.setJavaScriptCanOpenWindowsAutomatically(false);settings.setMediaPlaybackRequiresUserGesture(true);
         web.addJavascriptInterface(new Bridge(),"HALNative");
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){return true;}
             @Override public boolean shouldOverrideUrlLoading(WebView view,String url){return true;}
             @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
                 String url=request.getUrl().toString();String asset="";String mime="text/plain";
-                if(url.equals(ORIGIN+"index.html")){asset="index.html";mime="text/html";}
-                if(url.equals(ORIGIN+"app.js")){asset="app.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"intelligence.js")){asset="intelligence.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"intelligence-ui.js")){asset="intelligence-ui.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"ai-ui.js")){asset="ai-ui.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"news-ai.js")){asset="news-ai.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"market-pulse.js")){asset="market-pulse.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"derivative-participation.js")){asset="derivative-participation.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"option-intelligence.js")){asset="option-intelligence.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"held-greeks.js")){asset="held-greeks.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"stream-preview.js")){asset="stream-preview.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"source-readiness.js")){asset="source-readiness.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"trading-skills.js")){asset="trading-skills.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"core.js")){asset="core.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"analytics.js")){asset="analytics.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"desk.js")){asset="desk.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"desk-ui.js")){asset="desk-ui.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"hedge.js")){asset="hedge.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"hedge-ui.js")){asset="hedge-ui.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"charts.js")){asset="charts.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"lightweight-charts.js")){asset="lightweight-charts.js";mime="application/javascript";}
-                if(url.equals(ORIGIN+"style.css")){asset="style.css";mime="text/css";}
-                if(url.equals(ORIGIN+"portfolio-ui.css")){asset="portfolio-ui.css";mime="text/css";}
-                if(url.equals(ORIGIN+"market-pulse.css")){asset="market-pulse.css";mime="text/css";}
-                if(url.equals(ORIGIN+"derivative-participation.css")){asset="derivative-participation.css";mime="text/css";}
-                if(url.equals(ORIGIN+"option-intelligence.css")){asset="option-intelligence.css";mime="text/css";}
-                if(url.equals(ORIGIN+"held-greeks.css")){asset="held-greeks.css";mime="text/css";}
-                if(url.equals(ORIGIN+"stream-preview.css")){asset="stream-preview.css";mime="text/css";}
-                if(url.equals(ORIGIN+"source-readiness.css")){asset="source-readiness.css";mime="text/css";}
+                for(String name:new String[]{"index.html","desk4.js","style4.css"})if(url.equals(ORIGIN+name)){asset=name;mime=name.endsWith(".html")?"text/html":name.endsWith(".css")?"text/css":"application/javascript";break;}
                 try { if(!asset.isEmpty())return new WebResourceResponse(mime,"UTF-8",getAssets().open(asset)); }
                 catch(Exception ignored) { }
                 return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));
@@ -117,64 +95,58 @@ public final class MainActivity extends Activity {
         });
         root.addView(web,new FrameLayout.LayoutParams(-1,-1));setContentView(root);web.loadUrl(ORIGIN+"index.html");
     }
-    private void send(String event,JSONObject data) {
+    private void send(String event,JSONObject data) { sendIf(event,data,()->true); }
+    private void sendMarket(String event,JSONObject data,int expected){sendIf(event,data,()->foreground&&expected==generation.get());}
+    private void sendAi(String event,JSONObject data,int expected){sendIf(event,data,()->foreground&&expected==aiGeneration.get());}
+    private void sendIf(String event,JSONObject data,BooleanSupplier allowed) {
         final String script="window.HALApp && window.HALApp.receive("+JSONObject.quote(event)+","+data.toString().replace("\u2028","\\u2028").replace("\u2029","\\u2029")+");";
-        runOnUiThread(()->{if(!isFinishing() && !isDestroyed() && pageReady)web.evaluateJavascript(script,null);});
+        runOnUiThread(()->{if(!isFinishing() && !isDestroyed() && pageReady && allowed.getAsBoolean())web.evaluateJavascript(script,null);});
     }
     private JSONObject object(String key,Object value) {
         JSONObject obj=new JSONObject();try{obj.put(key,value);}catch(Exception ignored){}return obj;
     }
-    private String mode(){return prefs.getString("mode","direct");}
+    private String mode(){return "direct";}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","3.3");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","4.0.2");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
     private void aiStatus() {
         JSONObject data=object("configured",secrets.has("gemini"));
-        try{data.put("direct",true);data.put("model",prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));data.put("revision",aiGeneration);}catch(Exception ignored){}
+        try{data.put("direct",true);data.put("model",prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));data.put("revision",aiGeneration.get());}catch(Exception ignored){}
         send("ai_connection",data);
     }
-    private void aiRequest(String request,boolean config) {
-        if(request==null||request.length()>65536)return;
-        final JSONObject args;try{args=new JSONObject(request);}catch(Exception error){return;}
+    private void aiRequest(String request,boolean config){
+        if(request==null||request.length()>65536)return;final JSONObject args;try{args=new JSONObject(request);}catch(Exception e){return;}
         final String id=args.optString("id");if(!id.matches("[A-Za-z0-9_-]{1,80}"))return;
-        try {
-            final String model=AiPolicy.model(prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));
-            if(config){
-                JSONObject info=object("aiEnabled",secrets.has("gemini"));info.put("model",model);info.put("direct",true);info.put("researchEnabled",true);
-                JSONObject event=object("id",id);event.put("data",info);send("ai_config",event);return;
-            }
-            if(!Boolean.TRUE.equals(args.opt("consent")))throw new Exception("Confirm sharing this question and its evidence with Gemini.");
+        try{final String model=AiPolicy.model(prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));
+            if(config){JSONObject info=object("aiEnabled",secrets.has("gemini"));info.put("model",model);info.put("direct",true);info.put("researchEnabled",true);send("ai_config",withId(id,"data",info));return;}
+            if(!foreground)throw new Exception("Open HAL Desk before requesting an AI review.");
+            if(!Boolean.TRUE.equals(args.opt("consent")))throw new Exception("Confirm sharing the selected evidence with Gemini.");
             if(!secrets.has("gemini"))throw new Exception("Enter your Gemini API key in AI settings first.");
-            JSONObject evidence=args.optJSONObject("evidence");if(evidence==null)throw new Exception("Refresh the app evidence before running a review.");
-            final String mode=args.optString("mode"),question=args.optString("message");
-            if("agents".equals(mode))AgentDesk.validate(question,evidence);else AiPolicy.prompt(mode,question,evidence.toString());
-            final String key;
-            try{key=secrets.get("gemini");}catch(Exception error){throw new Exception("Secure key storage is unavailable. Unlock your phone and check AI settings.");}
-            if(!AiPolicy.validKey(key))throw new Exception("Enter a valid Gemini API key in AI settings.");
-            final int current=aiGeneration;final Object ticket=new Object();
-            if(!aiWorking.compareAndSet(null,ticket))throw new Exception("The previous API request is still finishing. Please wait.");
-            final AiClient client=new AiClient();activeAi=client;activeAiId=id;
-            aiExecutor.execute(()->{
-                try {
-                    if(current!=aiGeneration)return;
-                    JSONObject result="agents".equals(mode)?AgentDesk.run(client,key,model,question,evidence,(step,title)->{
-                        if(current!=aiGeneration)return;
-                        JSONObject progress=object("id",id);
-                        try{progress.put("step",step);progress.put("title",title);progress.put("total",6);}catch(Exception ignored){}
-                        send("ai_progress",progress);
-                    }):client.generate(key,model,mode,question,evidence);
-                    JSONObject event=object("id",id);event.put("data",result);if(current==aiGeneration)send("ai_result",event);
-                }catch(Exception error){
-                    JSONObject event=object("id",id);
-                    try{event.put("message",error instanceof AiClient.Failure?error.getMessage():"The Gemini request could not finish. Check your API settings and retry.");}catch(Exception ignored){}
-                    if(current==aiGeneration)send("ai_error",event);
-                }finally{if(aiWorking.compareAndSet(ticket,null)){activeAiId="";activeAi=null;}}
-            });
-        }catch(Exception error){JSONObject event=object("id",id);try{event.put("message",error.getMessage());}catch(Exception ignored){}send(config?"ai_config_error":"ai_error",event);}
+            final String mode=args.optString("mode"),question=args.optString("message");final JSONObject evidence=AiPolicy.sanitizeEvidence(args.optJSONObject("evidence"),mode);AiPolicy.prompt(mode,question,evidence.toString());final int current=aiGeneration.get();
+            if(aiWorking.get()!=null)throw new Exception("The previous API request is still finishing.");
+            if(consentDialog!=null&&consentDialog.isShowing())throw new Exception("Review or cancel the open sharing request first.");
+            ScrollView scroll=new ScrollView(this);TextView contents=text("Model: "+model+"\nQuestion: "+question+"\n\nExact evidence sent to Google:\n"+evidence.toString(2));contents.setTextIsSelectable(true);contents.setPadding(dp(20),dp(8),dp(20),dp(16));scroll.addView(contents);
+            activeAiId=id;consentDialog=new AlertDialog.Builder(this).setTitle("Send this evidence to Gemini?").setView(scroll).setPositiveButton("Send to Gemini",(d,w)->runAi(id,model,mode,question,evidence,current)).setNegativeButton("Cancel",(d,w)->send("ai_error",withId(id,"message","Review cancelled before any API call."))).setOnCancelListener(d->send("ai_error",withId(id,"message","Review cancelled before any API call."))).create();consentDialog.show();consentDialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }catch(Exception e){send(config?"ai_config_error":"ai_error",withId(id,"message",e.getMessage()));}
+    }
+    private JSONObject withId(String id,String key,Object value){JSONObject out=object("id",id);try{out.put(key,value);}catch(Exception ignored){}return out;}
+    private void runAi(String id,String model,String mode,String question,JSONObject evidence,int current){
+        try{if(current!=aiGeneration.get()||!foreground)throw new Exception("Evidence changed or the app paused. Review the current book and retry.");
+            final String key;try{key=secrets.get("gemini");}catch(Exception e){throw new Exception("Secure key storage unavailable. Unlock the phone and retry.");}if(!AiPolicy.validKey(key))throw new Exception("Enter a valid Gemini API key in AI settings.");
+            final Object ticket=new Object();if(!aiWorking.compareAndSet(null,ticket))throw new Exception("The previous API request is still finishing.");final AiClient client=new AiClient();activeAi=client;activeAiId=id;
+            aiExecutor.execute(()->{try{if(current!=aiGeneration.get()||!foreground)return;JSONObject result=client.generate(key,model,mode,question,evidence);if(current==aiGeneration.get()&&foreground)sendAi("ai_result",withId(id,"data",result),current);}catch(Exception e){if(current==aiGeneration.get())sendAi("ai_error",withId(id,"message",e instanceof AiClient.Failure?e.getMessage():"The Gemini request could not finish. Check quota or connectivity and retry."),current);}finally{if(aiWorking.compareAndSet(ticket,null)){activeAiId="";activeAi=null;}}});
+        }catch(Exception e){send("ai_error",withId(id,"message",e.getMessage()));}
     }
     private void cancelAi(){AiClient client=activeAi;if(client!=null)client.cancel();}
+    private void invalidateAi(String reason){
+        aiGeneration.incrementAndGet();final String id=activeAiId;activeAiId="";cancelAi();
+        if(!id.isEmpty())send("ai_error",withId(id,"message",reason));
+        runOnUiThread(()->{if(consentDialog!=null&&consentDialog.isShowing())consentDialog.dismiss();});
+    }
+    private void stopStream(){streamGeneration.incrementAndGet();if(stream!=null)stream.stop();}
+    private void cancelOffline(){offlineGeneration.incrementAndGet();if(offlineFinbert!=null)offlineFinbert.cancel();}
     private void showAiSettings(){
         if(aiSettingsShowing)return;aiSettingsShowing=true;
         LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(24),dp(8),dp(24),dp(16));
@@ -201,61 +173,64 @@ public final class MainActivity extends Activity {
                 try {
                     if(!value.isEmpty())secrets.set("gemini",value);
                     if(!prefs.edit().putString("ai_model",selected).commit())throw new Exception();
-                    aiGeneration++;cancelAi();dialog.dismiss();aiStatus();
+                    invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");dialog.dismiss();aiStatus();
                 }catch(Exception error){credential.setError("Could not save securely. Unlock your phone and try again.");}
             });
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
-                try{secrets.remove("gemini");aiGeneration++;cancelAi();dialog.dismiss();aiStatus();}
+                try{secrets.remove("gemini");invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");dialog.dismiss();aiStatus();}
                 catch(Exception error){credential.setError("Could not remove the saved API key.");}
             });
         });dialog.show();
     }
     private void startStream() {
-        if(!"direct".equals(mode())||!secrets.has("direct")){
+        if(!foreground||!secrets.has("direct")){
             send("stream",object("state","direct_connection_required"));return;
         }
         if(stream.isEnabled())return;
-        final MarketClient active=client;
+        final MarketClient active=client;final int ticket=streamGeneration.incrementAndGet();
         executor.execute(()->{
-            try{String token=secrets.get("direct");stream.start(active,token);}
-            catch(Exception error){send("stream",object("state","stream_connection_failed"));}
+            try{if(!foreground||ticket!=streamGeneration.get())return;String token=secrets.get("direct");stream.start(active,token,()->foreground&&ticket==streamGeneration.get());}
+            catch(Exception error){sendIf("stream",object("state","stream_connection_failed"),()->foreground&&ticket==streamGeneration.get());}
         });
     }
     private void refresh(String expiry) {
+        if(!foreground)return;
         if(expiry==null || expiry.length()>10 || (!expiry.isEmpty() && !expiry.matches("\\d{4}-\\d{2}-\\d{2}"))) {send("error",object("code","invalid_expiry"));return;}
         if(!working.compareAndSet(false,true))return;
         if(System.currentTimeMillis()-lastRequest<10000){working.set(false);send("error",object("code","refresh_too_soon"));return;}
-        lastRequest=System.currentTimeMillis();final int current=generation;final String selectedMode=mode();final MarketClient activeClient=client;
-        send("loading",new JSONObject());
+        lastRequest=System.currentTimeMillis();final int current=generation.get();final String selectedMode=mode();final MarketClient activeClient=client;
+        sendMarket("loading",new JSONObject(),current);
         executor.execute(()->{
             try {
-                String secret;
+                if(current!=generation.get()||!foreground)return;String secret;
                 try{secret=secrets.get(selectedMode);}catch(Exception error){throw new MarketClient.Failure("secure_storage_unavailable");}
                 if(secret.isEmpty())throw new MarketClient.Failure("credential_missing");
                 JSONObject data=activeClient.load(selectedMode,secret,expiry);
-                if(current==generation)send("snapshot",data);
+                sendMarket("snapshot",data,current);
             }catch(Exception error){
                 String code=error instanceof MarketClient.Failure?((MarketClient.Failure)error).code:"network_unavailable";
-                if(current==generation)send("error",object("code",code));
-            }finally{working.set(false);if(current!=generation)send("idle",new JSONObject());}
+                sendMarket("error",object("code",code),current);
+            }finally{working.set(false);sendMarket("idle",new JSONObject(),current);}
         });
     }
     private int dp(int size){return Math.round(size*getResources().getDisplayMetrics().density);}
     private void research(String request){
-        if(request==null||request.length()>1000)return;
+        if(!foreground)return;
+        if(request==null||request.length()>20000)return;
         final JSONObject args;try{args=new JSONObject(request);}catch(Exception e){return;}
         final String section=args.optString("section"),frame=args.optString("frame","D"),type=args.optString("type","consolidated"),id=section+":"+frame+":"+type;
-        final JSONArray strikeHints=args.optJSONArray("strikes");
-        final int current=generation;final String selectedMode=mode();final MarketClient active=client;
+        final JSONArray strikeHints=args.optJSONArray("contracts".equals(section)?"legs":"strikes");
+        final int current=generation.get();final String selectedMode=mode();final MarketClient active=client;
         Long previous=researchRequests.put(id,System.currentTimeMillis());
         if(previous!=null&&System.currentTimeMillis()-previous<15000){JSONObject result=object("key",id);try{result.put("code","refresh_too_soon");}catch(Exception ignored){}send("research_error",result);return;}
         researchExecutor.execute(()->{
-            try{String token=secrets.get(selectedMode);JSONObject result=new ResearchClient(active).load(selectedMode,token,section,frame,type,strikeHints);result.put("key",id);if(current==generation)send("research",result);}
-            catch(Exception e){JSONObject result=object("key",id);try{result.put("code",e instanceof MarketClient.Failure?((MarketClient.Failure)e).code:"network_unavailable");}catch(Exception ignored){}if(current==generation)send("research_error",result);}
+            try{if(current!=generation.get()||!foreground)return;String token=secrets.get(selectedMode);JSONObject result=new ResearchClient(active).load(selectedMode,token,section,frame,type,strikeHints);result.put("key",id);sendMarket("research",result,current);}
+            catch(Exception e){JSONObject result=object("key",id);try{result.put("code",e instanceof MarketClient.Failure?((MarketClient.Failure)e).code:"network_unavailable");}catch(Exception ignored){}sendMarket("research_error",result,current);}
         });
     }
     private void exportDocument(String data,boolean csv){
         if(data==null||data.length()>2000000){send("file_error",object("message","Export is too large."));return;}
+        try{if(!csv)BookValidator.rejectCredentials(new JSONObject(data),0);}catch(Exception e){send("file_error",object("message","Backup contains invalid or credential fields."));return;}
         pendingExport=data.getBytes(StandardCharsets.UTF_8);
         Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType(csv?"text/csv":"application/json");
         intent.putExtra(Intent.EXTRA_TITLE,"HAL-Desk-"+(csv?"Journal":"Backup")+"-"+java.time.LocalDate.now()+ (csv?".csv":".json"));
@@ -269,88 +244,77 @@ public final class MainActivity extends Activity {
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);if(result!=RESULT_OK||data==null||data.getData()==null){if(request==41)pendingExport=null;return;}
         if(request==41){try{if(pendingExport==null)throw new Exception();try(OutputStream out=getContentResolver().openOutputStream(data.getData())){if(out==null)throw new Exception();out.write(pendingExport);}send("file_saved",new JSONObject());}catch(Exception e){send("file_error",object("message","The file could not be saved."));}finally{pendingExport=null;}}
-        if(request==42){final Uri uri=data.getData();executor.execute(()->{try{ByteArrayOutputStream bytes=new ByteArrayOutputStream();try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new Exception();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(bytes.size()+n>2000000)throw new Exception();bytes.write(buf,0,n);}}JSONObject imported=new JSONObject(new String(bytes.toByteArray(),StandardCharsets.UTF_8));send("import_preview",imported);}catch(Exception e){send("file_error",object("message","Choose a valid HAL Desk JSON backup under 2 MB."));}});}
+        if(request==42){final Uri uri=data.getData();executor.execute(()->{try{ByteArrayOutputStream bytes=new ByteArrayOutputStream();try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new Exception();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(bytes.size()+n>2000000)throw new Exception();bytes.write(buf,0,n);}}JSONObject imported=new JSONObject(new String(bytes.toByteArray(),StandardCharsets.UTF_8));BookValidator.rejectCredentials(imported,0);send("import_preview",imported);}catch(Exception e){send("file_error",object("message","Choose a valid HAL Desk JSON backup under 2 MB."));}});}
     }
     private TextView text(String value){TextView view=new TextView(this);view.setText(value);view.setTextSize(15);view.setPadding(0,dp(8),0,dp(8));return view;}
     private void showSettings(){
         if(settingsShowing)return;settingsShowing=true;
         LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(24),dp(8),dp(24),dp(16));
-        RadioGroup choice=new RadioGroup(this);RadioButton direct=new RadioButton(this),server=new RadioButton(this);
-        direct.setId(101);server.setId(102);direct.setText("Upstox Analytics Token (recommended)");server.setText("Legacy Render server");choice.addView(direct);choice.addView(server);
-        choice.check("server".equals(mode())?102:101);form.addView(choice);
-        TextView explanation=text("");form.addView(explanation);
-        EditText credential=new EditText(this);credential.setSingleLine(false);credential.setMaxLines(4);credential.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        credential.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);form.addView(credential);
-        TextView details=text("Credentials are encrypted with Android Keystore. They never enter the page or the APK. Market data only. Broker holdings, account funds and trade history are not accessed; those require a whitelisted static IP and a separate opt-in implementation. This app never places orders.");details.setTextSize(13);form.addView(details);
-        Runnable labels=()->{
-            boolean isServer=choice.getCheckedRadioButtonId()==102;String selected=isServer?"server":"direct";
-            explanation.setText(isServer?"Uses hal-dashboard.onrender.com. Enter HAL_VIEWER_KEY. Your Upstox token remains on Render as UPSTOX_ACCESS_TOKEN.":"Paste an Upstox token here. Use a free, read-only Analytics Token from Upstox Developer Apps (Analytics tab). It works for market data for one year, cannot trade, and needs no static IP for public market feeds. Standard OAuth tokens also work but expire daily. Sent only to api.upstox.com.");
-            credential.setHint(secrets.has(selected)?"Saved securely — leave blank to keep":(isServer?"HAL_VIEWER_KEY":"Paste Upstox Analytics Token"));credential.setText("");
-        };
-        choice.setOnCheckedChangeListener((group,id)->labels.run());labels.run();
+        form.addView(text("Use a read-only Upstox Analytics Token. Market requests go directly to api.upstox.com over HTTPS. No HAL server is required. Permissions and quotas determine feed availability."));
+        EditText credential=new EditText(this);credential.setSingleLine(false);credential.setMaxLines(4);credential.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);credential.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);credential.setHint(secrets.has("direct")?"Saved securely — leave blank to keep":"Paste Upstox Analytics Token");form.addView(credential);
+        form.addView(text("Encrypted with Android Keystore. Credentials never enter the page, backups or APK. No broker holdings, funds, orders or trade history are accessed."));
         ScrollView scroll=new ScrollView(this);scroll.addView(form);
-        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Connect HAL").setView(scroll).setPositiveButton("Save & connect",null).setNegativeButton("Cancel",null).setNeutralButton("Forget credentials",null).create();
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Read-only Upstox connection").setView(scroll).setPositiveButton("Save",null).setNegativeButton("Cancel",null).setNeutralButton("Forget token",null).create();
         dialog.setOnDismissListener(d->{settingsShowing=false;credential.setText("");});
-        dialog.setOnShowListener(d->{
-            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
-                String selected=choice.getCheckedRadioButtonId()==102?"server":"direct";
-                String value=credential.getText().toString().trim();
-                if(selected.equals("direct") && value.regionMatches(true,0,"Bearer ",0,7))value=value.substring(7).trim();
-                if(value.length()>16384 || value.matches("(?s).*\\p{Cntrl}.*") || value.contains(" ")){credential.setError("Paste only the token or viewer key, without spaces or line breaks.");return;}
-                if(value.isEmpty() && !secrets.has(selected)){credential.setError("Enter a credential to connect.");return;}
-                try {
-                    if(!value.isEmpty())secrets.set(selected,value);
-                    prefs.edit().putString("mode",selected).commit();generation++;client=new MarketClient();lastRequest=0;researchRequests.clear();
-                    stream.stop();dialog.dismiss();status();send("reset",new JSONObject());
-                    if(working.get())send("error",object("code","connection_changed"));else refresh("");
-                }catch(Exception error){credential.setError("Secure storage unavailable. Unlock your phone and try again.");}
-            });
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{
-                new AlertDialog.Builder(this).setTitle("Forget market credentials?").setMessage("Remove the Upstox and market-server credentials. Your AI connection and manual positions stay on this phone.")
-                    .setPositiveButton("Forget",(a,b)->{try{generation++;secrets.remove("direct");secrets.remove("server");client=new MarketClient();lastRequest=0;stream.stop();dialog.dismiss();status();send("reset",new JSONObject());}catch(Exception error){credential.setError("Could not remove the saved market credentials.");}})
-                    .setNegativeButton("Cancel",null).show();
-            });
+        dialog.setOnShowListener(d->{dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String value=credential.getText().toString().trim();if(value.regionMatches(true,0,"Bearer ",0,7))value=value.substring(7).trim();
+                if(value.length()>16384||value.matches("(?s).*\\p{Cntrl}.*")||value.contains(" ")){credential.setError("Paste only the token without spaces or line breaks.");return;}
+                if(value.isEmpty()&&!secrets.has("direct")){credential.setError("Enter a token to connect.");return;}
+                try{if(!value.isEmpty())secrets.set("direct",value);generation.incrementAndGet();client.cancel();client=new MarketClient();lastRequest=0;researchRequests.clear();stopStream();dialog.dismiss();status();send("reset",new JSONObject());}catch(Exception error){credential.setError("Secure storage unavailable. Unlock the phone and retry.");}});
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{try{generation.incrementAndGet();client.cancel();secrets.remove("direct");client=new MarketClient();lastRequest=0;stopStream();dialog.dismiss();status();send("reset",new JSONObject());}catch(Exception error){credential.setError("Could not remove the saved token.");}});
         });dialog.show();
     }
     private void offlineStatus() {
         JSONObject info = new JSONObject();
         try { info.put("state", offlineFinbert.ready() ? "ready" : offlineFinbert.isInstalling() ? "downloading" : "not_installed");
-              info.put("model", FinbertClassifier.MODEL_NAME); } catch (Exception ignored) {}
+              info.put("model", FinbertClassifier.MODEL_NAME);info.put("downloadBytes",FinbertClassifier.MODEL_BYTES+FinbertClassifier.VOCAB_BYTES);info.put("license",FinbertClassifier.LICENSE); } catch (Exception ignored) {}
         send("finbert_status", info);
     }
     private void installOfflineFinbert() {
+        if(!foreground)return;
         if (offlineFinbert.ready()) { offlineStatus(); return; }
+        final int uiTicket=offlineGeneration.incrementAndGet();final long operation=offlineFinbert.newOperation();
         offlineExecutor.execute(() -> {
             try {
+                if(!foreground||uiTicket!=offlineGeneration.get())return;
                 offlineFinbert.install(percent -> {
                     JSONObject data = object("progress", percent);
                     try { data.put("state", "downloading"); } catch (Exception ignored) {}
-                    send("finbert_status", data);
-                });
-                offlineStatus();
+                    sendIf("finbert_status", data,()->foreground&&uiTicket==offlineGeneration.get());
+                },operation);
+                if(foreground&&uiTicket==offlineGeneration.get())offlineStatus();
             } catch (Exception error) {
-                send("finbert_status", object("state", "error"));
-                send("finbert_error", object("message", "Model download failed: " + error.getMessage()));
+                sendIf("finbert_status", object("state", "error"),()->foreground&&uiTicket==offlineGeneration.get());
+                sendIf("finbert_error", object("message", "Model download failed: " + error.getMessage()),()->foreground&&uiTicket==offlineGeneration.get());
             }
         });
     }
     private void classifyOffline(String json) {
-        if (json == null || json.length() > 15000) return;
+        if (!foreground||json == null || json.length() > 15000) return;
+        final int uiTicket=offlineGeneration.incrementAndGet();final long operation=offlineFinbert.newOperation();
         offlineExecutor.execute(() -> {
             try {
+                if(!foreground||uiTicket!=offlineGeneration.get())return;
                 if (!offlineFinbert.ready()) { offlineStatus(); return; }
                 JSONArray items = new JSONArray(json);
-                JSONArray results = offlineFinbert.score(items);
-                send("finbert_results", object("items", results));
+                JSONArray results = offlineFinbert.score(items,operation);
+                sendIf("finbert_results", object("items", results),()->foreground&&uiTicket==offlineGeneration.get());
             } catch (Exception error) {
-                send("finbert_error", object("message", "Offline classification unavailable: " + error.getMessage()));
+                sendIf("finbert_error", object("message", "Offline classification unavailable: " + error.getMessage()),()->foreground&&uiTicket==offlineGeneration.get());
             }
         });
     }
+    private String storeFailure(Exception e){JSONObject out=object("ok",false);try{String code=e.getMessage();if(code==null||!code.matches("[a-z_]+"))code="storage_unavailable";out.put("code",code);out.put("revision",books.currentRevision());out.put("message","Records were not replaced. Reload the book or review recovery.");}catch(Exception ignored){}return out.toString();}
     private final class Bridge {
+        @JavascriptInterface public String loadBook(){try{return books.load(false).toString();}catch(Exception e){return storeFailure(e);}}
+        @JavascriptInterface public String restorePreviousBook(long revision){try{JSONObject out=books.restorePrevious(revision);invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");return out.toString();}catch(Exception e){return storeFailure(e);}}
+        @JavascriptInterface public String previousBook(){try{return books.load(true).toString();}catch(Exception e){return storeFailure(e);}}
+        @JavascriptInterface public String saveBook(String json,long revision){try{JSONObject out=books.save(json,revision);invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");return out.toString();}catch(Exception e){return storeFailure(e);}}
+        @JavascriptInterface public String cacheGet(String key){try{return books.cacheGet(key).toString();}catch(Exception e){return storeFailure(e);}}
+        @JavascriptInterface public String cachePut(String key,String json){try{books.cachePut(key,json);return object("ok",true).toString();}catch(Exception e){return storeFailure(e);}}
+
         @JavascriptInterface public void streamStart(){MainActivity.this.startStream();}
-        @JavascriptInterface public void streamStop(){stream.stop();}
+        @JavascriptInterface public void streamStop(){stopStream();}
         @JavascriptInterface public void minimize(){runOnUiThread(()->moveTaskToBack(true));}
         @JavascriptInterface public void ready(){runOnUiThread(()->{pageReady=true;status();});}
         @JavascriptInterface public void settings(){runOnUiThread(()->showSettings());}
@@ -360,25 +324,24 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void ai(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,false));}
         @JavascriptInterface public void aiSettings(){runOnUiThread(()->showAiSettings());}
         @JavascriptInterface public void finbertStatus(){offlineStatus();}
-        @JavascriptInterface public void finbertInstall(){installOfflineFinbert();}
+        @JavascriptInterface public void finbertInstall(){runOnUiThread(()->{if(!foreground)return;if(offlineFinbert.ready()){offlineStatus();return;}new AlertDialog.Builder(MainActivity.this).setTitle("Download offline FinBERT?").setMessage("Download approximately 111 MB of model/tokenizer data. Mobile-data charges may apply. Pinned files are checksum verified. English headline classification runs locally and does not predict prices. Models are excluded from backups. Model license: CC BY-NC-SA 4.0 for personal noncommercial use.").setPositiveButton("Download",(d,w)->installOfflineFinbert()).setNegativeButton("Cancel",null).show();});}
         @JavascriptInterface public void finbertScore(String json){classifyOffline(json);}
-        @JavascriptInterface public void aiCancel(String id){runOnUiThread(()->{if(id!=null&&id.equals(activeAiId))cancelAi();});}
+        @JavascriptInterface public void finbertCancel(){cancelOffline();offlineStatus();}
+        @JavascriptInterface public void finbertRemove(){cancelOffline();offlineExecutor.execute(()->{try{offlineFinbert.remove();offlineStatus();}catch(Exception e){send("finbert_error",object("message","Could not remove offline model."));}});}
+        @JavascriptInterface public void aiCancel(String id){runOnUiThread(()->{if(id!=null&&id.equals(activeAiId)){invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");if(consentDialog!=null)consentDialog.dismiss();activeAiId="";}});}
         @JavascriptInterface public void openLink(String url){runOnUiThread(()->MainActivity.this.openLink(url));}
         @JavascriptInterface public void exportBackup(String json){runOnUiThread(()->exportDocument(json,false));}
         @JavascriptInterface public void exportCSV(String csv){runOnUiThread(()->exportDocument(csv,true));}
         @JavascriptInterface public void importBackup(){runOnUiThread(()->{try{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");startActivityForResult(i,42);}catch(Exception e){send("file_error",object("message","A document picker is not available."));}});}
-        @JavascriptInterface public void openResearch(){runOnUiThread(()->{
-            try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(MarketClient.SERVER+"/")));}
-            catch(Exception error){send("error",object("code","browser_unavailable"));}
-        });}
         @JavascriptInterface public void openTokenPage(){runOnUiThread(()->{
             try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://account.upstox.com/developer/apps")));}
             catch(Exception error){send("error",object("code","browser_unavailable"));}
         });}
     }
-    @Override protected void onPause(){stream.stop();super.onPause();web.onPause();web.pauseTimers();}
-    @Override protected void onResume(){super.onResume();if(web!=null){web.onResume();web.resumeTimers();}}
-    @Override protected void onDestroy(){stream.shutdown();generation++;aiGeneration++;cancelAi();executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();offlineExecutor.shutdownNow();if (offlineFinbert!=null)offlineFinbert.close();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}super.onDestroy();}
-    @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp.back()",null);else super.onBackPressed();}
+    @Override protected void onPause(){foreground=false;generation.incrementAndGet();invalidateAi("AI review cancelled when the app left the foreground.");client.cancel();cancelOffline();stopStream();super.onPause();web.onPause();web.pauseTimers();}
+    @Override protected void onResume(){super.onResume();foreground=true;lastRequest=0;researchRequests.clear();if(web!=null){web.onResume();web.resumeTimers();if(pageReady){send("lifecycle",object("state","resumed"));offlineStatus();}}}
+    @Override protected void onDestroy(){foreground=false;client.cancel();cancelOffline();streamGeneration.incrementAndGet();stream.shutdown();generation.incrementAndGet();invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();offlineExecutor.shutdownNow();if (offlineFinbert!=null)offlineFinbert.close();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}if(books!=null)books.close();super.onDestroy();}
+    @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp && window.HALApp.back()",null);else super.onBackPressed();}
 }
+
 

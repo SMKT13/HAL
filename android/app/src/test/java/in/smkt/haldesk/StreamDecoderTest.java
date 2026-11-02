@@ -49,6 +49,8 @@ public final class StreamDecoderTest {
     }
     @Test public void missingOrOlderTickCannotReplaceVerifiedTrade() {
         assertFalse(StreamDecoder.shouldReplace(1793000000000L,0));
+        assertFalse(StreamDecoder.shouldReplace(1793000000000L,1793000000000L));
+        assertFalse(StreamDecoder.shouldReplace(0,0));
         assertFalse(StreamDecoder.shouldReplace(1793000000000L,1792999999999L));
         assertTrue(StreamDecoder.shouldReplace(1793000000000L,1793000000001L));
         assertTrue(StreamDecoder.shouldReplace(0,1793000000001L));
@@ -64,4 +66,12 @@ public final class StreamDecoderTest {
         try{StreamDecoder.decode(new byte[2097153],Collections.emptySet(),NOW);fail("oversized frame");}
         catch(com.google.protobuf.InvalidProtocolBufferException expected){}
     }
+    @Test public void missingFutureAndStaleFeedEnvelopeClocksAreRejected()throws Exception {
+        for(long ts:new long[]{0,NOW+60001,NOW-300001}){
+            byte[] wire=MarketDataFeedV3.FeedResponse.newBuilder().setType(MarketDataFeedV3.Type.live_feed).setCurrentTs(ts).build().toByteArray();
+            try{StreamDecoder.decode(wire,Collections.emptySet(),NOW);fail("bad envelope clock");}catch(com.google.protobuf.InvalidProtocolBufferException expected){}
+        }
+    }
+
 }
+

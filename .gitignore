@@ -17,3 +17,12 @@ android/runtime/
 playwright-report/
 test-results/
 android/tests/.output/
+**/.gradle/
+android/app/build/
+android/local.properties
+android/.idea/
+qa/
+**/password.txt
+**/signing/
+*.p12
+*.pfx

@@ -80,3 +80,4 @@ final class AgentDesk {
             .put("sources",sources==null?new JSONArray():sources);
     }
 }
+

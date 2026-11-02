@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="in.smkt.haldesk.HeldContractPlatformTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-02T09:12:31" hostname="ad8fed60c93f" time="10.743">
+  <properties/>
+  <testcase name="realExpiryStrikeKeyAndLotMismatchesRemainBlocked[26]" classname="in.smkt.haldesk.HeldContractPlatformTest" time="3.627"/>
+  <testcase name="realExpiryStrikeKeyAndLotMismatchesRemainBlocked" classname="in.smkt.haldesk.HeldContractPlatformTest" time="6.827"/>
+  <testcase name="missingKeyIsNotAContractIdOnAndroid[26]" classname="in.smkt.haldesk.HeldContractPlatformTest" time="0.044"/>
+  <testcase name="missingKeyIsNotAContractIdOnAndroid" classname="in.smkt.haldesk.HeldContractPlatformTest" time="0.034"/>
+  <testcase name="malformedKeyIsRejectedBeforeAnyRequest[26]" classname="in.smkt.haldesk.HeldContractPlatformTest" time="0.037"/>
+  <testcase name="malformedKeyIsRejectedBeforeAnyRequest" classname="in.smkt.haldesk.HeldContractPlatformTest" time="0.033"/>
+  <testcase name="exactKeySelectsCorrectDuplicateTupleAndUnknownKeyDoesNotGuess[26]" classname="in.smkt.haldesk.HeldContractPlatformTest" time="0.026"/>
+  <testcase name="exactKeySelectsCorrectDuplicateTupleAndUnknownKeyDoesNotGuess" classname="in.smkt.haldesk.HeldContractPlatformTest" time="0.036"/>
+  <testcase name="bothProtectivePutsMatchWithNullOrAbsentKeysWithoutEditingBook[26]" classname="in.smkt.haldesk.HeldContractPlatformTest" time="0.034"/>
+  <testcase name="bothProtectivePutsMatchWithNullOrAbsentKeysWithoutEditingBook" classname="in.smkt.haldesk.HeldContractPlatformTest" time="0.039"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

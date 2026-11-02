@@ -16,9 +16,10 @@ final class SecretStore {
     private static final String ALIAS = "hal-upstox-secrets-v1";
     private final SharedPreferences prefs;
     SecretStore(Context context) { prefs=context.getSharedPreferences("private_credentials",Context.MODE_PRIVATE); }
-    private SecretKey key() throws Exception {
+    private SecretKey key(boolean create) throws Exception {
         KeyStore store=KeyStore.getInstance("AndroidKeyStore"); store.load(null);
         if(store.containsAlias(ALIAS)) return (SecretKey)store.getKey(ALIAS,null);
+        if(!create)throw new Exception("keystore_key_unavailable");
         KeyGenerator generator=KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore");
         generator.init(new KeyGenParameterSpec.Builder(ALIAS,KeyProperties.PURPOSE_ENCRYPT|KeyProperties.PURPOSE_DECRYPT)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
@@ -26,7 +27,7 @@ final class SecretStore {
         return generator.generateKey();
     }
     synchronized void set(String name,String value) throws Exception {
-        Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE,key());
+        Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE,key(true));
         cipher.updateAAD(name.getBytes(StandardCharsets.UTF_8));
         String encrypted=Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP)+":"+
             Base64.encodeToString(cipher.doFinal(value.getBytes(StandardCharsets.UTF_8)),Base64.NO_WRAP);
@@ -36,7 +37,7 @@ final class SecretStore {
         String value=prefs.getString(name,""); if(value.isEmpty()) return "";
         String[] parts=value.split(":",2);
         Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE,key(),new GCMParameterSpec(128,Base64.decode(parts[0],Base64.NO_WRAP)));
+        cipher.init(Cipher.DECRYPT_MODE,key(false),new GCMParameterSpec(128,Base64.decode(parts[0],Base64.NO_WRAP)));
         cipher.updateAAD(name.getBytes(StandardCharsets.UTF_8));
         return new String(cipher.doFinal(Base64.decode(parts[1],Base64.NO_WRAP)),StandardCharsets.UTF_8);
     }
@@ -46,3 +47,4 @@ final class SecretStore {
     }
     synchronized void clear() { prefs.edit().clear().commit(); }
 }
+

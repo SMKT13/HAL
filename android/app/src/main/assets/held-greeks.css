@@ -1,7 +1,0 @@
-.held-greek-leg{border-radius:12px;border:1px solid var(--line);background:var(--surface2);padding:13px;margin:12px 0}
-.held-greek-title{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:.77rem}
-.held-greek-title span{color:var(--muted);font-size:.65rem}
-.held-greek-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:15px 0}
-.held-greek-stats small{display:block;font-size:.63rem;color:var(--muted)}
-.held-greek-stats strong{display:block;margin-top:4px;font-size:1.03rem;font-variant-numeric:tabular-nums}
-.held-greek-leg .fine{margin-top:5px;overflow-wrap:anywhere}

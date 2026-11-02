@@ -1,119 +1,38 @@
- > Android v2.7 adds Today / My Position / Plan / Research, saved risk limits, book confirmation, funding freshness, shock review, shared held-contract full quotes, sourced position context and consented AI desk evidence. See [Android release scope](android/README.md). This is the first rework stage; background alerts and wider market-impact integrations remain on the roadmap.
+# HAL Desk 4.0.2
 
-# HAL Desk
+Personal Android research and position-management desk for Hindustan Aeronautics Limited (NSE: HAL). Package `in.smkt.haldesk`, versionCode **20**, Android **8.0+**. Direct read-only Upstox data, optional Gemini and opt-in local FinBERT. No broker orders, fund transfers or required application server.
 
-A private, read-only HAL research and position monitor. The React/TypeScript interface and Gemini integration are retained. Real feed adapters, the native Android source, backup migrations and regression tests are restored.
+The Android application has four workspaces: **Today**, **My Position**, **Plan** and **Research**. It supports multiple long futures and protective puts, partial closes, preserved realised history, exact-contract marks, expiry-gap checks, deterministic scenarios, hedge comparisons and offline books.
 
-The app does **not** place orders, read broker positions, or initiate trades. You record your own holdings and completed fills.
+## Latest fix
 
-## Run the React desk
+4.0.2 fixes protective-put marks disappearing from My Position while the option chain remained visible. Android treated an unset instrument key as the string `"null"`; contract verification rejected it and hid valid quotes. Matching now handles absent keys correctly and retains strict expiry, strike, lot-size and explicit-key validation. Saved holdings and journal history are unchanged. See [fix details](android/docs/FIX-4.0.2.md).
 
-Requirements: Node 22.10+ and Python 3.11+ (standard library only).
+## Source and release
 
-```bash
+- [Android architecture and build instructions](android/README.md)
+- [Installation and preserved signing identity](android/INSTALL.md)
+- [4.0.2 verification report and limitations](android/docs/VERIFICATION.md)
+- [Provider capabilities and restrictions](android/docs/API-CAPABILITIES.md)
+- [Acceptance criteria](android/docs/ACCEPTANCE.md)
+- [Repository synchronization notes](docs/REPOSITORY-SYNC-4.0.2.md)
+
+The released APK was built and signed privately with the original HAL certificate. GitHub contains the source, tests and verification records; CI produces **unsigned** candidates for private local signing. Keystores, passwords, API credentials and personal portfolio backups must never be committed. Update the existing installation without uninstalling it or clearing its data, and export a book backup first.
+
+```sh
+cd android
 npm ci
-cp .env.example .env
-# Configure the server credentials in .env, then:
-npm run dev
-```
-
-Open `http://localhost:3000`. Enter `HAL_VIEWER_KEY` in **Desk settings**. This is a separate random password, never your Upstox token. It is required for every data and AI API route and is stored in browser session storage, excluded from backups.
-
-After configuring `.env`, `bash run.sh` (Mac/Linux) or `run.bat` (Windows) starts the same integrated desk and installs npm dependencies on first use. The gateway resolves `PYTHON` after loading `.env`; it defaults to `python` on Windows and `python3` elsewhere.
-
-For production:
-
-```bash
-npm run build
-npm start
-```
-
-Node serves the React build and authenticated API. It launches a Python feed worker on an ephemeral **loopback-only** port with a separate random internal key. Only Node listens publicly. No second public service or paid database is required. `/health` checks whether the worker is running; it does not assert that provider credentials or upstream feeds are healthy.
-
-## Server configuration
-
-| Variable | Purpose |
-| --- | --- |
-| `HAL_VIEWER_KEY` | Required private viewer password; data access fails closed when missing. |
-| `UPSTOX_ACCESS_TOKEN` | Your server-side Upstox access token. Renew it through your existing broker authorization process when it expires. |
-| `GEMINI_API_KEY` | Optional server-side Gemini key. AI stays unavailable when absent. |
-| `GEMINI_MODEL` | Defaults to the existing `gemini-3.8-flash`; configurable without code changes. |
-| `HAL_AI_SEARCH` | Set to `1` to enable Google Search grounding. Defaults to `0`. |
-| `HAL_AI_HOURLY_LIMIT` | Global per-process AI request cap, default 20, maximum 100. Two concurrent requests allowed. |
-| `HAL_PUBLIC_ORIGIN` | Your deployed HTTPS origin when behind a reverse proxy. |
-| `PORT` | Public server port, default 3000. |
-| `PYTHON` | Optional Python executable, default `python3`. |
-
-Keep credentials outside git. Never prefix provider secrets with `VITE_`. The app does not claim Gemini or search requests are free: requests use the configured account's access, quota and pricing. No AI request is triggered by opening a screen or by background refresh. A visible checkbox and Run/Ask button control sharing.
-
-Gemini offers six review perspectives, a position Copilot and optional search research. These are perspectives from **one model**, not six independent agents. The server validates the book and computes quote, ledger, risk and hedge context using its own feeds. Client-supplied prices or metrics are ignored. Failed AI calls return an explicit error; there is no fabricated verified-research fallback. Search grounding is shown only when the provider returns usable source links. Source links still need verification.
-
-Official API references: [Gemini models](https://ai.google.dev/gemini-api/docs/models), [Google Search grounding](https://ai.google.dev/gemini-api/docs/google-search), [Upstox developer documentation](https://upstox.com/developer/api-documentation/).
-
-## Data and monitoring
-
-- **Overview:** actual provider spot, dated daily indicators, benchmark beta/correlation from aligned returns, recorded P&L and expiry warnings. Missing data is unavailable, never a synthetic live price.
-- **Position Desk:** up to 12 long futures/put legs, exact-contract LTP or bid marks, explicit manual marks, per-contract lot validation, risk timeline, funding snapshots, journalled actual closes and charges.
-- **Scenarios:** actual expiry horizons, explicit IV assumptions when absent, futures basis before expiry, model assumptions displayed. A single future spot cannot value an already-settled earlier expiry.
-- **Put hedge:** compare the existing basket with a replacement that matches futures units in whole lots. Requires fresh spot, futures, chain and full option quotes; acceptable spread, trades, OI, volume, depth and Greeks; and complete relevant listed-expiry coverage. Earlier-expiring candidates are rejected. New premium, sale proceeds, fees, net cash outlay and additional P&L are distinct. Keep-current scenarios stop at the first existing put expiry. Categories are based on cost and **sampled** scenario loss, not a guaranteed maximum-loss floor. Comparing never edits holdings or executes an order.
-- **Markets:** real daily/15-minute/hourly candles, SMA overlays, listed futures and expiry-specific option chains. Data availability is explicit. TradingView opens as an external chart.
-- **HAL Research:** provider fundamentals with statement basis, periods and partial errors; personal sourced notes. No hardcoded financial dossier is substituted for missing data.
-- **Newsroom:** Upstox news and NSE RSS disclosures, provider dates, safe source links and persisted bookmarks. The NSE feed is a recent window, not a complete filing archive.
-
-Upstox is accessed only through explicit GET allowlists. There are no order or broker-account routes. Access to news/fundamentals can depend on provider entitlements. Quotes can be old, especially outside the session; retrieval time is never substituted for provider quote time. Strict hedge checks may correctly produce no shortlist outside the market session.
-
-Yahoo daily data is an optional delayed feed with a 15-minute cache. Indicator summaries use completed sessions; charts may include provisional candles. The NIFTY block is absent when its feed fails. Historical/cached prices are dated and must not be interpreted as executable quotes.
-
-## Backups and earlier books
-
-Canonical storage uses the Android-compatible `hal_desk_v2` book. Import supports Android v1/v2 backups and the prior React `version: 3` position/funding/journal/notes export. Existing browser `halpos3`/`halpos2`, journal and notes are migrated when no canonical book exists. No sample holdings are created on first launch.
-
-A full backup includes all open legs, journal, notes, bookmarks, hedge preferences, funding and display settings. Import validates before writing, shows record counts, persists one complete book and retains the previous saved book under `hal_before_import_v2`. Credentials are excluded. Invalid data is rejected without replacing the book. If earlier saved data is corrupt or uses non-integral lots, it remains untouched for recovery rather than becoming a default portfolio.
-
-Earlier React realized P&L and charge totals are retained as opening reconciliation. Its amount-only notebook is kept separately because those entries did not update the running totals automatically; they are not added again. Review them under Journal. New actual closes update quantity and realized P&L together. Settlement cash is tracked separately and never counted again as trading profit.
-
-Browser data is per origin and device. Moving to another deployment URL does not move it automatically: export first, then import. Native Android has its own storage; use explicit backup transfer. Native market caches/history are not part of the React position ledger import. The [archived uploaded dashboard](docs/archive/README.md) retains its dated commentary separately; its sample positions and model marks never become live holdings.
-
-## Deploy
-
-The restored `Dockerfile` builds the React bundle and installs Node plus Python in one image. `render.yaml` uses that Docker image. Set secrets through the host's environment settings, set the public HTTPS origin, and enter the matching viewer key in the app. An older Render service configured as Python must switch to this Docker setup; merely changing its start command is insufficient.
-
-The optional feed cache is disposable. Open books remain on the user's device; clearing browser storage loses them unless backed up. The AI limiter is in memory per process: use one instance or add a shared limiter before scaling beyond a private desk.
-
-## Android
-
-Android 2.5 calls the **Gemini API directly from the native Android app**. Open the sixth **AI** tab → **Gemini settings**, enter your own Gemini API key and select a model (default `gemini-3.8-flash`). The key is encrypted with Android Keystore. There is no HAL AI server, website dependency or model download. Internet and Google API quota/billing apply. The separate React/web Gemini integration above is retained.
-
-Android 2.5 adds local checkpoint briefings, a completed-daily-bar historical pattern scanner and **Positions → My next rollover**. The paper planner compares closing, one lot and target lots with protective puts, explicit post-exit funding and fees, full bid/ask quality checks and expiry-gap warnings. Matching-expiry payoff floors are separate from interim margin risk; earlier puts never receive an invented later loss floor. Gemini can explain calculated plans and historical observations after explicit consent. Historical frequencies are not forecasts, and comparing never changes the saved book. See the Android guide for methods and assumptions.
-
-The Android key field supports long authorization keys and dots, cleans pasted whitespace and does not silently truncate pasted credentials.
-
-Position Copilot explains app-calculated P&L, risk and hedge limitations. Six perspectives requests one model's review across technicals, business, app news, derivatives, risk and synthesis. App research explains news and indicators already fetched by the app, without AI web search. Before each run, the UI lists the shared evidence and requires a sharing checkbox. Broker tokens, private notes, bookmarks and journal text are excluded; AI evidence/replies are transient and excluded from backups. Stop, timeout and late-response guards prevent obsolete replies from appearing as current analysis. Direct Upstox and Gemini work independently of a HAL backend.
-
-Both interfaces use the same pure `core.js`, `analytics.js` and `hedge.js` calculations. See [Android build instructions](android/README.md). Preserve your original private signing files for compatible updates; never commit or distribute them.
-
-A signing-free validation build is available for CI:
-
-```bash
-HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT=/path/to/android-sdk bash android/build.sh
-```
-
-The aligned unsigned APK is for build verification, not installation as an update.
-
-## Verification
-
-```bash
-npm run lint
-npm run test:python
+npm run assets
 npm test
-npm run test:android
-npm run build
 npx playwright install chromium
 npm run test:ui
-(cd android && node tests/ui.test.js)
-(cd android && node tests/ai-ui.test.js)
-(cd android && node tests/intelligence-ui.test.js)
+./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease
 ```
 
-GitHub Actions runs the Python, Node, real Python-worker integration, Android calculation, React browser and native asset browser regressions and compiles an unsigned Android APK. Browser tests use clearly synthetic fixtures and do not call Upstox or Gemini. The worker integration test uses an explicitly empty broker token, so it makes no upstream request. Live token permissions, model quota and physical-device behavior require verification in the user's configured environment.
+Use JDK 17, Gradle 8.10.2 and Android SDK 35/build-tools 35.0.0. The Gradle wrapper and npm lockfile pin build dependencies. Run `bash tests/test-native-ai.sh` for the additional mocked Gemini checks. Signing is a separate private local step described in the Android guide.
 
+Release verification recorded 153 calculation/data tests, 57 native/framework tests, 28 browser integration checks and 219 mocked Gemini assertions passing. Framework tests use Robolectric API 26 and 35. A physical-device upgrade, authenticated provider requests and actual FinBERT inference remain unverified; these results do not claim live-account or phone testing.
+
+## Existing web viewer
+
+The earlier React/Python web viewer remains available with its [own setup guide](docs/WEB-VIEWER.md). Its three existing calculation modules and regression tests are preserved under `web-engine/`, independent of the Android rebuild. It retains schema-2 behavior and is not a web edition of Android 4.0.2. Do not import an Android schema-4 book into it without a compatible migration.

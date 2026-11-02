@@ -24,10 +24,10 @@ import okio.ByteString;
 final class MarketStream {
     interface Sink { void publish(JSONObject status); }
     private final OkHttpClient client=new OkHttpClient.Builder()
-        .readTimeout(0, TimeUnit.MILLISECONDS).pingInterval(25,TimeUnit.SECONDS).build();
+        .followRedirects(false).followSslRedirects(false).readTimeout(0, TimeUnit.MILLISECONDS).pingInterval(25,TimeUnit.SECONDS).build();
     private final Sink sink;
     private WebSocket socket;
-    private long generation=0, messages=0, lastStatus=0;
+    private long generation=0, messages=0, lastStatus=0,lastFeedTs=0;
     private boolean enabled=false;
     private final LinkedHashMap<String,JSONObject> latestQuotes=new LinkedHashMap<>();
     private long lastQuotePublish=0;
@@ -46,7 +46,7 @@ final class MarketStream {
     private void announce(String state,int count){
         sink.publish(status(state,messages,count));
     }
-    private static URI validateEndpoint(String raw) throws Exception {
+    static URI validateEndpoint(String raw) throws Exception {
         if(raw==null||raw.length()>2048)throw new MarketClient.Failure("stream_authorization_failed");
         URI uri=new URI(raw);
         String host=uri.getHost(),path=uri.getPath();
@@ -58,11 +58,12 @@ final class MarketStream {
         return uri;
     }
     synchronized boolean isEnabled(){return enabled;}
-    void start(MarketClient market,String token) {
+    void start(MarketClient market,String token) {start(market,token,()->true);}
+    void start(MarketClient market,String token,java.util.function.BooleanSupplier permitted) {
         final long id;
         synchronized(this){
-            if(enabled)return;
-            enabled=true;id=++generation;messages=0;lastStatus=0;lastQuotePublish=0;latestQuotes.clear();
+            if(enabled||!permitted.getAsBoolean())return;
+            enabled=true;id=++generation;messages=0;lastStatus=0;lastFeedTs=0;lastQuotePublish=0;latestQuotes.clear();
         }
         sink.publish(status("authorizing",0,0));
         try {
@@ -101,6 +102,7 @@ final class MarketStream {
                         final long now=System.currentTimeMillis();
                         try {
                             JSONObject packet=StreamDecoder.decode(bytes.toByteArray(),allowed,now);
+                            long feedTs=packet.optLong("feed_ts",0);if(feedTs<lastFeedTs){if(now-lastStatus>=2000){lastStatus=now;announce("out_of_order_frame_ignored",keys.length());}return;}lastFeedTs=feedTs;
                             if("market_info".equals(packet.optString("type"))){
                                 if(now-lastStatus>=2000){lastStatus=now;announce("market_info",keys.length());}
                                 return;
@@ -115,7 +117,7 @@ final class MarketStream {
                                 long oldTrade=old==null?0:old.optLong("last_trade_ts",0);
                                 long nextTrade=quote.optLong("last_trade_ts",0);
                                 // An older exchange trade must never displace a newer observation.
-                                if(old!=null&&!StreamDecoder.shouldReplace(oldTrade,nextTrade))continue;
+                                if(!StreamDecoder.shouldReplace(oldTrade,nextTrade))continue;
                                 latestQuotes.put(key,quote);
                             }
                             if(!latestQuotes.isEmpty()&&now-lastQuotePublish>=1000){
@@ -123,7 +125,7 @@ final class MarketStream {
                                 JSONObject update=status("decoded_quotes",messages,keys.length());
                                 JSONArray all=new JSONArray();
                                 for(JSONObject row:latestQuotes.values())all.put(row);
-                                update.put("rows",all);
+                                update.put("rows",all);update.put("decoded",true);
                                 update.put("feed_ts",packet.opt("feed_ts"));
                                 update.put("frame_type",packet.optString("type"));
                                 sink.publish(update);
@@ -169,7 +171,7 @@ final class MarketStream {
     synchronized void stop(){
         generation++;enabled=false;
         WebSocket old=socket;socket=null;messages=0;lastQuotePublish=0;latestQuotes.clear();
-        if(old!=null)old.close(1000,"Stopped");
+        if(old!=null){old.close(1000,"Stopped");old.cancel();}
         sink.publish(status("stopped",0,0));
     }
     synchronized void shutdown(){
@@ -178,3 +180,4 @@ final class MarketStream {
         client.connectionPool().evictAll();
     }
 }
+

@@ -1,7 +1,0 @@
-.source-readiness-head{font-size:.84rem;font-weight:700;margin:0 0 11px}
-.source-readiness-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:11px 0}
-.source-readiness-grid>div{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--surface2)}
-.source-readiness-grid small{display:block;font-size:.64rem;color:var(--muted);line-height:1.4}
-.source-readiness-grid b{display:block;font-size:.79rem;margin-top:5px;line-height:1.35;overflow-wrap:anywhere}
-#source-readiness .fine,#settings-source-readiness .fine{margin-top:12px;line-height:1.5}
-@media(max-width:350px){.source-readiness-grid{grid-template-columns:1fr}}

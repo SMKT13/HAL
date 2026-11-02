@@ -2,18 +2,29 @@ plugins { id 'com.android.application'; id 'com.google.protobuf' }
 android {
     namespace 'in.smkt.haldesk'
     compileSdk 35
+    buildToolsVersion "35.0.0"
     defaultConfig {
         applicationId 'in.smkt.haldesk'
         minSdk 26
         targetSdk 35
-        versionCode 17
-        versionName '3.3'
+        versionCode 20
+        versionName '4.0.2'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
     buildTypes { release { minifyEnabled false } }
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
+            ['https.proxyHost','https.proxyPort','http.proxyHost','http.proxyPort'].each { name ->
+                if (System.getProperty(name)) systemProperty name, System.getProperty(name)
+            }
+        }
+    }
+    packaging { jniLibs { useLegacyPackaging = true } }
 }
 
 
@@ -28,7 +39,21 @@ protobuf {
 dependencies {
     implementation 'com.google.protobuf:protobuf-javalite:3.25.5'
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
     testImplementation 'org.json:json:20250517'
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.20.0'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.23.2'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
+
+
+// A stale generated bundle must never ship after editing its source.
+tasks.register('verifyWebAssets') {
+    doLast {
+        def hashes = new groovy.json.JsonSlurper().parse(rootProject.file('web-assets-sha256.json'))
+        hashes.each { name, expected ->
+            def digest = java.security.MessageDigest.getInstance('SHA-256').digest(file('src/main/assets/' + name).bytes).encodeHex().toString()
+            if (digest != expected) throw new GradleException('Web assets changed: run npm ci && npm run assets before building.')
+        }
+    }
+}
+tasks.named('preBuild').configure { dependsOn('verifyWebAssets') }

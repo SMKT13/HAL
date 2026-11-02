@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="in.smkt.haldesk.BookValidatorTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-02T09:12:45" hostname="ad8fed60c93f" time="0.01">
+  <properties/>
+  <testcase name="credentialsRejected" classname="in.smkt.haldesk.BookValidatorTest" time="0.005"/>
+  <testcase name="malformedLotsDateAndVersionRejected" classname="in.smkt.haldesk.BookValidatorTest" time="0.004"/>
+  <testcase name="missingManualMarkRemainsNull" classname="in.smkt.haldesk.BookValidatorTest" time="0.001"/>
+  <testcase name="zeroManualMarkAllowed" classname="in.smkt.haldesk.BookValidatorTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

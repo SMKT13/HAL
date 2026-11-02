@@ -1,12 +1,14 @@
 {
-  "name": "hal-upstox-android-private",
-  "version": "3.3.0",
+  "name": "hal-desk-android",
+  "version": "4.0.2",
   "private": true,
   "scripts": {
-    "test": "node tests/core.test.js && node tests/market-pulse.test.js && node tests/derivative-participation.test.js && node tests/option-intelligence.test.js && node tests/held-greeks.test.js && node tests/stream-preview.test.js && node tests/source-readiness.test.js && node --test tests/analytics.test.js tests/hedge.test.js tests/intelligence.test.js tests/desk.test.js tests/trading-skills.test.js",
-    "test:ui": "node tests/news-ai.test.js && node tests/ui.test.js && node tests/ai-ui.test.js && node tests/intelligence-ui.test.js && node tests/desk-ui.test.js"
+    "test": "node --test tests/engine4.test.js tests/insights4.test.js tests/data4.test.js",
+    "test:ui": "node tests/ui4.test.js",
+    "assets": "node scripts/build-assets.js"
   },
   "devDependencies": {
-    "playwright": "1.51.1"
+    "playwright": "1.51.1",
+    "esbuild": "0.25.12"
   }
 }

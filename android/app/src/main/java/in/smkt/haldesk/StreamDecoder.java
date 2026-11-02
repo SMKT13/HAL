@@ -16,7 +16,7 @@ final class StreamDecoder {
     private static boolean price(double value){return Double.isFinite(value)&&value>0&&value<100000000;}
     /** Do not let an out-of-order or timestamp-less tick replace a verified trade. */
     static boolean shouldReplace(long previousTradeMs,long incomingTradeMs){
-        return previousTradeMs<=0 || (incomingTradeMs>0 && incomingTradeMs>=previousTradeMs);
+        return incomingTradeMs>0 && (previousTradeMs<=0 || incomingTradeMs>previousTradeMs);
     }
     static JSONObject decode(byte[] bytes,Set<String> allowed,long now) throws Exception {
         if(bytes==null||bytes.length<1||bytes.length>MAX_FRAME_BYTES)
@@ -24,14 +24,16 @@ final class StreamDecoder {
         MarketDataFeedV3.FeedResponse response=MarketDataFeedV3.FeedResponse.parseFrom(bytes);
         JSONObject out=new JSONObject();
         MarketDataFeedV3.Type kind=response.getType();
+        long feedTs=response.getCurrentTs();
+        if(feedTs<=0 || feedTs>now+60000L || now-feedTs>300000L)throw new InvalidProtocolBufferException("Missing, future or stale feed clock");
+        out.put("feed_ts",feedTs);out.put("received_at",now);
         if(kind==MarketDataFeedV3.Type.market_info) {
             out.put("type","market_info");out.put("rows",new JSONArray());return out;
         }
         if(kind!=MarketDataFeedV3.Type.live_feed&&kind!=MarketDataFeedV3.Type.initial_feed)
             throw new InvalidProtocolBufferException("Unsupported frame type");
         out.put("type",kind==MarketDataFeedV3.Type.initial_feed?"snapshot":"tick");
-        long feedTs=response.getCurrentTs();
-        out.put("feed_ts",feedTs>0&&feedTs<=now+86400000L?feedTs:JSONObject.NULL);
+
         JSONArray rows=new JSONArray();
         for(Map.Entry<String,MarketDataFeedV3.Feed> entry:response.getFeedsMap().entrySet()){
             String key=entry.getKey();
@@ -43,7 +45,9 @@ final class StreamDecoder {
             row.put("key",key);
             row.put("price",q.getLtp());
             row.put("prev_close",price(q.getCp())?q.getCp():JSONObject.NULL);
-            row.put("last_trade_ts",ltt>0&&ltt<=now+86400000L?ltt:JSONObject.NULL);
+            row.put("last_trade_ts",ltt>0&&ltt<=now+60000L&&ltt<=feedTs+60000L?ltt:JSONObject.NULL);
+            row.put("feed_ts",feedTs);row.put("received_at",now);row.put("source","upstox_stream_preview");
+            row.put("quality",ltt<=0?"trade_timestamp_missing":ltt>now+60000L||ltt>feedTs+60000L?"trade_clock_future":now-ltt>300000L?"last_trade_stale":"recent");
             rows.put(row);
             if(rows.length()>=5)break;
         }
@@ -51,3 +55,4 @@ final class StreamDecoder {
         return out;
     }
 }
+

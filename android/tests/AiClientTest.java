@@ -21,7 +21,7 @@ public final class AiClientTest {
         public InputStream getErrorStream(){errorBodyRead=true;return getInputStream();}
         public int getResponseCode(){if(onStatus!=null)onStatus.run();return code;}
     }
-    static JSONObject evidence()throws Exception{return new JSONObject("{\"quoteAsOf\":null,\"spot\":null,\"sources\":[],\"ledger\":{\"open\":20000}}");}
+    static JSONObject evidence()throws Exception{return new JSONObject("{\"schemaVersion\":4,\"quoteAsOf\":null,\"portfolioIncluded\":true,\"bookRevision\":\"rev-1234abcd\",\"portfolio\":{\"legs\":[]},\"market\":{\"spot\":null},\"sources\":[],\"valuation\":{\"open\":20000}}");}
     static String answer(String finish,JSONArray parts)throws Exception{return new JSONObject().put("candidates",new JSONArray().put(new JSONObject().put("finishReason",finish).put("content",new JSONObject().put("parts",parts)))).toString();}
     static JSONArray text(String value)throws Exception{return new JSONArray().put(new JSONObject().put("text",value));}
     static JSONObject run(AiClient client)throws Exception{return client.generate(KEY,AiPolicy.DEFAULT_MODEL,"copilot","Explain risk",evidence());}
@@ -60,3 +60,4 @@ public final class AiClientTest {
         System.out.println("PASS "+checks+" native Gemini transport/response checks (mock HTTPS; no provider call)");
     }
 }
+

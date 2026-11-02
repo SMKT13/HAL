@@ -37,3 +37,4 @@ public final class AgentDeskTest {
         System.out.println("PASS "+count+" agent role isolation and validation checks");
     }
 }
+

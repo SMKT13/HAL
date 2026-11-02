@@ -1,0 +1,36 @@
+{
+  "applicationId": "in.smkt.haldesk",
+  "versionName": "4.0.2",
+  "versionCode": 20,
+  "previousVersion": "4.0.1",
+  "previousCode": 19,
+  "certificateSHA256": "a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382",
+  "schemes": [
+    "v2",
+    "v3"
+  ],
+  "zipAlignment": "passed 16 KB",
+  "nativeLoadSegmentAlignments": {
+    "lib/arm64-v8a/libonnxruntime.so": [
+      16384,
+      16384,
+      16384
+    ],
+    "lib/arm64-v8a/libonnxruntime4j_jni.so": [
+      16384,
+      16384
+    ],
+    "lib/x86_64/libonnxruntime.so": [
+      16384,
+      16384,
+      16384
+    ],
+    "lib/x86_64/libonnxruntime4j_jni.so": [
+      16384,
+      16384
+    ]
+  },
+  "testedAssetsMatch": true,
+  "sizeBytes": 31644819,
+  "apkSHA256": "0b3421a9921fecb9a798ae302304ff7db6575b8de088e830197b0ca1ec2ebeab"
+}

@@ -1,0 +1,4 @@
+PASS 78 direct Gemini request policy checks
+PASS 104 native Gemini transport/response checks (mock HTTPS; no provider call)
+PASS 11 agent role isolation and validation checks
+PASS 26 native evidence privacy/revision checks (synthetic fixtures)

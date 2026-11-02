@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="in.smkt.haldesk.ProviderAdapterTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-11-02T09:12:48" hostname="ad8fed60c93f" time="0.012">
+  <properties/>
+  <testcase name="exactContractMismatchIsReturnedWithoutNetwork" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.002"/>
+  <testcase name="incompleteBarsAreNotSchemaFailures" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.002"/>
+  <testcase name="providerPreviousCloseCannotFallBackToSessionClose" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.002"/>
+  <testcase name="todaysDailyCandleIsExcluded" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.0"/>
+  <testcase name="malformedAndConflictingBarsAreSchemaFailures" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.001"/>
+  <testcase name="freshResponseDoesNotMakeOldTradeFresh" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.0"/>
+  <testcase name="separateProviderTradeAndRetrievalClocks" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.001"/>
+  <testcase name="missingAndFutureClocksAreExplicit" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.001"/>
+  <testcase name="matchesExactInstrumentNotMapDisplayKey" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.001"/>
+  <testcase name="excludesIncompleteInvalidAndConflictingCandles" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.001"/>
+  <testcase name="contextNormalizationRetainsExactQuoteClocks" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.0"/>
+  <testcase name="unavailableAndZeroAreDistinct" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.001"/>
+  <testcase name="nonDirectModeRejectedBeforeNetwork" classname="in.smkt.haldesk.ProviderAdapterTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

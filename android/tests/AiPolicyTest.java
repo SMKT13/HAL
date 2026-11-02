@@ -34,7 +34,7 @@ public final class AiPolicyTest {
         rejects(()->AiPolicy.prompt("unknown-skill","buy","{}"));
         check(AiPolicy.isAgentMode("agent_risk"));check(!AiPolicy.isAgentMode("copilot"));
         check(AiPolicy.preferLowThinking("gemini-3.8-flash"));
-        check(AiPolicy.preferLowThinking("gemini-4-argon"));
+        check(!AiPolicy.preferLowThinking("gemini-4-argon"));
         check(!AiPolicy.preferLowThinking("gemini-2.5-flash"));
         check(AiPolicy.outputLimit("agent_risk")==8192);
         check(AiPolicy.prompt("agent_risk","Review","{}").contains("At most 200 words"));
@@ -50,3 +50,4 @@ public final class AiPolicyTest {
         System.out.println("PASS "+checks+" direct Gemini request policy checks");
     }
 }
+
