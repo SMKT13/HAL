@@ -23,3 +23,5 @@
 .next-review button,.card h2,.card h3{overflow-wrap:anywhere}.daily-position .hero-value{overflow-wrap:anywhere}
 @media(min-width:760px){.daily-grid{grid-template-columns:1.15fr 1fr}.business-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.question-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.daily-position .hero-value{font-size:48px}}
 @media(max-width:360px){.comparison-results{grid-template-columns:minmax(0,1fr)}.next-review h2{font-size:19px}.event-row{flex-wrap:wrap}.daily-position .hero-value{font-size:34px}}
+
+.daily-position{padding:18px}.daily-position .text-button{margin-top:0}.next-review h2{margin:8px 0}.price-ribbon{padding-bottom:14px}

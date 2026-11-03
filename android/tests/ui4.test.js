@@ -101,7 +101,7 @@ await check('HAL business review shows sourced notes, upcoming events and escape
 });
 await browser.close();browser=await launch();
 await check('updated daily and planning layouts fit phone widths in both themes',async()=>{
- x=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT]}});p=x.page;await emit(p,'snapshot',snap);
+ x=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT]}});p=x.page;await emit(p,'connection',{configured:true});await emit(p,'snapshot',snap);await emit(p,'research',{section:'news',frame:'D',fetched_at_iso:ts,data:{articles:[{heading:'HAL delivery milestone: evidence to review',article_link:'https://example.org/hal-fixture',published_time:now-1000,source:'Synthetic preview'}]}});
  const qa=path.resolve(__dirname,'../../qa');fs.mkdirSync(qa,{recursive:true});
  for(const theme of ['dark','light']){
   await p.locator('#settings').click();await p.locator('#theme').selectOption(theme);await save(p);
