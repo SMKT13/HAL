@@ -1,98 +1,29 @@
-name: HAL regression tests
-
+name: Prepare HAL Android signing tools
 on:
   push:
-  pull_request:
-  workflow_dispatch:
-
+    branches: [work/hal-private-signing-tools]
 permissions:
   contents: read
-
 jobs:
-  web:
-    # Playwright 1.51.1 supports 24.04; do not drift with ubuntu-latest.
+  tools:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Install official Android build tools
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;35.0.0"'
+      - name: Package public signing and verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          bt="$ANDROID_HOME/build-tools/35.0.0"
+          mkdir -p package/build-tools/35.0.0
+          cp -a "$bt/apksigner" "$bt/zipalign" "$bt/aapt" "$bt/lib" "$bt/lib64" "$bt/source.properties" package/build-tools/35.0.0/
+          tar -czf android-signing-tools-35.0.0.tar.gz -C package build-tools
+          sha256sum android-signing-tools-35.0.0.tar.gz > android-signing-tools-35.0.0.sha256
+      - uses: actions/upload-artifact@v4
         with:
-          python-version: "3.13"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run test:python
-      - run: npm test
-      - run: npm run test:web-engine
-      - run: npm run build
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:ui
-
-  android:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: android/package-lock.json
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.10.2"
-      - run: python3 android/tests/check_release_identity.py
-      - run: npm ci
-        working-directory: android
-      - name: Rebuild Android UI bundle
-        run: npm run assets
-        working-directory: android
-      - name: Upload reproducible Android assets
-        uses: actions/upload-artifact@v4
-        with:
-          name: HAL-Desk-generated-assets
+          name: HAL-public-Android-signing-tools-35.0.0
           path: |
-            android/app/src/main/assets/desk4.js
-            android/web-assets-sha256.json
-          retention-days: 7
-          if-no-files-found: error
-      - run: npm test
-        working-directory: android
-      - run: npx playwright install --with-deps chromium
-        working-directory: android
-      - run: npm run test:ui
-        working-directory: android
-      - name: Upload Android UI previews
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: HAL-Desk-ui-previews
-          path: qa/*.png
-          retention-days: 7
-          if-no-files-found: warn
-      - name: Verify committed UI bundle
-        run: git diff --exit-code -- app/src/main/assets/desk4.js web-assets-sha256.json
-        working-directory: android
-      - run: bash android/tests/test-native-ai.sh
-      - name: Install Android SDK 35
-        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
-      - name: Native tests, lint and unsigned APK
-        run: HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash android/build.sh
-      - name: Upload unsigned candidate and test reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: HAL-Desk-v4.1.0-unsigned-and-reports
-          path: |
-            android/build/HAL-Desk-v4.1.0-unsigned.apk
-            android/app/build/reports/tests/testReleaseUnitTest/
-            android/app/build/reports/lint-results-release.html
-          retention-days: 7
+            android-signing-tools-35.0.0.tar.gz
+            android-signing-tools-35.0.0.sha256
+          retention-days: 3
           if-no-files-found: error
