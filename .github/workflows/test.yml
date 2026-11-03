@@ -52,16 +52,34 @@ jobs:
       - run: python3 android/tests/check_release_identity.py
       - run: npm ci
         working-directory: android
-      - name: Rebuild and verify committed UI bundle
-        run: |
-          npm run assets
-          git diff --exit-code -- app/src/main/assets/desk4.js web-assets-sha256.json
+      - name: Rebuild Android UI bundle
+        run: npm run assets
         working-directory: android
+      - name: Upload reproducible Android assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: HAL-Desk-generated-assets
+          path: |
+            android/app/src/main/assets/desk4.js
+            android/web-assets-sha256.json
+          retention-days: 7
+          if-no-files-found: error
       - run: npm test
         working-directory: android
       - run: npx playwright install --with-deps chromium
         working-directory: android
       - run: npm run test:ui
+        working-directory: android
+      - name: Upload Android UI previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HAL-Desk-ui-previews
+          path: qa/*.png
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Verify committed UI bundle
+        run: git diff --exit-code -- app/src/main/assets/desk4.js web-assets-sha256.json
         working-directory: android
       - run: bash android/tests/test-native-ai.sh
       - name: Install Android SDK 35
@@ -71,9 +89,9 @@ jobs:
       - name: Upload unsigned candidate and test reports
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v4.0.2-unsigned-and-reports
+          name: HAL-Desk-v4.1.0-unsigned-and-reports
           path: |
-            android/build/HAL-Desk-v4.0.2-unsigned.apk
+            android/build/HAL-Desk-v4.1.0-unsigned.apk
             android/app/build/reports/tests/testReleaseUnitTest/
             android/app/build/reports/lint-results-release.html
           retention-days: 7

@@ -920,6 +920,111 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
 ;
 (function(root) {
   "use strict";
+  const E = typeof module !== "undefined" && module.exports ? require("./engine4.js") : root.HAL4Engine;
+  const I = typeof module !== "undefined" && module.exports ? require("./insights4.js") : root.HAL4Insights;
+  function latestReview(candidates, now = Date.now()) {
+    return (candidates || []).filter((c) => c && c.version === 4 && typeof c.bookRevision === "string" && Number.isFinite(Date.parse(c.savedAt)) && Date.parse(c.savedAt) <= now && Number.isFinite(Date.parse(c.quoteAsOf)) && Date.parse(c.quoteAsOf) <= now + 5e3).sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt))[0] || null;
+  }
+  function canCaptureReview(input, now = Date.now()) {
+    var _a, _b, _c, _d, _e;
+    const v = input.valuation || {};
+    return !!((_b = (_a = input.book) == null ? void 0 : _a.legs) == null ? void 0 : _b.length) && v.complete === true && !v.manual && !v.stale && !((_c = input.market) == null ? void 0 : _c.failure) && !((_d = input.market) == null ? void 0 : _d.failureReason) && E.quoteQuality((_e = input.market) == null ? void 0 : _e.spot, { now, requireFresh: true, requireTrade: true }).valid && (v.rows || []).length === input.book.legs.length && v.rows.every((r) => {
+      var _a2, _b2;
+      return ((_a2 = r.mark) == null ? void 0 : _a2.source) !== "Manual" && ((_b2 = r.mark) == null ? void 0 : _b2.status) === "current" && E.quoteQuality(r.mark.quote, { now, requireFresh: true, requireTrade: true }).valid;
+    });
+  }
+  function strategy(book, market, now = Date.now()) {
+    var _a;
+    const risk = E.risk(book, market, now), valuation = E.ledger(book, market, { now });
+    const puts = risk.distribution.slice().sort((a, b) => a.expiry.localeCompare(b.expiry));
+    const nextPutExpiry = ((_a = puts[0]) == null ? void 0 : _a.expiry) || null;
+    const afterProtection = nextPutExpiry ? risk.timeline.find((t) => t.date === nextPutExpiry) : null;
+    return {
+      risk,
+      valuation,
+      nextPutExpiry,
+      afterProtection,
+      puts,
+      explanation: risk.futureUnits ? "".concat(risk.coveredUnits, " of ").concat(risk.futureUnits, " futures units have matching put quantity today.") : risk.putUnits ? "".concat(risk.putUnits, " put units are held without active futures.") : "No active futures or puts.",
+      caveat: "Matching quantity is not a guaranteed loss limit. Strike, futures basis and expiry affect the outcome."
+    };
+  }
+  function priority(input, configured, now = Date.now()) {
+    var _a;
+    const { book, valuation = {}, risk = {}, market = {} } = input;
+    if (!((_a = book == null ? void 0 : book.legs) == null ? void 0 : _a.length)) return { title: "Set up your position", detail: "Record your actual HAL futures and puts to see their combined exposure.", action: "add", label: "Add first position" };
+    if (!configured) return { title: "Connect market prices", detail: "Your saved positions are available offline. Connect Upstox to value exact contracts.", action: "connection", label: "Connect Upstox" };
+    if (market.failure || market.lastFailure && (!market.lastSuccess || Date.parse(market.lastFailure) > Date.parse(market.lastSuccess))) return { title: "Refresh your prices", detail: "The last refresh failed. Retained observations have not become live prices.", action: "retry-prices", label: "Retry prices" };
+    if (!valuation.complete) return { title: "Complete your position prices", detail: "A saved contract is missing a usable mark. Review its expiry, strike and lot size.", action: "review-contracts", label: "Review missing prices" };
+    const urgent = ["expired", "loss_limit", "lower_review", "upper_review", "reserve", "near_expiry", "expiry_gap", "quantity_gap", "overhedged"];
+    const warning = urgent.map((code) => (risk.warnings || []).find((w) => w.code === code)).find(Boolean);
+    if (warning) return { ...warning, action: warning.code === "expired" ? "go-book" : "go-risk", label: warning.code === "expired" ? "Review open contracts" : "Review protection" };
+    if (!I.isBookConfirmed(book, now)) return { title: "Confirm your recorded position", detail: "Check entries and quantities against your broker so planning starts with the right book.", action: "confirm", label: "Check my position" };
+    if (valuation.stale || !E.quoteQuality(market.spot, { now, requireFresh: true, requireTrade: true }).valid) return { title: "Prices need an update", detail: "Review the source times before comparing changes or modelling your position.", action: "retry-prices", label: "Refresh prices" };
+    return { title: "Review your downside", detail: "Explore a lower HAL price using your saved position and explicit model assumptions.", action: "quick-fall", label: "Explore a 5% fall" };
+  }
+  function compareReduction(book, market, params, legId, lots, exitCosts = 0, now = Date.now()) {
+    const original = E.validateBook(book), leg = original.legs.find((l) => l.id === legId);
+    if (!leg || leg.type !== "FUT" || !Number.isInteger(lots) || lots < 1 || lots > leg.lots) throw Error("Choose a futures contract and a whole number of lots to reduce.");
+    if (!E.finite(exitCosts) || exitCosts < 0) throw Error("Enter non-negative exit charges and slippage.");
+    const reduced = E.validateBook(original);
+    reduced.legs = reduced.legs.map((l) => l.id === legId ? { ...l, lots: l.lots - lots } : l).filter((l) => l.lots > 0);
+    const evaluate = (b, cost) => {
+      const valuation = E.ledger(b, market, { now }), result = E.scenario(b, market, params, now);
+      const errors = [...result.errors];
+      if (!valuation.complete) errors.push("Current marks are required to compare additional P&L.");
+      return {
+        additional: result.complete && valuation.complete ? result.total - valuation.open - cost : null,
+        entryPnl: result.total,
+        horizon: result.horizon,
+        errors,
+        manual: valuation.manual,
+        stale: valuation.stale,
+        futureUnits: b.legs.filter((l) => l.type === "FUT").reduce((n, l) => n + E.units(l), 0),
+        putUnits: b.legs.filter((l) => l.type === "PE").reduce((n, l) => n + E.units(l), 0)
+      };
+    };
+    const current = evaluate(original, 0), alternative = evaluate(reduced, exitCosts);
+    const complete = E.finite(current.additional) && E.finite(alternative.additional);
+    return {
+      current,
+      alternative,
+      complete,
+      removedUnits: lots * leg.lotSize,
+      exitCosts,
+      difference: complete ? alternative.additional - current.additional : null,
+      assumptions: [
+        "Additional P&L is the change from current marks to the same scenario horizon.",
+        "Reduction assumes the recorded current futures mark as the exit reference; entered costs are deducted once.",
+        "All existing puts remain held. Their quantity may exceed the remaining futures.",
+        "No trade, settlement or journal entry is recorded. Model outcomes are not execution quotes."
+      ]
+    };
+  }
+  const drivers = [
+    { id: "orders", title: "Order book", question: "Are new orders translating into a funded, executable backlog?", pattern: /order|backlog|contract|procurement/i },
+    { id: "deliveries", title: "Deliveries & execution", question: "Are aircraft, helicopter and engine deliveries keeping pace with guidance?", pattern: /deliver|production|engine|tejas|helicopter|execution|delay/i },
+    { id: "margins", title: "Revenue & margins", question: "Is revenue growth converting into sustainable operating profit?", pattern: /revenue|margin|profit|earnings|results|income/i },
+    { id: "cash", title: "Cash conversion", question: "Are earnings converting to operating cash, with receivables under control?", pattern: /cash|receivable|working.capital|debt/i }
+  ];
+  function businessReview(notes, articles, now = Date.now()) {
+    const safeNews = I.newsGroups(articles), today = E.istDate(now);
+    return {
+      drivers: drivers.map((d) => ({
+        ...d,
+        notes: (notes || []).filter((n) => d.pattern.test([n.category, n.title, n.text].join(" "))).slice().sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 3),
+        articles: safeNews.filter((n) => d.pattern.test(n.title + " " + (n.summary || ""))).slice(0, 2)
+      })),
+      events: (notes || []).filter((n) => E.validDate(n.eventDate) && n.eventDate >= today).slice().sort((a, b) => a.eventDate.localeCompare(b.eventDate)).slice(0, 8)
+    };
+  }
+  const api = { latestReview, canCaptureReview, strategy, priority, compareReduction, businessReview };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.HAL4Workflow = api;
+})(typeof globalThis !== "undefined" ? globalThis : this);
+;
+(function(root) {
+  "use strict";
   const E = typeof module === "object" ? require("./engine4.js") : root.HAL4Engine, clone = (x) => JSON.parse(JSON.stringify(x)), stamp = () => (/* @__PURE__ */ new Date()).toISOString();
   const errors = { credential_missing: "Add an Upstox Analytics Token in Connection.", token_expired_or_unauthorized: "Upstox rejected or expired the token. Replace it in Connection.", upstox_permission_denied: "This token cannot access this feed.", upstox_rate_limited: "Upstox rate limit reached. Wait before refreshing.", network_unavailable: "Network unavailable. Saved observations are retained.", bad_response: "Provider response could not be validated.", expiry_not_listed: "This exact expiry is no longer listed.", no_hal_option_contracts: "No eligible HAL option contracts were returned.", redirect_blocked: "An unexpected provider redirect was blocked.", cancelled: "Request cancelled when leaving the foreground." };
   function message(code) {
@@ -8280,7 +8385,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
 (function() {
   "use strict";
   var _a, _b;
-  const E = HAL4Engine, D = HAL4Data, I = HAL4Insights, N = window.HALNative, $ = (id) => document.getElementById(id), esc = (x) => String(x != null ? x : "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const E = HAL4Engine, D = HAL4Data, I = HAL4Insights, W = HAL4Workflow, N = window.HALNative, $ = (id) => document.getElementById(id), esc = (x) => String(x != null ? x : "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const num = (v, d = 2) => E.finite(v) ? v.toLocaleString("en-IN", { maximumFractionDigits: d }) : "\u2014", money = (v) => E.finite(v) ? (v < 0 ? "\u2212" : "") + "\u20B9" + Math.abs(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "Unavailable", pct = (v) => E.finite(v) ? num(v) + "%" : "\u2014";
   const when = (v) => v && Number.isFinite(Date.parse(v)) ? new Date(v).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) + " IST" : "Time unavailable", date = (v) => E.validDate(v) ? (/* @__PURE__ */ new Date(v + "T00:00:00Z")).toLocaleDateString("en-IN", { timeZone: "UTC", day: "2-digit", month: "short", year: "numeric" }) : "\u2014", stamp = () => (/* @__PURE__ */ new Date()).toISOString(), clone = (v) => JSON.parse(JSON.stringify(v)), color = (v) => E.finite(v) ? v < 0 ? "negative" : "positive" : "muted";
   const btn = (a, t, x = "") => '<button data-action="'.concat(a, '" ').concat(x, ">").concat(t, "</button>"), badge = (t, c = "") => '<span class="badge '.concat(esc(c), '">').concat(esc(t), "</span>"), row = (a, b) => '<div class="row"><span>'.concat(esc(a), "</span><strong>").concat(esc(b), "</strong></div>"), tile = (a, b, c = "") => '<div class="metric"><small>'.concat(esc(a), "</small><strong>").concat(esc(b), "</strong><span>").concat(esc(c), "</span></div>"), empty = (a, b = "") => '<div class="empty"><strong>'.concat(esc(a), "</strong>").concat(esc(b), "</div>"), card = (a, b, c = "") => '<section class="card"><div class="section-heading"><h2>'.concat(esc(a), "</h2>").concat(c, "</div>").concat(b, "</section>");
@@ -8292,7 +8397,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     return ((_a2 = $(id)) == null ? void 0 : _a2.value) || "";
   };
   let book = E.emptyBook(), revision = 0, s = D.empty(), configured = false, started = false, storageError = "", chart = null, saveModal = null, returnFocus = null, toastTimer;
-  const ui = { screen: "today", position: "book", plan: "stress", research: "markets", frame: "D", expiry: "", side: "PE", filter: "all", search: "", statement: "consolidated", scenario: { spot: "", horizon: "", iv: "", shift: 0, rate: 6, dividend: 0, basis: "constant", base: "" }, result: null, resultAt: null, hedges: null, hedgesAt: null, hedgeDraft: null, pattern: null, patternWindow: 20, patternForward: 10, aiMode: "copilot", question: "Explain the position, expiry gaps, quote reliability and evidence that needs review.", share: true, ai: null, pendingAI: null, aiError: "", aiConfigured: false, model: "", finbert: { state: "not_installed" }, sentiments: {} };
+  const ui = { screen: "today", position: "book", plan: "stress", research: "markets", frame: "D", expiry: "", side: "PE", filter: "all", search: "", statement: "consolidated", scenario: { spot: "", horizon: "", iv: "", shift: 0, rate: 6, dividend: 0, basis: "constant", base: "" }, result: null, resultAt: null, reduction: null, compare: { leg: "", lots: 1, costs: 0 }, advanced: false, hedges: null, hedgesAt: null, hedgeDraft: null, pattern: null, patternWindow: 20, patternForward: 10, aiMode: "copilot", question: "Explain the position, expiry gaps, quote reliability and evidence that needs review.", share: true, ai: null, pendingAI: null, aiError: "", aiConfigured: false, model: "", finbert: { state: "not_installed" }, sentiments: {} };
   function native(name, ...args) {
     if (typeof (N == null ? void 0 : N[name]) === "function") return N[name](...args);
     if (!["ready", "finbertStatus"].includes(name)) toast("Available in the installed Android app.");
@@ -8307,7 +8412,12 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   function isBookConfirmed() {
     return I.isBookConfirmed(book);
   }
+  function clearCalculationOutput() {
+    document.querySelectorAll("[data-calculation-output]").forEach((el) => el.remove());
+  }
   function invalidateCalculations() {
+    clearCalculationOutput();
+    ui.reduction = null;
     ui.result = null;
     ui.resultAt = null;
     ui.hedges = null;
@@ -8345,6 +8455,43 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
       toast("Market cache could not be saved; your portfolio is stored separately.");
     }
   }
+  let reviewBaseline = null, reviewCurrent = null, reviewCaptured = false, reviewSaveFailed = false, hiddenAt = null;
+  function beginReview() {
+    var _a2, _b2;
+    let cached = null;
+    try {
+      if (N == null ? void 0 : N.cacheGet) {
+        const r = JSON.parse(N.cacheGet("snapshot:review"));
+        cached = r.ok ? (_a2 = r.data) == null ? void 0 : _a2.current : null;
+      } else cached = (_b2 = JSON.parse(localStorage.getItem("hal_review_v4") || "null")) == null ? void 0 : _b2.current;
+    } catch (_) {
+    }
+    reviewCurrent = W.latestReview([cached]);
+    reviewBaseline = W.latestReview([reviewCurrent, ...book.checkpoints]);
+    reviewCaptured = false;
+    reviewSaveFailed = false;
+  }
+  function captureReview() {
+    if (reviewCaptured || reviewSaveFailed || storageError || ui.screen !== "today" || document.visibilityState === "hidden" || s.cached) return;
+    const input2 = evidence();
+    if (!W.canCaptureReview(input2)) return;
+    const current = I.checkpoint(input2), payload = JSON.stringify({ version: 1, current });
+    try {
+      if (N == null ? void 0 : N.cachePut) {
+        const r = JSON.parse(N.cachePut("snapshot:review", payload));
+        if (!r.ok) throw Error();
+      } else localStorage.setItem("hal_review_v4", payload);
+      reviewCurrent = current;
+      reviewCaptured = true;
+    } catch (_) {
+      reviewSaveFailed = true;
+      toast("This review could not be saved. Your positions are unaffected.");
+    }
+  }
+  function resumeReview(awayMs) {
+    if (E.finite(awayMs) && awayMs >= 3e5 || hiddenAt !== null && Date.now() - hiddenAt >= 3e5) beginReview();
+    hiddenAt = null;
+  }
   const market = () => D.market(s), ledger = () => E.ledger(book, market()), risk = () => {
     const r = E.risk(book, market());
     if (book.legs.length && !isBookConfirmed() && !r.warnings.some((w) => w.code === "unconfirmed")) r.warnings.push({ code: "unconfirmed", title: "Confirm your book", detail: "Check these positions against your broker records." });
@@ -8361,7 +8508,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   function evidence() {
     return { book, valuation: ledger(), risk: risk(), market: market(), technical: technical(), fundamentals: I.providerFundamentals(D.packet(s, "fundamentals", "D", ui.statement)), news: news(), scenarios: ui.result && !Array.isArray(ui.result) ? [ui.result] : [], funding: book.funding };
   }
-  const checkpoint = () => I.checkpoint(evidence()), changes = () => I.changes(book.checkpoints.at(-1), checkpoint(), news());
+  const checkpoint = () => I.checkpoint(evidence()), changes = () => I.changes(reviewBaseline, checkpoint(), news());
   function request(section, frame = "D", force = false) {
     if (!configured && section !== "filings") return;
     const k = D.key(section, frame, ui.statement), h = s.health[k] || {}, ttl = section === "fundamentals" ? 216e5 : ["candles", "patterns", "news", "filings"].includes(section) ? 9e5 : 6e4;
@@ -8385,6 +8532,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   function navigate(screen, sub) {
     ui.screen = screen;
     if (sub) ui[screen] = sub;
+    if (screen === "today") captureReview();
     render();
     window.scrollTo(0, 0);
     if (screen === "research") {
@@ -8403,21 +8551,24 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   }
   function changeView() {
     const c = changes();
-    return c.ready ? '<p class="fine">Since '.concat(esc(when(c.from)), '</p><div class="metrics">').concat(tile("Spot change", money(c.spot))).concat(tile("Open P&L change", money(c.open), c.sameBook ? "Same book" : "Book changed"), '</div><p class="fine">').concat(esc(c.reason), "</p>") : empty("No comparison checkpoint", c.reason);
+    if (!c.ready) return '<p class="fine">'.concat(reviewCaptured ? "Your first review is saved. Your next visit will compare with this observation." : "Load current prices for every leg to begin. Reviews save automatically while Today is open.", "</p>");
+    return '<p class="fine">Compared with '.concat(esc(when(c.from)), '</p><div class="metrics">').concat(tile("HAL price change", money(c.spot))).concat(tile("Open P&L change", money(c.open), c.sameBook ? "Same recorded position" : "Position changed"), '</div><p class="fine">').concat(esc(c.reason), "</p>");
   }
   function articleCards(list, limit = 30) {
     return list.slice(0, limit).map((n) => {
       var _a2;
-      return '<article class="news-item"><div class="news-meta"><span>'.concat(esc(n.source || "Unknown source")).concat(n.official ? " \xB7 Official filing" : "", "</span><span>").concat(esc(when(n.publishedAt)), "</span></div><h3>").concat(esc(n.title), "</h3>").concat(n.summary ? "<p>" + esc(n.summary) + "</p>" : "").concat(((_a2 = n.duplicates) == null ? void 0 : _a2.length) ? badge(n.duplicates.length + " duplicates grouped") : "").concat(ui.sentiments[n.url] ? badge("FinBERT " + ui.sentiments[n.url].label + " " + pct(ui.sentiments[n.url].confidence * 100)) : "", '<div class="toolbar">').concat(n.url ? btn("link", "Read source", 'data-url="'.concat(esc(n.url), '" class="text-button"')) + btn("bookmark", book.bookmarks.some((b) => b.url === n.url) ? "Saved" : "Save", 'data-url="'.concat(esc(n.url), '" class="text-button"')) : badge("Link unavailable"), '</div><p class="fine">Retrieved ').concat(esc(when(n.retrievedAt)), "</p></article>");
+      return '<article class="news-item"><div class="news-meta"><span>'.concat(esc(n.source || "Unknown source")).concat(n.official ? " \xB7 Official filing" : "", "</span><span>").concat(esc(when(n.publishedAt)), "</span></div><h3>").concat(esc(n.title), "</h3>").concat(n.summary ? "<p>" + esc(n.summary) + "</p>" : "").concat(((_a2 = n.duplicates) == null ? void 0 : _a2.length) ? badge(n.duplicates.length + " duplicates grouped") : "").concat(ui.sentiments[n.url] ? badge("FinBERT " + ui.sentiments[n.url].label + " " + pct(ui.sentiments[n.url].confidence * 100)) : "", '<div class="toolbar">').concat(n.url ? btn("link", "Read source", 'data-url="'.concat(esc(n.url), '" class="text-button"')) + btn("explain-news", "Explain", 'data-url="'.concat(esc(n.url), '" class="text-button"')) + btn("bookmark", book.bookmarks.some((b) => b.url === n.url) ? "Saved" : "Save", 'data-url="'.concat(esc(n.url), '" class="text-button"')) : badge("Link unavailable"), '</div><p class="fine">Retrieved ').concat(esc(when(n.retrievedAt)), "</p></article>");
     }).join("") || empty("No verified news loaded", "Refresh when connected. Absence from a feed does not prove that no event occurred.");
   }
+  function strategySummary(m, compact = false) {
+    const x = W.strategy(book, m), r = x.risk, l = x.valuation;
+    return '<p class="strategy-sentence">'.concat(esc(x.explanation), "</p>") + '<div class="metrics">'.concat(tile("Protection entry cost", money(l.openPutPremium), "Premium paid for open puts")).concat(tile("Next put expiry", date(x.nextPutExpiry), x.afterProtection ? num(x.afterProtection.uncoveredUnits, 0) + " futures units uncovered after expiry" : "No active put protection"), "</div>") + (compact ? "" : '<div class="protection-list">'.concat(x.puts.map((p) => '<div class="owned-put"><div><b>\u20B9'.concat(num(p.strike, 0), " put</b><small>Until ").concat(date(p.expiry), "</small></div><span>").concat(num(p.units, 0), " units</span></div>")).join(""), "</div>")) + '<p class="fine">'.concat(esc(x.caveat), "</p>");
+  }
   function today(m, l, r) {
-    var _a2, _b2, _c, _d;
-    const q = E.quoteQuality(m.spot), delta = E.finite(m.spot.price) && E.finite(m.spot.previousClose) ? m.spot.price - m.spot.previousClose : null, shocks = [0, -0.03, -0.05, -0.1].map((x) => {
-      const p = E.scenario(book, m, { spot: E.finite(m.spot.price) ? m.spot.price * (1 + x) : null, days: 0 });
-      return [x ? pct(x * 100) : "Unchanged", money(p.total), p.complete ? "Model estimate" : p.errors[0]];
-    });
-    return intro("Your position, in focus.", "Exposure, protection and the evidence worth reviewing.") + '<div class="columns"><section class="card hero"><div class="hero-header"><span class="eyebrow">Indicative open P&L</span>'.concat(badge(l.manual ? "Manual marks included" : l.stale ? "Older REST marks" : l.complete ? "All marks available" : "Incomplete", l.manual ? "manual" : l.stale ? "stale" : ""), '</div><div class="hero-value ').concat(color(l.open), '">').concat(book.legs.length ? money(l.open) : "No open book", '</div><p class="fine">').concat(book.legs.length ? l.complete ? book.legs.length + " saved legs \xB7 not a broker account balance" : "One or more required marks are unavailable." : "Record and confirm your actual holdings. No example positions are preloaded.", '</p><div class="hero-footer"><div><small>Recorded realised</small><strong>').concat(money(l.realized), "</strong></div><div><small>Net strategy P&L</small><strong>").concat(money(l.net), "</strong></div></div></section>").concat(card("HAL \xB7 NSE", '<div class="hero-value">'.concat(money(m.spot.price), '</div><p class="').concat(color(delta), '">').concat(money(delta), " daily change \xB7 ").concat(badge(q.status, q.status), '</p><p class="fine">Quote ').concat(esc(when(m.spot.quoteAt)), "<br>Trade ").concat(esc(when(m.spot.tradeAt)), "</p><details><summary>Source & refresh clocks</summary>").concat(clocks(m.spot), "</details>")), '</div><div class="metrics wide">').concat(tile("Futures exposure", num(r.futureUnits, 0) + " shares", num(r.futureLots, 0) + " lots")).concat(tile("Quantity coverage", pct(r.coverage), num(r.putUnits, 0) + " put units")).concat(tile("Net delta", num(r.delta), "Only with complete valid Greeks")).concat(tile("Nearest expiry", date(r.nextExpiry)), '</div><div class="columns">').concat(card("Owned protection", '<p class="fine">'.concat(esc(r.coverageMeaning), '</p><div class="coverage-track"><span style="width:').concat(Math.min(r.coverage || 0, 100), '%"></span></div>').concat(r.distribution.map((p) => '<div class="owned-put"><div><b>\u20B9'.concat(num(p.strike, 0), " PE</b><small>").concat(date(p.expiry), "</small></div><span>").concat(num(p.units, 0), " units</span></div>")).join("") || empty("No active puts")))).concat(card("Review triggers", reviews(r.warnings.slice(0, 5)) || empty("No position triggers")), "</div>").concat(card("Downside shock preview", book.legs.length ? table(["Spot shock", "Entry-based P&L", "Evidence"], shocks) + '<p class="fine">Immediate model shocks; current IV and observed futures basis. Excludes journal charges and realised history. Missing inputs remain unavailable.</p>' : empty("Record your position first"), btn("go-stress", "Explore", 'class="text-button"')), '<div class="columns">').concat(card("Since your last review", changeView(), btn("checkpoint", "Save checkpoint", 'class="text-button"'))).concat(card("Market context", row("NIFTY 50", money((_a2 = m.nifty) == null ? void 0 : _a2.price)) + row("India VIX", num((_b2 = m.vix) == null ? void 0 : _b2.price)) + '<p class="fine">' + esc(when((_c = m.nifty) == null ? void 0 : _c.quoteAt)) + " \xB7 " + esc(when((_d = m.vix) == null ? void 0 : _d.quoteAt)) + "</p>", btn("health", "Data health", 'class="text-button"')), "</div>").concat(card("Business & news", articleCards(news(), 3), btn("go-news", "All news", 'class="text-button"')));
+    var _a2, _b2;
+    const q = E.quoteQuality(m.spot), daily = E.finite(m.spot.price) && E.finite(m.spot.previousClose) ? m.spot.price - m.spot.previousClose : null;
+    const next = W.priority(evidence(), configured), c = changes(), recent = (c.ready ? c.newNews : news()).slice(0, 1);
+    return intro("Your daily HAL review", "What changed. What it means for your position. What to review next.") + '<div class="price-ribbon"><div><span class="eyebrow">HAL \xB7 NSE</span><strong>'.concat(money(m.spot.price), '</strong></div><div class="price-change ').concat(color(daily), '">').concat(money(daily), " today").concat(badge(q.status, q.status), "</div></div>") + (!book.legs.length ? card("Start with your actual position", '<p>Connect prices, record your futures and puts, then review them together.</p><ol class="setup-steps"><li>'.concat(configured ? "Prices connected" : btn("connection", "Connect Upstox"), "</li><li>").concat(btn("add", "Add first position", 'class="primary"'), '</li><li>Confirm the entries against your broker.</li></ol><p class="fine">You can record positions offline. No example holdings are added.</p>')) : "") + '<div class="daily-grid"><section class="card hero daily-position"><span class="eyebrow">Your combined position</span><div class="hero-value '.concat(color(l.open), '">').concat(book.legs.length ? money(l.open) : "No open book", '</div><p class="fine">Indicative open P&L \xB7 ').concat(l.manual ? "manual marks included" : l.stale ? "older prices" : l.complete ? "all marks available" : "missing contract prices", '</p><p class="fine">Strategy net <strong>').concat(money(l.net), "</strong> \xB7 includes recorded realised P&amp;L and charges</p>").concat(btn("go-book", "View my position \u2192", 'class="text-button"'), "</section>") + '<section class="card next-review"><span class="eyebrow">Next review</span><h2>'.concat(esc(next.title), "</h2><p>").concat(esc(next.detail), "</p>").concat(btn(next.action, next.label, 'class="primary"')).concat(book.legs.length ? btn("explain-position", "Explain my protection", 'class="text-button"') : "", "</section></div>") + card("Since your last visit", changeView()) + card("Explore your next decision", '<div class="question-grid">'.concat(btn("quick-fall", "If HAL falls 5% \u2192")).concat(btn("quick-expiry", "When my first put expires \u2192")).concat(btn("go-compare", "Reduce exposure or change protection \u2192"), "</div>")) + card(c.ready ? "New evidence to review" : "Latest HAL evidence", c.ready && !recent.length ? empty("No new items in the loaded feed", "Open Business review for existing evidence and upcoming events.") : articleCards(recent, 1), btn("go-company", "Business review \u2192", 'class="text-button"')) + '<details class="card disclosure"><summary>Protection, market context & source times</summary>'.concat(strategySummary(m, true)).concat(row("Futures exposure", num(r.futureUnits, 0) + " units")).concat(row("Net delta", num(r.delta))).concat(row("NIFTY 50", money((_a2 = m.nifty) == null ? void 0 : _a2.price))).concat(row("India VIX", num((_b2 = m.vix) == null ? void 0 : _b2.price))).concat(clocks(m.spot)).concat(btn("health", "Check all feeds", 'class="text-button"'), "</details>");
   }
   function contractHelp(leg, m) {
     const candidates = m.contracts.filter((c) => c.type === leg.type && (leg.type !== "PE" || c.strike === leg.strike));
@@ -8438,22 +8589,44 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
       })) + '<p class="fine">Observed spread, not a rollover plan or funding projection.</p>');
     }
     if (ui.position === "journal") body = card("Funding snapshot", row("Recorded margin", money(book.funding.margin)) + row("Recorded available funds", money(book.funding.free)) + row("Time", when(book.funding.at)) + '<p class="fine">Manual snapshot; broker margin can change. No account-fund access.</p>', btn("funding", "Update", 'class="text-button"')) + '<div class="toolbar">'.concat(btn("cash", "Record fee / cash", 'class="primary"')).concat(btn("csv", "Journal CSV")).concat(btn("export", "JSON backup")).concat(btn("import", "Import")).concat(btn("recovery", "Previous book"), "</div>") + card("Completed history", book.journal.slice().reverse().map((j) => '<article class="news-item"><strong>'.concat(esc(j.kind === "close" ? "Completed " + j.leg.type + " close" : j.kind), "</strong><small> \xB7 ").concat(date(j.date), "</small>").concat(j.kind === "close" ? row(j.leg.lots + " \xD7 " + j.leg.lotSize + " \xB7 " + date(j.leg.expiry), money((j.exit - j.leg.entry) * E.units(j.leg))) + row("Exit / charges", money(j.exit) + " / " + money(j.fees)) : row("Amount", money(j.amount)), '<p class="fine">').concat(esc(j.note), "</p>").concat(btn("journal-edit", "Correct record", 'data-id="'.concat(esc(j.id), '" class="text-button"')), "</article>")).join("") || empty("No recorded closes")) + (book.legacy ? card("Preserved legacy history", row("Realised", money(book.legacy.realized)) + row("Costs", money(book.legacy.costs)) + table(["Date", "Kind", "Amount", "Note"], book.legacy.journal.map((j) => [j.date, j.kind, money(j.amount), j.note]))) : "");
+    if (ui.position === "book" && book.legs.length) body = card("Your strategy together", strategySummary(m) + '<div class="toolbar">'.concat(btn("go-compare", "Compare an adjustment", 'class="primary"')).concat(btn("explain-position", "Explain protection", 'class="text-button"'), "</div>")) + body;
     return intro("My Position", "Your exact contracts and complete local record.") + subnav("position", [["book", "Book"], ["performance", "Performance"], ["risk", "Risk"], ["journal", "Journal & Funding"]]) + body;
   }
   function scenarioView(r) {
     if (Array.isArray(r)) return card("Sampled scenarios", table(["Shock", "Spot", "P&L", "Quality"], r.map((x) => [pct(x.shock * 100), money(x.spot), money(x.total), x.complete ? x.kind : x.errors.join("; ")])));
     return card(r.complete ? "Scenario results" : "Scenario unavailable", '<div class="hero-value '.concat(color(r.total), '">').concat(money(r.total), '</div><p class="fine">').concat(esc(r.kind), " \xB7 ").concat(when(r.horizon), "</p>").concat(r.complete ? table(["Contract", "Model price", "Units", "P&L", "Valuation"], r.rows.map((x) => [x.leg.type === "FUT" ? "Future" : num(x.leg.strike) + " PE", money(x.modelPrice), x.units, money(x.pnl), x.kind])) : reviews(r.errors.map((e) => ({ title: "Input needs review", detail: e }))), "<details><summary>Assumptions</summary>").concat(r.assumptions.map((a) => '<p class="fine">' + esc(a) + "</p>").join(""), "</details>"));
   }
+  function advancedAssumptions(p) {
+    return '<details id="scenario-advanced" '.concat(ui.advanced ? "open" : "", '><summary>Advanced assumptions</summary><div class="form-grid">').concat(input("sc-iv", "Explicit IV assumption (%) \xB7 optional", p.iv)).concat(input("sc-shift", "IV shift (percentage points)", p.shift)).concat(input("sc-rate", "Interest rate (% annual)", p.rate)).concat(input("sc-dividend", "Dividend yield (% annual)", p.dividend)).concat(select("sc-basis", "Futures basis", [["constant", "Observed constant basis"], ["decay", "Basis decays to expiry"], ["carry", "Theoretical cost of carry"]], p.basis)).concat(input("sc-base", "Manual base spot \xB7 optional", p.base), "</div></details>");
+  }
+  function scenarioInputs(m) {
+    var _a2;
+    const p = ui.scenario;
+    return '<div class="form-grid">'.concat(input("sc-spot", "HAL price to explore (\u20B9)", (_a2 = E.value(p.spot)) != null ? _a2 : m.spot.price)).concat(input("sc-horizon", "On date \xB7 blank means now", p.horizon, "date"), "</div>").concat(advancedAssumptions(p), '<p class="fine">Uses observed futures basis and valid provider IV when available. Rate ').concat(esc(p.rate), "%, dividend ").concat(esc(p.dividend), "%, IV shift ").concat(esc(p.shift), " points. Open Advanced assumptions to review or supply missing IV.</p>");
+  }
+  function stressPlanner(m) {
+    return card("What would this mean for me?", '<div class="question-grid">'.concat(btn("quick-fall", "HAL falls 5%")).concat(btn("quick-expiry", "My first put expires")).concat(btn("quick-flat", "HAL stays at today\u2019s price"), "</div>").concat(scenarioInputs(m), '<div class="toolbar">').concat(btn("scenario", "Calculate outcome", 'class="primary"')).concat(btn("shock-grid", "Compare 0 / \u22123 / \u22125 / \u221210%"), '</div><p class="fine">The date must be on or before the earliest open-leg expiry. Model estimates use your saved entries; realised history and charges remain separate.</p>')) + (ui.result ? '<div data-calculation-output><p class="fine">Calculated ' + esc(when(ui.resultAt)) + " with these assumptions.</p>" + scenarioView(ui.result) + "</div>" : empty("Choose a question to begin", "You can adjust the price and date before calculating."));
+  }
+  function comparisonPlanner(m) {
+    const futures = book.legs.filter((l) => l.type === "FUT"), chosen = futures.find((l) => l.id === ui.compare.leg) || futures[0], c = ui.reduction;
+    return card("Keep my position or reduce exposure?", "<p>Compare the change from current marks at the same HAL price and date. Existing puts remain held.</p>".concat(scenarioInputs(m), '<div class="form-grid">').concat(select("compare-leg", "Future to reduce", futures.map((l) => [l.id, date(l.expiry) + " \xB7 " + l.lots + " lots"]), chosen == null ? void 0 : chosen.id)).concat(input("compare-lots", "Lots to reduce", ui.compare.lots)).concat(input("compare-costs", "Exit charges + slippage (\u20B9)", ui.compare.costs), "</div>").concat(btn("compare-reduction", "Compare outcomes", 'class="primary"'), '<p class="fine">The exit reference is the current mark. Add your estimated execution costs; a zero estimate excludes them.</p>')) + (c ? "<div data-calculation-output>" + card("Additional P&L from now", '<div class="comparison-results">'.concat(tile("Keep current position", money(c.current.additional), num(c.current.futureUnits, 0) + " futures units")).concat(tile("Reduce by " + num(c.removedUnits, 0) + " units", money(c.alternative.additional), num(c.alternative.futureUnits, 0) + " futures units \xB7 " + num(c.alternative.putUnits, 0) + " put units retained"), "</div>").concat(c.complete ? row("Difference with reduction", money(c.difference)) : reviews([.../* @__PURE__ */ new Set([...c.current.errors, ...c.alternative.errors])].map((detail) => ({ title: "Comparison needs an input", detail }))), '<p class="fine">Horizon ').concat(when(c.current.horizon), " \xB7 ").concat(c.current.manual || c.alternative.manual ? "Manual marks included. " : "").concat(c.current.stale || c.alternative.stale ? "Older marks included. " : "", "Estimated exit costs ").concat(money(c.exitCosts), ".</p><details><summary>How to read this comparison</summary>").concat(c.assumptions.map((a) => '<p class="fine">' + esc(a) + "</p>").join(""), "</details>")) + "</div>" : "") + card("Compare a different protective put", "<p>Use listed contracts to compare your current hedge with replacement protection, including premium, sale proceeds and liquidity.</p>".concat(btn("go-hedge", "Find replacement protection \u2192", 'class="text-button"')));
+  }
   function plan(m) {
-    var _a2, _b2, _c;
+    var _a2, _b2;
     let body;
     const p = ui.scenario, h = ui.hedgeDraft || book.hedge;
-    if (ui.plan === "stress") body = card("Multi-leg stress test", '<p class="fine">A horizon after the earliest open-leg expiry is invalid. A later hypothetical spot cannot establish an earlier settlement.</p><div class="form-grid">'.concat(input("sc-spot", "Scenario spot (\u20B9)", (_a2 = E.value(p.spot)) != null ? _a2 : m.spot.price)).concat(input("sc-horizon", "Horizon \xB7 blank = now", p.horizon, "date")).concat(input("sc-iv", "Explicit IV assumption (%) \xB7 optional", p.iv)).concat(input("sc-shift", "IV shift (percentage points)", p.shift)).concat(input("sc-rate", "Interest rate (% annual)", p.rate)).concat(input("sc-dividend", "Dividend yield (% annual)", p.dividend)).concat(select("sc-basis", "Futures basis", [["constant", "Observed constant basis"], ["decay", "Basis decays to expiry"], ["carry", "Theoretical cost of carry"]], p.basis)).concat(input("sc-base", "Manual base spot \xB7 optional", p.base), '</div><div class="toolbar">').concat(btn("scenario", "Calculate", 'class="primary"')).concat(btn("shock-grid", "Run 0 / \u22123 / \u22125 / \u221210%"), '</div><p class="fine">European Black\u2013Scholes puts; ACT/365. Entered IV, rates and base spot are assumptions. Missing inputs remain unavailable. No model price is an execution quote.</p>')) + (ui.result ? '<p class="fine">Calculated ' + esc(when(ui.resultAt)) + " using the displayed assumptions.</p>" + scenarioView(ui.result) : empty("Choose assumptions to calculate"));
-    else body = card("Find a protective put", '<p class="fine">Compare actual listed HAL puts as replacements for existing puts. Whole lots must exactly cover current futures units. A comparison never changes your saved positions.</p><div class="form-grid">'.concat(input("hg-budget", "Gross purchase budget (\u20B9)", h.budget)).concat(input("hg-loss", "Sampled additional-loss limit (\u20B9)", h.maxLoss)).concat(input("hg-through", "Protection-through date", h.protectThrough, "date")).concat(input("hg-spread", "Maximum bid/ask spread (%)", h.maxSpread), '</div><details><summary>Costs, liquidity & model assumptions</summary><div class="form-grid">').concat(input("hg-buy", "Buy charges (\u20B9)", h.buyFees)).concat(input("hg-exit", "Exit charges (\u20B9)", h.exitFees)).concat(input("hg-slip", "Slippage each side (%)", h.slippage)).concat(input("hg-iv", "IV shift (percentage points)", h.ivShift)).concat(input("hg-rate", "Interest (% annual)", h.rate)).concat(input("hg-dividend", "Dividend (% annual)", h.dividend)).concat(input("hg-volume", "Minimum volume (units)", (_b2 = h.minVolume) != null ? _b2 : 1)).concat(input("hg-oi", "Minimum OI (units)", (_c = h.minOI) != null ? _c : 1), '</div></details><div class="toolbar">').concat(btn("hedge-fetch", "Save & fetch puts", 'class="primary"')).concat(btn("hedge-rank", "Compare available quotes"), '</div><p class="fine">Fresh quote/trade clocks, contract specifications, liquidity and valid Greeks are required. No qualifying contract is a valid result.</p>')) + (ui.hedges ? '<p class="fine">Compared '.concat(esc(when(ui.hedgesAt)), '. Refresh or edit assumptions to recalculate.</p><div class="columns">').concat([["lowerCost", "Lower Cost"], ["balanced", "Balanced"], ["strongerProtection", "Stronger Protection"]].map(([k, title]) => {
+    if (ui.plan === "stress") body = stressPlanner(m);
+    else if (ui.plan === "compare") body = comparisonPlanner(m);
+    else if (ui.plan === "hedge") body = card("Find a protective put", '<p class="fine">Compare actual listed HAL puts as replacements for existing puts. Whole lots must exactly cover current futures units. A comparison never changes your saved positions.</p><div class="form-grid">'.concat(input("hg-budget", "Gross purchase budget (\u20B9)", h.budget)).concat(input("hg-loss", "Sampled additional-loss limit (\u20B9)", h.maxLoss)).concat(input("hg-through", "Protection-through date", h.protectThrough, "date")).concat(input("hg-spread", "Maximum bid/ask spread (%)", h.maxSpread), '</div><details><summary>Costs, liquidity & model assumptions</summary><div class="form-grid">').concat(input("hg-buy", "Buy charges (\u20B9)", h.buyFees)).concat(input("hg-exit", "Exit charges (\u20B9)", h.exitFees)).concat(input("hg-slip", "Slippage each side (%)", h.slippage)).concat(input("hg-iv", "IV shift (percentage points)", h.ivShift)).concat(input("hg-rate", "Interest (% annual)", h.rate)).concat(input("hg-dividend", "Dividend (% annual)", h.dividend)).concat(input("hg-volume", "Minimum volume (units)", (_a2 = h.minVolume) != null ? _a2 : 1)).concat(input("hg-oi", "Minimum OI (units)", (_b2 = h.minOI) != null ? _b2 : 1), '</div></details><div class="toolbar">').concat(btn("hedge-fetch", "Save & fetch puts", 'class="primary"')).concat(btn("hedge-rank", "Compare available quotes"), '</div><p class="fine">Fresh quote/trade clocks, contract specifications, liquidity and valid Greeks are required. No qualifying contract is a valid result.</p>')) + (ui.hedges ? '<p class="fine">Compared '.concat(esc(when(ui.hedgesAt)), '. Refresh or edit assumptions to recalculate.</p><div class="columns">').concat([["lowerCost", "Lower Cost"], ["balanced", "Balanced"], ["strongerProtection", "Stronger Protection"]].map(([k, title]) => {
       const c = ui.hedges.rankings[k];
       return card(title, c ? "<h3>\u20B9".concat(num(c.contract.strike, 0), " PE \xB7 ").concat(date(c.contract.expiry), "</h3>").concat(row("Gross purchase", money(c.grossCost))).concat(row("Sampled worst loss", money(c.worstLoss))).concat(row("Net cash required", money(c.netCashRequired))).concat(c.expiryGap ? '<p class="warning fine">Protection ends before the last futures expiry.</p>' : "").concat(btn("hedge-detail", "Inspect comparison", 'data-id="'.concat(esc(c.contract.instrumentKey), '" class="text-button"'))) : empty("No qualifying candidate"));
     }).join(""), "</div>").concat(card("Eligibility & ranking", reviews(ui.hedges.errors.map((e) => ({ title: "No forced recommendation", detail: e }))) + "<details><summary>Excluded contracts (".concat(ui.hedges.excluded.length, ")</summary>").concat(table(["Strike", "Expiry", "Reason"], ui.hedges.excluded.map((c) => [c.contract.strike, date(c.contract.expiry), c.reasons.join("; ")])), "</details><details><summary>Ranking method</summary>").concat(ui.hedges.assumptions.map((x) => '<p class="fine">' + esc(x) + "</p>").join(""), "</details>"))) : empty("No comparison requested", "Sampled worst loss is not a guaranteed maximum loss."));
-    return intro("Plan with evidence", "Understand the assumptions behind every comparison.") + subnav("plan", [["stress", "Stress Test"], ["hedge", "Find a Hedge"]]) + body;
+    return intro("Explore your options", "Start with a question. Compare outcomes before making a decision.") + subnav("plan", [["stress", "What if?"], ["compare", "Compare"], ["hedge", "Find a Hedge"]]) + body;
+  }
+  function businessBoard() {
+    const b = W.businessReview(book.notes, news());
+    const note = (n) => '<article class="business-note"><div class="news-meta"><span>User-entered evidence</span><span>'.concat(date(n.date), "</span></div><h3>").concat(esc(n.title), "</h3><p>").concat(esc(n.text), '</p><div class="toolbar">').concat(n.url ? btn("link", "Source", 'data-url="'.concat(esc(n.url), '" class="text-button"')) : badge("Source link needed")).concat(btn("note-edit", "Edit note", 'data-id="'.concat(esc(n.id), '" class="text-button"')), "</div></article>");
+    return card("HAL business review", "<p>Track the evidence behind your thesis. Headlines and your notes are grouped by topic; these groups do not establish a business trend.</p>".concat(btn("note", "Add sourced evidence", 'class="primary"'))) + card("Upcoming events", b.events.length ? b.events.map((n) => '<div class="event-row"><span>'.concat(date(n.eventDate), "</span><div><strong>").concat(esc(n.title), "</strong><small>User-entered event</small></div>").concat(btn("note-edit", "Review", 'data-id="'.concat(esc(n.id), '" class="text-button"')), "</div>")).join("") : empty("No upcoming events recorded", "Add a source and event date when a results release or delivery milestone is confirmed.")) + '<div class="business-grid">'.concat(b.drivers.map((d) => card(d.title, '<p class="driver-question">'.concat(esc(d.question), "</p>").concat(d.notes.map(note).join("")).concat(d.articles.length ? articleCards(d.articles, 2) : "").concat(!d.notes.length && !d.articles.length ? empty("Evidence to collect", "Save a filing or add a sourced note for this business driver.") : ""))).join(""), "</div>");
   }
   function facts(v, path = "", out = []) {
     if (out.length >= 120) return out;
@@ -8484,6 +8657,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
         return "<details><summary>".concat(v).concat(fund[k] ? "" : " \xB7 unavailable", "</summary>").concat(fund[k] ? table(["Provider field / period", "Reported value"], facts(fund[k])) : empty("Unavailable", D.message(((_a3 = p == null ? void 0 : p.errors) == null ? void 0 : _a3[k]) || "No verified data loaded")), "</details>");
       }).join(""), '<a href="https://upstox.com/developer/api-documentation/fundamentals/">Source documentation</a>')) + card("Business notes & events", book.notes.map((n) => '<article class="news-item">'.concat(badge("User-entered note"), "<h3>").concat(esc(n.title), "</h3><p>").concat(esc(n.text), '</p><p class="fine">').concat(esc(n.category), " \xB7 ").concat(date(n.date), " \xB7 Event ").concat(date(n.eventDate), "</p>").concat(n.url ? btn("link", "Source", 'data-url="'.concat(esc(n.url), '" class="text-button"')) : "").concat(btn("note-edit", "Edit", 'data-id="'.concat(esc(n.id), '" class="text-button"')), "</article>")).join("") || empty("No business notes", "Record verified order backlog, execution progress and guidance with source links."), btn("note", "Add note", 'class="text-button"'));
     }
+    if (ui.research === "company") body = businessBoard() + '<details class="card disclosure"><summary>Financial statements, indicators & all notes</summary>' + body + "</details>";
     if (ui.research === "news") {
       let list = ui.filter === "saved" ? book.bookmarks.map((n) => ({ ...n, publishedAt: n.published })) : news();
       if (ui.filter === "official") list = list.filter((n) => n.official);
@@ -8494,7 +8668,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     }
     if (ui.research === "insights") body = card("Change since review", changeView(), btn("checkpoint", "Save checkpoint", 'class="text-button"')) + card("Skills Coach", reviews(I.coach(evidence()))) + card("Historical pattern scanner", '<p class="fine">Normalized return-distance comparison of completed, non-overlapping windows. Sample outcomes are descriptive, not predictive probabilities or backtested trading signals.</p><div class="form-grid">'.concat(input("pattern-window", "Pattern window (sessions)", ui.patternWindow)).concat(input("pattern-forward", "Outcome horizon (sessions)", ui.patternForward), '</div><div class="toolbar">').concat(btn("patterns-load", "Load history")).concat(btn("patterns", "Compare", 'class="primary"'), "</div>").concat(ui.pattern ? '<p class="fine">' + esc(ui.pattern.reason || ui.pattern.metric) + "</p>" + table(["Pattern ended", "Distance \u2193", "Later return"], (ui.pattern.matches || []).map((x) => [when(x.to), num(x.distance, 4), pct(x.outcome)])) + (ui.pattern.summary ? table(["Samples", "Median", "Worst / best"], [[ui.pattern.sampleCount, pct(ui.pattern.summary.median), pct(ui.pattern.summary.min) + " / " + pct(ui.pattern.summary.max)]]) : "") : empty("No scan requested")));
     if (ui.research === "ai") body = card("Evidence-grounded AI Desk", '<p class="fine">Optional Gemini directly from Android. Your own API key and Google quota apply. Local deterministic calculations remain authoritative.</p>'.concat(row("Connection", ui.aiConfigured ? "Configured \xB7 " + ui.model : "Disabled / no API key")).concat(btn("ai-settings", "Manage key")).concat(select("ai-mode", "Workspace", [["copilot", "Position Copilot"], ["deliberate", "Six-Perspective Research"], ["research", "Research Assistant"]], ui.aiMode), '<label><input id="ai-share" type="checkbox" ').concat(ui.share ? "checked" : "", " ").concat(ui.aiMode === "research" ? "disabled" : "", '>Include position evidence</label><label>Question<textarea id="ai-question" maxlength="2000">').concat(esc(ui.question), '</textarea></label><p class="fine">Research Assistant always excludes your portfolio. Credentials, private journal memos and business-note text are excluded.</p><div class="toolbar">').concat(btn("ai-review", "Review exact evidence", 'class="primary"' + (ui.pendingAI ? " disabled" : ""))).concat(ui.pendingAI ? btn("ai-cancel", "Cancel request") : "", '</div><p class="warning">').concat(esc(ui.aiError || (ui.pendingAI ? "Waiting for Gemini\u2026" : "")), "</p>")) + (ui.ai ? card(I.canUseAnswer(ui.ai, book) ? "AI interpretation" : "Previous conclusion invalidated", I.canUseAnswer(ui.ai, book) ? '<p class="fine">Evidence '.concat(when(ui.ai.evidenceAt), " \xB7 ").concat(ui.ai.portfolioIncluded ? "Position " + esc(ui.ai.bookRevision) : "Portfolio excluded", '</p><div class="ai-output">').concat(esc(ui.ai.reply || ui.ai.text || ui.ai.answer || ui.ai.content || "No text returned"), "</div>") : empty("The position changed", "Review updated evidence and request a new answer.")) : "");
-    return intro("Research", "HAL evidence, with source quality always in view.") + subnav("research", [["markets", "Markets"], ["company", "Company & Analysis"], ["news", "News"], ["insights", "Insights"], ["ai", "AI Desk"]]) + body;
+    return intro("Research", "HAL evidence, with source quality always in view.") + subnav("research", [["markets", "Markets"], ["company", "Business"], ["news", "News"], ["insights", "Insights"], ["ai", "AI Desk"]]) + body;
   }
   function streamView() {
     const x = s.stream;
@@ -8678,7 +8852,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     });
   }
   function settings() {
-    modal("HAL Desk 4.0.2 \xB7 Settings", '<p class="fine">Personal read-only research. Android 8+. Credentials stay encrypted natively; market and AI calls use fixed HTTPS destinations.</p><div class="toolbar">'.concat(btn("connection", "Upstox connection")).concat(btn("ai-settings", "Gemini settings")).concat(btn("token-page", "Get Analytics Token"), "</div>").concat(select("theme", "Appearance", [["dark", "Graphite dark"], ["light", "Paper light"], ["system", "Follow device"]], book.preferences.theme)).concat(select("mark-mode", "Put valuation marks", [["ltp", "Last traded price"], ["bid", "Quoted bid"]], book.preferences.markMode), '<label><input id="auto-refresh" type="checkbox" ').concat(book.preferences.auto ? "checked" : "", '>Refresh roughly every 60 seconds while foreground</label><p class="fine">Android background monitoring is not guaranteed. No automatic paid AI requests occur.</p><div class="toolbar">').concat(btn("export", "Export JSON")).concat(btn("csv", "Journal CSV")).concat(btn("import", "Import backup")).concat(btn("recovery", "Recovery")).concat(btn("health", "Data health"), "</div>"), "Save preferences", () => commit({ ...book, preferences: { theme: text("theme"), markMode: text("mark-mode"), auto: $("auto-refresh").checked } }));
+    modal("HAL Desk 4.1.0 \xB7 Settings", '<p class="fine">Personal read-only research. Android 8+. Credentials stay encrypted natively; market and AI calls use fixed HTTPS destinations.</p><div class="toolbar">'.concat(btn("connection", "Upstox connection")).concat(btn("ai-settings", "Gemini settings")).concat(btn("token-page", "Get Analytics Token"), "</div>").concat(select("theme", "Appearance", [["dark", "Graphite dark"], ["light", "Paper light"], ["system", "Follow device"]], book.preferences.theme)).concat(select("mark-mode", "Put valuation marks", [["ltp", "Last traded price"], ["bid", "Quoted bid"]], book.preferences.markMode), '<label><input id="auto-refresh" type="checkbox" ').concat(book.preferences.auto ? "checked" : "", '>Refresh roughly every 60 seconds while foreground</label><p class="fine">Android background monitoring is not guaranteed. No automatic paid AI requests occur.</p><div class="toolbar">').concat(btn("export", "Export JSON")).concat(btn("csv", "Journal CSV")).concat(btn("import", "Import backup")).concat(btn("recovery", "Recovery")).concat(btn("health", "Data health"), "</div>"), "Save preferences", () => commit({ ...book, preferences: { theme: text("theme"), markMode: text("mark-mode"), auto: $("auto-refresh").checked } }));
   }
   function health() {
     modal("Data readiness & connection health", Object.entries(s.health).map(([k, h]) => '<div class="health-row"><div><strong>'.concat(esc(k), "</strong><small>Success ").concat(when(h.lastSuccess), "<br>Failure ").concat(when(h.lastFailure), "</small><small>").concat(esc(h.error ? D.message(h.error) : ""), "</small></div>").concat(badge(h.pending ? "Loading" : h.error ? "Needs review" : h.lastSuccess ? "Retrieved" : "Unavailable", h.error ? "stale" : ""), "</div>")).join("") || empty("No feeds requested"), null, null);
@@ -8700,11 +8874,19 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     const cur = new Map(ui.hedges.current.map((x) => [x.horizon + "|" + x.shock, x.additionalPnl]));
     modal("Current protection vs replacement", "<h3>".concat(c.contract.strike, " PE \xB7 ").concat(date(c.contract.expiry), " \xB7 ").concat(c.lots, " lots</h3>").concat(row("New premium", money(c.newPremium))).concat(row("Buy / exit charges", money(c.buyFees) + " / " + money(c.exitFees))).concat(row("Existing-put sale proceeds", money(c.saleProceeds))).concat(row("Net cash required", money(c.netCashRequired))).concat(row("Spread / slippage", pct(c.spread) + " / " + pct(c.slippage))).concat(table(["Horizon", "Shock", "Current hedge \u0394P&L", "Replacement \u0394P&L"], c.scenarios.map((x) => [when(x.horizon), pct(x.shock * 100), money(cur.get(x.horizon + "|" + x.shock)), money(x.additionalPnl)])), '<p class="fine">Sale proceeds reduce cash required; they are not new investment profit. Sampled worst loss is not guaranteed. Current-hedge comparisons after earlier put expiry are withheld.</p><details><summary>Missing current comparisons</summary>').concat(table(["Horizon", "Reason"], ui.hedges.currentErrors.map((x) => [when(x.horizon), x.reason])), "</details>"), null, null);
   }
-  function aiReview() {
-    if (storageError && ui.aiMode !== "research") throw Error("Recover the saved book before sharing position evidence.");
-    ui.question = text("ai-question");
-    ui.share = $("ai-share").checked;
-    const packet = I.evidencePacket(evidence(), { mode: ui.aiMode, includePortfolio: ui.share }), question = ui.question;
+  function aiReview(context) {
+    if (storageError && ((context == null ? void 0 : context.mode) || ui.aiMode) !== "research") throw Error("Recover the saved book before sharing position evidence.");
+    if (context == null ? void 0 : context.question) {
+      ui.question = context.question;
+      ui.aiMode = context.mode;
+      ui.share = context.mode !== "research";
+    } else {
+      ui.question = text("ai-question");
+      ui.share = $("ai-share").checked;
+    }
+    const input2 = evidence();
+    if (context == null ? void 0 : context.news) input2.news = context.news;
+    const packet = I.evidencePacket(input2, { mode: ui.aiMode, includePortfolio: ui.share }), question = ui.question;
     if (!question.trim()) throw Error("Enter a question.");
     modal("Review evidence sent to Gemini", "<p>".concat(packet.portfolioIncluded ? "Includes the shown positions, valuations, risk and funding snapshot." : "Your portfolio is excluded.", ' Private journal memos, credentials and private notes are excluded.</p><p class="fine">Provider API charges or quota limits may apply. Evidence timestamp ').concat(when(packet.generatedAt), ".</p><pre>").concat(esc(JSON.stringify({ question, evidence: packet }, null, 2)), '</pre><label><input id="ai-consent" type="checkbox">Send this question and exact evidence to Google Gemini.</label>'), "Send to Gemini", () => {
       if (!$("ai-consent").checked) throw Error("Explicit evidence-sharing consent is required.");
@@ -8713,8 +8895,31 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
       ui.ai = null;
       ui.pendingAI = { id, evidence: packet };
       native("ai", JSON.stringify({ id, mode: ui.aiMode, message: question, evidence: packet, consent: true }));
+      ui.screen = "research";
+      ui.research = "ai";
       render();
     });
+  }
+  function quickScenario(kind) {
+    if (!book.legs.length) throw Error("Record your actual open position before modelling.");
+    const m = market();
+    if (!E.finite(m.spot.price)) throw Error("Refresh HAL prices or enter a scenario price in Plan.");
+    readScenario();
+    ui.scenario.spot = m.spot.price * (kind === "fall" ? 0.95 : 1);
+    ui.scenario.horizon = "";
+    if (kind === "expiry") {
+      const puts = book.legs.filter((l) => l.type === "PE" && E.expiryTime(l.expiry) >= Date.now()).sort((a, b) => a.expiry.localeCompare(b.expiry));
+      if (!puts.length) throw Error("No active put expiry to explore. Add your actual protection first.");
+      ui.scenario.horizon = puts[0].expiry;
+    }
+    ui.screen = "plan";
+    ui.plan = "stress";
+    ui.result = E.scenario(book, m, scenarioParams());
+    ui.resultAt = stamp();
+    ui.reduction = null;
+    if (!ui.result.complete) ui.advanced = true;
+    render();
+    window.scrollTo(0, 0);
   }
   const actions = { add: () => legEditor(), edit: (b) => legEditor(b.dataset.id), close: (b) => closeLeg(b.dataset.id), verify: () => {
     request("contracts", "D", true);
@@ -8729,6 +8934,8 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     const c = checkpoint();
     if (!c.quoteAsOf) throw Error("Load a timestamped market observation before saving a checkpoint.");
     commit({ ...book, checkpoints: [...book.checkpoints, c].slice(-5e3) });
+    reviewBaseline = c;
+    render();
     toast("Review checkpoint saved.");
   }, "go-stress": () => navigate("plan", "stress"), "go-news": () => navigate("research", "news"), scenario: () => {
     if (!book.legs.length) throw Error("Record your actual open position before modelling.");
@@ -8781,6 +8988,33 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     const items = news().filter((n) => n.url).slice(0, 12).map((n) => ({ id: n.url, title: n.title.slice(0, 480) }));
     native("finbertScore", JSON.stringify(items));
   } };
+  Object.assign(actions, {
+    "go-book": () => navigate("position", "book"),
+    "go-risk": () => navigate("position", "risk"),
+    "go-company": () => navigate("research", "company"),
+    "go-compare": () => navigate("plan", "compare"),
+    "go-hedge": () => navigate("plan", "hedge"),
+    "retry-prices": () => refresh(),
+    "review-contracts": () => {
+      navigate("position", "book");
+      if (configured) request("contracts", "D", true);
+    },
+    "quick-fall": () => quickScenario("fall"),
+    "quick-flat": () => quickScenario("flat"),
+    "quick-expiry": () => quickScenario("expiry"),
+    "compare-reduction": () => {
+      readScenario();
+      ui.compare = { leg: text("compare-leg"), lots: value("compare-lots"), costs: value("compare-costs") };
+      ui.reduction = W.compareReduction(book, market(), scenarioParams(), ui.compare.leg, ui.compare.lots, ui.compare.costs);
+      if (!ui.reduction.complete) ui.advanced = true;
+      render();
+    },
+    "explain-position": () => aiReview({ mode: "copilot", question: "Explain my combined HAL futures and puts. Describe quantity coverage, strikes, protection expiries and any gaps in plain language. Distinguish recorded facts, model assumptions and missing data. Do not infer a guaranteed loss limit." }),
+    "explain-news": (b) => {
+      const n = news().find((n2) => n2.url === b.dataset.url) || book.bookmarks.find((n2) => n2.url === b.dataset.url);
+      if (n) aiReview({ mode: "research", news: [{ ...n, publishedAt: n.publishedAt || n.published }], question: "Explain this HAL headline and its possible relevance to orders, deliveries, margins or cash flow: " + n.title + ". Use only the supplied headline/summary and sources; identify missing detail and do not claim to have read the full filing." });
+    }
+  });
   document.addEventListener("click", (ev) => {
     var _a2;
     const a = ev.target.closest("a[href]");
@@ -8803,10 +9037,16 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     }
   });
   function rememberInput(id) {
+    if (id.startsWith("sc-") || id.startsWith("compare-")) clearCalculationOutput();
     if (id.startsWith("sc-")) {
       readScenario();
       ui.result = null;
       ui.resultAt = null;
+      ui.reduction = null;
+    }
+    if (id.startsWith("compare-")) {
+      for (const k of ["leg", "lots", "costs"]) if ($("compare-" + k)) ui.compare[k] = text("compare-" + k);
+      ui.reduction = null;
     }
     if (id.startsWith("hg-")) {
       ui.hedgeDraft = { ...ui.hedgeDraft || book.hedge };
@@ -8820,6 +9060,9 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     if (id === "news-search") ui.search = text(id);
     if (id === "ai-question") ui.question = text(id);
   }
+  document.addEventListener("toggle", (ev) => {
+    if (ev.target.id === "scenario-advanced") ui.advanced = ev.target.open;
+  }, true);
   document.addEventListener("input", (ev) => rememberInput(ev.target.id));
   document.addEventListener("change", (ev) => {
     const id = ev.target.id;
@@ -8881,6 +9124,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   function receive(event, data) {
     var _a2, _b2, _c, _d, _e, _f, _g, _h, _i;
     if (event === "lifecycle" && data.state === "resumed") {
+      resumeReview(data.awayMs);
       s.loading = false;
       for (const h of Object.values(s.health)) if (h.pending) {
         h.pending = null;
@@ -8957,6 +9201,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     if (event === "finbert_results") {
       for (const x of data.items || []) if (["positive", "negative", "neutral"].includes(x.label) && E.finite(x.confidence)) ui.sentiments[x.id] = x;
     }
+    if (["snapshot", "research"].includes(event)) captureReview();
     if (!((_i = document.activeElement) == null ? void 0 : _i.matches("main input,main select,main textarea"))) render();
   }
   window.HALApp = { receive, back: () => {
@@ -8990,6 +9235,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   } catch (_) {
     s = D.empty();
   }
+  beginReview();
   if (((_b = s.snapshot) == null ? void 0 : _b.option_expiry) && E.expiryTime(s.snapshot.option_expiry) >= Date.now()) ui.expiry = s.snapshot.option_expiry;
   theme();
   render();
@@ -9007,6 +9253,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   }, 3e4);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") {
+      hiddenAt = Date.now();
       native("streamStop");
       s.loading = false;
       for (const h of Object.values(s.health)) if (h.pending) {
