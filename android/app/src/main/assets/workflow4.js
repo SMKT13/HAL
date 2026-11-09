@@ -85,6 +85,77 @@ function businessReview(notes,articles,now=Date.now()){
   articles:safeNews.filter(n=>d.pattern.test(n.title+' '+(n.summary||''))).slice(0,2)})),
   events:(notes||[]).filter(n=>E.validDate(n.eventDate)&&n.eventDate>=today).slice().sort((a,b)=>a.eventDate.localeCompare(b.eventDate)).slice(0,8)};
 }
-const api={latestReview,canCaptureReview,strategy,priority,compareReduction,businessReview};
+function reviewPeriods(now=Date.now()){
+ const offset=19800000,day=86400000;
+ const local=new Date(now+offset);
+ if(!Number.isFinite(local.getTime()))throw Error('Invalid review clock.');
+ const y=local.getUTCFullYear(),m=local.getUTCMonth(),d=local.getUTCDate();
+ const today=Date.UTC(y,m,d)-offset,week=today-((local.getUTCDay()+6)%7)*day,month=Date.UTC(y,m,1)-offset;
+ const periods=[['since-review','Since previous checkpoint',null,now,true],['day','Previous calendar day',today-day,today,false],['week','Previous week',week-7*day,week,false],['month','Previous month',Date.UTC(y,m-1,1)-offset,month,false],['week-to-date','Week to date',week,now,true],['month-to-date','Month to date',month,now,true]];
+ return periods.map(([id,label,start,end,toDate])=>({id,label,start:start===null?null:new Date(start).toISOString(),end:new Date(end).toISOString(),toDate}));
+}
+
+function reviewSummary(input,checkpoints,period='since-review',now=Date.now()){
+ const bounds=reviewPeriods(now).find(p=>p.id===period);
+ if(!bounds)throw Error('Choose a supported review period.');
+ const saved=(checkpoints||[]).filter(c=>c?.version===4&&typeof c.bookRevision==='string'&&Number.isFinite(Date.parse(c.savedAt))&&Date.parse(c.savedAt)<=now).slice().sort((a,b)=>Date.parse(a.savedAt)-Date.parse(b.savedAt));
+ const current=I.checkpoint(input,now),unique=new Map(saved.map(c=>[Date.parse(c.savedAt),c]));
+ if(bounds.toDate)unique.set(now,current);
+ const start=Date.parse(bounds.start),end=Date.parse(bounds.end);
+ const periodPoints=[...unique.values()].filter(c=>{
+   const at=Date.parse(c.savedAt);return (bounds.start===null||at>=start)&&(bounds.toDate?at<=end:at<end);
+ });
+ const since=period==='since-review';
+ const first=since?saved.filter(c=>Date.parse(c.savedAt)<now).slice(-1)[0]:periodPoints[0];
+ const last=since?current:periodPoints[periodPoints.length-1];
+ const newsStart=since?Date.parse(first?.savedAt):start;
+ const articles=[...(input.news||[])];for(const c of periodPoints)articles.push(...(Array.isArray(c.news)?c.news:[]));
+ const uniqueArticles=new Map();
+ for(const n of I.normalizeNews(articles)){
+   const pub=Date.parse(n.publishedAt);
+   if(!n.url||!Number.isFinite(pub)||!(pub>=newsStart)||pub>end||(!bounds.toDate&&pub===end))continue;
+   const key=n.url+'|'+n.publishedAt;if(!uniqueArticles.has(key))uniqueArticles.set(key,n);
+ }
+ const news=I.newsGroups([...uniqueArticles.values()]).slice(0,60);
+ const result={...bounds,period,start:bounds.start||first?.savedAt||null,ready:false,reason:null,completePeriodCoverage:false,
+   from:first?.savedAt||null,to:last?.savedAt||null,fromQuote:first?.quoteAsOf||null,toQuote:last?.quoteAsOf||null,
+   changes:{},summary:[],warnings:[],news,observations:since?(first?2:1):periodPoints.length};
+ if(!first||!last||Date.parse(first.savedAt)>=Date.parse(last.savedAt)){
+   result.reason=since?'Save a checkpoint to compare against a later review.':'Two distinct saved observations in this period are required for a comparison.';
+   return result;
+ }
+ result.ready=true;
+ if(!since&&(Date.parse(first.savedAt)>start||(!bounds.toDate&&Date.parse(last.savedAt)<end-1))){
+   result.warnings.push('Changes use the first and last available observations within this period. Activity before or after these observations is outside the comparison.');
+ }else result.completePeriodCoverage=true;
+ const diff=field=>E.finite(first[field])&&E.finite(last[field])?last[field]-first[field]:null;
+ const usableTime=(c,key)=>Number.isFinite(Date.parse(c[key]))&&Date.parse(c[key])<=Date.parse(c.savedAt)+5000;
+ const comparableQuotes=usableTime(first,'quoteAsOf')&&usableTime(last,'quoteAsOf')&&Date.parse(last.quoteAsOf)>=Date.parse(first.quoteAsOf);
+ const sameBook=Array.isArray(first.legs)&&Array.isArray(last.legs)
+   ?I.canonical(first.legs)===I.canonical(last.legs)&&(first.markMode||'ltp')===(last.markMode||'ltp')
+   :first.bookRevision===last.bookRevision;
+ const technicalOk=[first,last].every(c=>usableTime(c,'technicalAt')&&c.technicalStale===false)&&Date.parse(first.technicalAt)<=Date.parse(last.technicalAt);
+ result.sameBook=sameBook;
+ const changes=result.changes;
+ for(const k of ['realized','charges','net','bookedNet','coverage','futureUnits','putUnits'])changes[k]=diff(k);
+ for(const k of ['margin','free'])changes[k]=usableTime(first,'fundingAt')&&usableTime(last,'fundingAt')?diff(k):null;
+ changes.spot=comparableQuotes?diff('spot'):null;
+ changes.open=sameBook&&first.complete&&last.complete?diff('open'):null;
+ changes.rsi=technicalOk?diff('rsi'):null;changes.atr=technicalOk?diff('atr'):null;
+ result.fundingAt=last.fundingAt||null;result.technicalAt=last.technicalAt||null;
+ const fmt=value=>Math.abs(value).toLocaleString('en-IN',{maximumFractionDigits:2});
+ if(!sameBook)result.summary.push('The saved position or mark basis changed. Open P&L movements cannot be compared on the same holdings.');
+ if(E.finite(changes.bookedNet))result.summary.push(changes.bookedNet===0?'Booked P&L after recorded charges was unchanged.':'Booked P&L after recorded charges '+(changes.bookedNet>0?'improved':'fell')+' by ₹'+fmt(changes.bookedNet)+'.');
+ if(E.finite(changes.futureUnits)&&changes.futureUnits!==0)result.summary.push('Futures exposure '+(changes.futureUnits>0?'increased':'decreased')+' by '+fmt(changes.futureUnits)+' underlying units.');
+ if(technicalOk&&first.bias&&last.bias&&first.bias!==last.bias)result.summary.push('Recorded daily technical assessment changed from '+first.bias+' to '+last.bias+'.');
+ if(!comparableQuotes)result.warnings.push('Spot change needs dated provider quotes in chronological order.');
+ if(comparableQuotes&&(Date.parse(first.quoteAsOf)<Date.parse(first.savedAt)-120000||Date.parse(last.quoteAsOf)<Date.parse(last.savedAt)-120000))result.warnings.push('At least one spot observation used a quote over two minutes old.');
+ if(first.marksStale||last.marksStale||first.marksManual||last.marksManual)result.warnings.push('One or both portfolio valuations include older or manual marks.');
+ if(!technicalOk)result.warnings.push('Indicator changes require dated, completed and current technical observations at both endpoints.');
+ if(!result.fundingAt||!usableTime(last,'fundingAt')||Date.parse(last.savedAt)-Date.parse(last.fundingAt)>86400000)result.warnings.push('The ending funding snapshot is unavailable or more than one day old.');
+ if(!E.finite(changes.bookedNet))result.warnings.push('At least one checkpoint lacks a recorded realised balance or charge total.');
+ return result;
+}
+const api={latestReview,canCaptureReview,strategy,priority,compareReduction,businessReview,reviewSummary,reviewPeriods};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.HAL4Workflow=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
