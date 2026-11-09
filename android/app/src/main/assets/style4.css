@@ -25,3 +25,12 @@
 @media(max-width:360px){.comparison-results{grid-template-columns:minmax(0,1fr)}.next-review h2{font-size:19px}.event-row{flex-wrap:wrap}.daily-position .hero-value{font-size:34px}}
 
 .daily-position{padding:18px}.daily-position .text-button{margin-top:0}.next-review h2{margin:8px 0}.price-ribbon{padding-bottom:14px}
+
+.bottom-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
+.bottom-nav button{min-width:0;min-height:52px;padding:5px 2px;font-size:clamp(10px,2.8vw,13px)}
+.desk-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:16px 0}
+.desk-heading h1{margin:3px 0;font-size:clamp(23px,5.6vw,34px);line-height:1.2;letter-spacing:-.03em}
+.desk-heading small,.ledger-head small{color:var(--muted);font-size:12px}
+.subnav{flex-wrap:nowrap;overflow:auto;scrollbar-width:thin}.subnav button{flex:0 0 auto}
+.ledger-head{display:flex;flex-direction:column;gap:3px;padding:4px 0 14px}.ledger-head strong{font-size:1.8rem}
+@media print{.app-header,.bottom-nav,.connection-strip,.subnav,button,#toast,#modal{display:none!important}body,main,.card{background:white!important;color:black!important;box-shadow:none}main{padding:0!important}.card{break-inside:avoid}}
