@@ -86,3 +86,51 @@ test('next action distinguishes missing prices, failed refresh and an empty book
  x.market.failure='network_unavailable';A.equal(W.priority(x,true,NOW).action,'retry-prices');
  x.book.legs=[];A.equal(W.priority(x,false,NOW).action,'add');
 });
+
+test('IST periods handle a month/year boundary and Monday midnight',()=>{
+ const clock=Date.parse('2027-01-04T00:01:00+05:30');
+ const periods=new Map(W.reviewPeriods(clock).map(p=>[p.id,p]));
+ const from=id=>periods.get(id).start,to=id=>periods.get(id).end;
+ A.equal(from('week'),'2026-12-27T18:30:00.000Z');
+ A.equal(to('week'),'2027-01-03T18:30:00.000Z');
+ A.equal(from('month'),'2026-11-30T18:30:00.000Z');
+ A.equal(to('month'),'2026-12-31T18:30:00.000Z');
+ A.equal(from('day'),'2027-01-02T18:30:00.000Z');
+ A.equal(to('week-to-date'),new Date(clock).toISOString());
+});
+const observed=(time,overrides={})=>{
+ const ms=Date.parse(time);
+ return {...I.checkpoint(input(),ms),quoteAsOf:new Date(ms-2000).toISOString(),
+   technicalAt:new Date(ms-86400000).toISOString(),technicalStale:false,rsi:50,atr:15,realized:300,charges:40,bookedNet:260,...overrides};
+};
+test('completed month uses dated observations inside bounds and preserves coverage gaps',()=>{
+ const clock=Date.parse('2027-03-15T10:00:00+05:30'), a=observed('2027-02-03T10:00:00+05:30'),
+ b=observed('2027-02-26T10:00:00+05:30',{realized:500,charges:50,bookedNet:450,rsi:54}),
+ jan=observed('2027-01-30T10:00:00+05:30'),mar=observed('2027-03-01T00:00:00+05:30',{bookedNet:99999});
+ const r=W.reviewSummary(input(),[mar,b,jan,a,a],'month',clock);
+ A.equal(r.ready,true);A.equal(r.from,a.savedAt);A.equal(r.to,b.savedAt);
+ A.equal(r.completePeriodCoverage,false);A.equal(r.changes.bookedNet,190);
+ A.equal(r.changes.charges,10);A.equal(r.changes.rsi,4);
+ A.equal(r.observations,2);A.match(r.warnings.join(' '),/outside the comparison/);
+ A.equal(W.reviewSummary(input(),[a,jan,mar],'month',clock).ready,false);
+});
+test('missing newer checkpoint fields remain unavailable and changed holdings suppress comparable open P&L',()=>{
+ const clock=Date.parse('2027-03-16T15:00:00+05:30'), b=observed('2027-03-15T15:00:00+05:30');
+ const a={version:4,savedAt:'2027-03-15T05:00:00Z',bookRevision:'revision-before-close',quoteAsOf:'2027-03-15T05:00:00Z',spot:4500,complete:true,open:250,legs:[]};
+ const r=W.reviewSummary(input(),[a,b],'day',clock);
+ A.equal(r.sameBook,false);A.equal(r.changes.open,null);A.equal(r.changes.charges,null);A.equal(r.changes.rsi,null);A.match(r.summary.join(' '),/saved position/);
+});
+test('period news uses publication date and keeps separate event date even without historical marks',()=>{
+ const clock=Date.parse('2027-02-02T12:00:00+05:30'),x=input();
+ x.news=[{title:'Old order re-reported',url:'https://example.org/new',publishedAt:'2027-02-01T09:00:00+05:30',source:'Synthetic release',eventDate:'2026-12-14'},
+ {title:'At end boundary',url:'https://example.org/later',publishedAt:'2027-02-02T00:00:00+05:30'},{title:'No date',url:'https://example.org/undated'}];
+ const r=W.reviewSummary(x,[],'day',clock);
+ A.equal(r.ready,false);A.equal(r.news.length,1);A.equal(r.news[0].eventDate,'2026-12-14');
+});
+test('unchanged zero, future input clocks and stale source clocks remain distinguishable',()=>{
+ const a=observed('2027-02-01T09:00:00+05:30',{open:0,spot:4560}),b=observed('2027-02-01T15:00:00+05:30',{open:0,spot:4560});
+ const run=end=>W.reviewSummary(input(),[a,end],'day',Date.parse('2027-02-02T09:00:00+05:30'));
+ A.equal(run(b).changes.open,0);A.equal(run(b).changes.spot,0);
+ A.equal(run({...b,quoteAsOf:'2037-02-01T10:00:00Z'}).changes.spot,null);
+ A.equal(run({...b,technicalStale:true}).changes.rsi,null);
+});

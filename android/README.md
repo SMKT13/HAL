@@ -1,10 +1,14 @@
-# HAL Desk 4.1.0
+# HAL Desk 4.2.0
 
-Personal HAL research and derivatives risk desk for Android 8+. Package `in.smkt.haldesk`, versionCode 21. Read-only Upstox Analytics Token, optional direct Gemini and opt-in offline FinBERT. No server, trading, broker holdings access or money transfers.
+Personal HAL research and derivatives desk for Android 8 and later. Package `in.smkt.haldesk`, versionCode 22.
 
-Four workspaces: Today; My Position (Book, Performance, Risk, Journal & Funding); Plan (What if?, Compare, Find a Hedge); Research (Markets, Business, News, Insights, AI Desk). New installations contain no assumed holdings.
+- **Position** shows the open book, protection, risk, scenarios, hedge comparisons and dated break-even calculations.
+- **History** imports HAL contract summaries and reconciles them with completed trades and cumulative fees. A preview shows the resulting totals before saving.
+- **Technicals** includes charts, completed-bar indicators, derivatives data and historical pattern comparisons.
+- **Research** brings together company disclosures, fundamentals, news and sourced business notes.
+- **AI Desk** provides optional Gemini analysis with an evidence preview and explicit consent.
 
-See [daily review behavior and validation](docs/DAILY-REVIEW-4.1.md) for automatic comparisons, question shortcuts and combined strategy planning. This source targets an unsigned 4.1.0 candidate; private signing and phone installation are separate.
+Review periods are available from each workspace. The open-position and lifetime recovery prices use the selected valuation date, remaining contract quantities, costs and assumptions. See [installation and private signing instructions](INSTALL.md).
 
 ## Architecture
 
