@@ -108,7 +108,7 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return "direct";}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","4.1.0");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","4.2.0");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
@@ -245,7 +245,31 @@ public final class MainActivity extends Activity {
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);if(result!=RESULT_OK||data==null||data.getData()==null){if(request==41)pendingExport=null;return;}
         if(request==41){try{if(pendingExport==null)throw new Exception();try(OutputStream out=getContentResolver().openOutputStream(data.getData())){if(out==null)throw new Exception();out.write(pendingExport);}send("file_saved",new JSONObject());}catch(Exception e){send("file_error",object("message","The file could not be saved."));}finally{pendingExport=null;}}
+        if (request == 43) {
+            final Uri uri = data.getData();
+            executor.execute(() -> previewHistory(uri));
+            return;
+        }
         if(request==42){final Uri uri=data.getData();executor.execute(()->{try{ByteArrayOutputStream bytes=new ByteArrayOutputStream();try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new Exception();byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(bytes.size()+n>2000000)throw new Exception();bytes.write(buf,0,n);}}JSONObject imported=new JSONObject(new String(bytes.toByteArray(),StandardCharsets.UTF_8));BookValidator.rejectCredentials(imported,0);send("import_preview",imported);}catch(Exception e){send("file_error",object("message","Choose a valid HAL Desk JSON backup under 2 MB."));}});}
+    }
+    private void previewHistory(Uri uri) {
+        if (!"content".equals(uri.getScheme())) {
+            send("file_error", object("message", "Choose a document from the Android file picker."));
+            return;
+        }
+        String name = "HAL statement";
+        try (android.database.Cursor c = getContentResolver().query(uri,
+                new String[]{android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (c != null && c.moveToFirst()) name = c.getString(0);
+        } catch (RuntimeException ignored) { /* Display name is optional. */ }
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            send("history_preview", HistoryDocument.read(in, name));
+        } catch (java.io.IOException e) {
+            send("file_error", object("message", "History import failed. " +
+                    (e.getMessage() != null && e.getMessage().length() < 160 ? e.getMessage() : "Check document access and size.")));
+        } catch (Exception e) {
+            send("file_error", object("message", "Choose a valid single-sheet HAL XLSX, UTF-8 CSV or HAL history JSON under 2 MB."));
+        }
     }
     private TextView text(String value){TextView view=new TextView(this);view.setText(value);view.setTextSize(15);view.setPadding(0,dp(8),0,dp(8));return view;}
     private void showSettings(){
@@ -332,7 +356,33 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void aiCancel(String id){runOnUiThread(()->{if(id!=null&&id.equals(activeAiId)){invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");if(consentDialog!=null)consentDialog.dismiss();activeAiId="";}});}
         @JavascriptInterface public void openLink(String url){runOnUiThread(()->MainActivity.this.openLink(url));}
         @JavascriptInterface public void exportBackup(String json){runOnUiThread(()->exportDocument(json,false));}
+        @JavascriptInterface public void printReview() {
+            runOnUiThread(() -> {
+                if (!foreground || isFinishing() || web == null) return;
+                try {
+                    android.print.PrintManager printer = (android.print.PrintManager) getSystemService(PRINT_SERVICE);
+                    String name = "HAL Desk review " + java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"));
+                    printer.print(name, web.createPrintDocumentAdapter(name), null);
+                } catch (RuntimeException error) {
+                    send("file_error", object("message", "Android printing is unavailable."));
+                }
+            });
+        }
         @JavascriptInterface public void exportCSV(String csv){runOnUiThread(()->exportDocument(csv,true));}
+        @JavascriptInterface public void importHistory() {
+            runOnUiThread(() -> {
+                if (!foreground) return;
+                Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                pick.addCategory(Intent.CATEGORY_OPENABLE);
+                pick.setType("*/*");
+                pick.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/json", "text/csv",
+                        "text/comma-separated-values", "application/vnd.ms-excel", "text/plain",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+                try { startActivityForResult(pick, 43); } catch (RuntimeException e) {
+                    send("file_error", object("message", "The Android document picker is unavailable."));
+                }
+            });
+        }
         @JavascriptInterface public void importBackup(){runOnUiThread(()->{try{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");startActivityForResult(i,42);}catch(Exception e){send("file_error",object("message","A document picker is not available."));}});}
         @JavascriptInterface public void openTokenPage(){runOnUiThread(()->{
             try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://account.upstox.com/developer/apps")));}
