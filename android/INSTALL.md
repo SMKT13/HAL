@@ -1,36 +1,25 @@
-# Install HAL Desk 4.1.0
+# HAL Desk 4.2.0 installation
 
-CI produces an **unsigned candidate**, not an installable update to a privately
-signed installation. First sign it with the original HAL certificate using
-`build.sh`, then verify it against the previous signed APK with
-`scripts/verify-apk.py`. No replacement signing key is generated.
+This release has application ID `in.smkt.haldesk`, versionCode 22 and minimum Android API 26. Export a JSON backup from the installed app before updating. Keep the installed app and its storage if Android reports a certificate conflict.
 
-After private signing and verification:
+## Sign the unsigned candidate
 
-1. Export a JSON book backup from your installed HAL Desk.
-2. Open `HAL-Desk-v4.1.0-signed.apk` on the same phone and choose **Update**.
-3. Keep the existing installation and its storage. Check the exact contracts,
-   entries and completed history in My Position, then confirm against your broker.
-4. Connect Upstox in Settings if needed. Today saves its first review only after
-   all required prices are current. The next visit can then show changes.
-5. Try What if? and Compare in Plan. These calculations never record a trade.
-6. Gemini is optional and still requires reviewing and consenting to each request.
+Sign the aligned APK locally with the original HAL keystore. The Android SDK Build Tools prompt for its password when this command runs in a terminal. The private keystore and password belong outside the source tree.
 
-The candidate identity is `in.smkt.haldesk`, versionName **4.1.0**, versionCode
-**21**. Updating an existing app requires the preserved certificate
-`a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382`.
-Certificate matching and installation must be verified on the privately signed
-artifact; source checks do not establish either. If Android requests uninstalling
-or reports a signature conflict, retain the current app and backup.
+```sh
+apksigner sign --ks /private/path/personal.jks --ks-key-alias hal-personal --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true --out HAL-Desk-v4.2.0-signed.apk HAL-Desk-v4.2.0-unsigned.apk
+apksigner verify --verbose --print-certs HAL-Desk-v4.2.0-signed.apk
+apksigner verify --verbose --print-certs HAL-Desk-v4.1.0-signed.apk
+```
 
-## Data quality and offline behavior
+Compare the SHA-256 certificate fingerprints on both APKs. The expected fingerprint is `a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382`. Confirm v2 and v3 verification on the signed update. The project also provides `scripts/verify-apk.py` for these checks against the previous APK and the tested assets.
 
-Saved positions, journal, manual marks, assumptions and backups work offline. Cached observations show their original clocks. Missing values stay unavailable. REST prices are distinct from the live WebSocket preview.
+## Update and check the book
 
-Strict hedge ranking can produce no qualifying contract. In particular, the documented option-chain schema does not provide a separate Greek timestamp; net Greeks and timestamp-qualified hedge rankings remain unavailable unless reliable provenance is supplied. Theta additionally requires verified units. Do not treat an empty shortlist as evidence that no listed puts exist; the Markets view can still show the returned chain. Explicit-IV stress calculations remain available.
+1. Open the verified signed 4.2 APK on the phone with the previous HAL Desk installation and select **Update**.
+2. In **Position → Book**, check each open contract, expiry, lot size, entry and manual mark against your records. Check completed closes in **Journal & funding**.
+3. In **History → Import statement**, select the private HAL history JSON or a supported HAL XLSX or CSV. Review duplicate rows, overlaps, accepted results and charge coverage. Confirm and save. The app also offers an explicit, broker-reviewed open-book import for an empty book.
+4. In **Position → Break-even**, choose a scenario date, price range, basis and costs. For a date beyond an open put's expiry, supply the assumed earlier settlement spot or record the actual close. The gross open result remains available with an unknown allocation of historical costs.
+5. Save dated checkpoints for comparisons under **Review periods**. Open **Settings** to inspect connections or export a backup.
 
-Provider fundamental fields retain their reported periods/units. Order backlog, delivery guidance and business notes need sourced disclosures; the app does not invent them. English FinBERT sentiment describes text, not expected price direction.
-
-A physical-device upgrade, your authenticated Upstox/Gemini access and an actual FinBERT model download/inference are not established by the synthetic release tests. Check these optional connections on your phone. No background monitoring is guaranteed.
-
-After this update, open My Position → Book → Verify contracts and refresh. A missing instrument key is now handled correctly; genuine expiry/strike/lot mismatches remain unavailable and show metadata for review. No saved trade is automatically changed.
+Authenticated market feeds, optional AI requests and phone-specific upgrade behavior can be checked after installing the signed update. Cached quotes retain their source times. The history import works offline.

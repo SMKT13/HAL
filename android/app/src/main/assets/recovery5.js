@@ -7,6 +7,28 @@
     return q&&!/manual|cache|stream|model/i.test(q.source||'')&&
       E.quoteQuality(q,{now,requireFresh:true,requireTrade:true}).valid;
   }
+  const FRESH_MS = 120000;
+  function freshThrough(quote, clocks) {
+    return Math.min(...clocks.map(key => E.time(quote[key]))) + FRESH_MS;
+  }
+  // Re-read a dated result after the clock advances, even without a network event.
+  function asOf(report, now) {
+    if (!report) return null;
+    if (report.modelDeadline != null && now > report.modelDeadline) return null;
+    const spotExpired = report.spotDeadline != null && now > report.spotDeadline;
+    const marksExpired = report.marksDeadline != null && now > report.marksDeadline;
+    if (!spotExpired && !marksExpired) return report;
+    const visible = {...report};
+    if (spotExpired) visible.currentSpot = null;
+    if (marksExpired) visible.currentOpenGross = null;
+    for (const name of ['openGross', 'openNet', 'lifetime']) {
+      const view = report[name];
+      visible[name] = {...view};
+      if (spotExpired) visible[name].roots = view.roots.map(root => ({...root, change:null, changePct:null}));
+      if (marksExpired) visible[name].requiredAdditionalPnl = null;
+    }
+    return visible;
+  }
   function unavailable(reason){
     return {available:false,status:'unavailable',roots:[],flatRanges:[],reason,requiredGrossPnl:null,requiredAdditionalPnl:null};
   }
@@ -50,7 +72,7 @@
       !flats.some(r=>v>=r.from&&v<=r.to)),flatRanges:flats};
   }
   function prepare(book,market,p,now,horizon,low,high){
-    const earlier=[],active=[],notes=[];
+    const earlier=[],active=[],notes=[],deadlines=[];
     for(const leg of book.legs){
       const expiry=E.expiryTime(leg.expiry);
       need(expiry>=now,'Reconcile expired open contract '+leg.id+' before modelling.');
@@ -70,10 +92,12 @@
     const futuresNeedMarks=active.filter(leg=>leg.type==='FUT'&&horizon<E.expiryTime(leg.expiry)&&basis!=='carry');
     if(futuresNeedMarks.length){
       need(E.finite(p.baseSpot)||priced(market.spot,now),'Current HAL spot or an explicit base spot is required for observed basis.');
+      if (!E.finite(p.baseSpot)) deadlines.push(freshThrough(market.spot,['quoteAt','tradeAt']));
       for(const leg of futuresNeedMarks){
         const mark=E.resolveMark(leg,market,{now});
         const manual=mark.source==='Manual'&&E.finite(E.time(mark.quoteAt))&&E.time(mark.quoteAt)<=now;
         need(manual||priced(mark.quote,now),'A timestamped manual futures mark or fresh exact-contract quote is required for '+leg.id+'.');
+        if (!manual) deadlines.push(freshThrough(mark.quote,['quoteAt','tradeAt']));
         if(manual)notes.push('Manual futures basis mark for '+leg.id+' at '+mark.quoteAt+'.');
       }
     }
@@ -88,12 +112,18 @@
         return {leg,kind:row.kind,linear:true,price:spot=>row.modelPrice+(spot-low)*slope};
       }
       const explicit=E.finite(p.ivByLeg?.[leg.id]??p.fallbackIV);
+      if (T > 0 && !explicit) {
+        const match = E.matchContract(leg,market);
+        const quote = match.contract && market.quotes[match.contract.instrumentKey];
+        need(priced(quote,now),'Fresh exact-contract prices and IV are required for '+leg.id+'.');
+        deadlines.push(freshThrough(quote,['quoteAt','tradeAt','greeksAt']));
+      }
       if(T>0)notes.push(leg.id+' uses '+iv+'% IV ('+(explicit?'user assumption':'provider Greeks')+').');
       return {leg,kind:row.kind,iv,linear:T===0||iv===0,
         corner:T===0?leg.strike:iv===0?leg.strike*Math.exp((dividend-rate)*T/100):null,
         price:spot=>E.putPrice(spot,leg.strike,T,(iv??0)/100,rate/100,dividend/100)};
     }).concat(earlier);
-    return {rows,notes,kind:earlier.length?'Conditional expiry path':rows.every(r=>r.kind==='expiry payoff')?'Exact expiry payoff':'Model estimate'};
+    return {rows,notes,modelDeadline:deadlines.length?Math.min(...deadlines):null,kind:earlier.length?'Conditional expiry path':rows.every(r=>r.kind==='expiry payoff')?'Exact expiry payoff':'Model estimate'};
   }
   function evaluate(bookInput,input={},p={},now=Date.now()){
     const out={complete:false,errors:[],assumptions:[],priceReference:'HAL spot',kind:'Model estimate',horizon:null,range:null,
@@ -114,16 +144,25 @@
       for(const v of [p.newCosts,p.openRecordedCharges])need(v==null||E.finite(v)&&v>=0,'Charges and slippage must be non-negative amounts.');
       out.horizon=E.iso(horizon);out.range={min:lo,max:hi};
       const model=prepare(book,market,p,now,horizon,lo,hi);
+      out.modelDeadline=model.modelDeadline;
       const ledger=E.ledger(book,input,{now});
       need(E.finite(ledger.realized)&&E.finite(ledger.charges),'Recorded realised P&L or charges are invalid.');
       out.lifetimeRecordedNet=ledger.realized-ledger.charges;
-      if(priced(market.spot,now)){out.currentSpot=market.spot.price;out.quoteAt=market.spot.quoteAt;out.tradeAt=market.spot.tradeAt;}
-      if(ledger.complete&&ledger.rows.every(r=>priced(r.mark.quote,now)))out.currentOpenGross=ledger.open;
-      const gross=spot=>model.rows.reduce((sum,r)=>sum+(r.price(spot)-r.leg.entry)*E.units(r.leg),0);
+      if(priced(market.spot,now)){out.currentSpot=market.spot.price;out.quoteAt=market.spot.quoteAt;out.tradeAt=market.spot.tradeAt;out.spotDeadline=freshThrough(market.spot,['quoteAt','tradeAt']);}
+      if(ledger.complete&&ledger.rows.every(r=>priced(r.mark.quote,now))){
+        out.currentOpenGross=ledger.open;
+        out.marksDeadline=Math.min(...ledger.rows.map(r=>freshThrough(r.mark.quote,['quoteAt','tradeAt'])));
+      }
+      const gross=spot=>{
+        const total=model.rows.reduce((sum,r)=>sum+(r.price(spot)-r.leg.entry)*E.units(r.leg),0);
+        need(Number.isFinite(total),'The assumptions exceed the numeric range of the pricing model.');
+        return total;
+      };
       const corners=model.rows.map(r=>r.corner).filter(E.finite),isLinear=model.rows.every(r=>r.linear);
       const netTarget=E.finite(p.newCosts)&&E.finite(p.openRecordedCharges)?p.newCosts+p.openRecordedCharges:null;
       const lifetimeTarget=E.finite(p.newCosts)?p.newCosts-out.lifetimeRecordedNet:null;
       function view(target){
+        need(E.finite(target),'The combined cost exceeds the supported numeric range.');
         const solution=solve(spot=>gross(spot)-target,lo,hi,corners,isLinear);
         const roots=solution.roots.map(price=>({price,change:out.currentSpot===null?null:price-out.currentSpot,
           changePct:out.currentSpot>0?(price/out.currentSpot-1)*100:null,
@@ -155,7 +194,7 @@
     }catch(e){out.errors.push(e.message);out.openGross=unavailable(e.message);out.openNet=unavailable(e.message);out.lifetime=unavailable(e.message);}
     return out;
   }
-  const api={evaluate};
+  const api={evaluate,asOf};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.HAL5Recovery=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

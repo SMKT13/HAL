@@ -24,11 +24,9 @@ window.createHalRecovery = function createHalRecovery(api){
   }
   function currentResult(){
     if(result&&(result.bookRevision!==get().book.revision||E.time(result.horizon)<Date.now()))invalidate();
-    if(result&&result.currentSpot!==null){
-      const q=E.normalizeMarket(get().market).spot;
-      if(!E.quoteQuality(q,{requireFresh:true,requireTrade:true}).valid)invalidate();
-    }
-    return result;
+    const visible=R.asOf(result,Date.now());
+    if(result&&!visible)invalidate();
+    return visible;
   }
   function prices(view){
     if(!view?.available)return 'Unavailable';

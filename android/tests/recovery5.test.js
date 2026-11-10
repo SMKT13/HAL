@@ -92,3 +92,27 @@ test('rejects an invalid lot specification, out-of-order horizon and incomplete 
   }
   assert.equal(run(basket()).complete,false);
 });
+
+test('expiring optional marks hides distances without losing a manual scenario root',()=>{
+  const f=future();
+  const market={contracts:[f],quotes:{TEST_F:quote(102)},spot:quote(101)};
+  const result=run(basket(f),market);
+  const later=R.asOf(result,now+121000);
+  oneRoot(later.openGross,100);
+  assert.equal(later.currentSpot,null);
+  assert.equal(later.currentOpenGross,null);
+  assert.equal(later.openGross.roots[0].change,null);
+  assert.equal(later.openGross.requiredAdditionalPnl,null);
+  assert.equal(result.currentSpot,101);
+});
+test('an observed basis expires when the first required leg quote ages',()=>{
+  const f=future(),market={contracts:[f],quotes:{TEST_F:quote(102,{tradeAt:E.iso(now-119000)})},spot:quote(101)};
+  const report=run(basket(f),market,{horizon:near,basis:'constant'});
+  assert.ok(report.complete);
+  assert.equal(R.asOf(report,now+1001),null);
+});
+test('overflow in the option or futures valuation fails closed',()=>{
+  const result=run(basket(future({expiry:'9999-03-29'})),{}, {horizon:near,rate:100});
+  assert.equal(result.complete,false);
+  assert.equal(result.openGross.available,false);
+});

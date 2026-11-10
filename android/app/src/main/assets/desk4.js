@@ -1592,6 +1592,27 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   function priced(q, now) {
     return q && !/manual|cache|stream|model/i.test(q.source || "") && E.quoteQuality(q, { now, requireFresh: true, requireTrade: true }).valid;
   }
+  const FRESH_MS = 12e4;
+  function freshThrough(quote, clocks) {
+    return Math.min(...clocks.map((key) => E.time(quote[key]))) + FRESH_MS;
+  }
+  function asOf(report, now) {
+    if (!report) return null;
+    if (report.modelDeadline != null && now > report.modelDeadline) return null;
+    const spotExpired = report.spotDeadline != null && now > report.spotDeadline;
+    const marksExpired = report.marksDeadline != null && now > report.marksDeadline;
+    if (!spotExpired && !marksExpired) return report;
+    const visible = { ...report };
+    if (spotExpired) visible.currentSpot = null;
+    if (marksExpired) visible.currentOpenGross = null;
+    for (const name of ["openGross", "openNet", "lifetime"]) {
+      const view = report[name];
+      visible[name] = { ...view };
+      if (spotExpired) visible[name].roots = view.roots.map((root2) => ({ ...root2, change: null, changePct: null }));
+      if (marksExpired) visible[name].requiredAdditionalPnl = null;
+    }
+    return visible;
+  }
   function unavailable(reason) {
     return { available: false, status: "unavailable", roots: [], flatRanges: [], reason, requiredGrossPnl: null, requiredAdditionalPnl: null };
   }
@@ -1646,7 +1667,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   }
   function prepare(book, market, p, now, horizon, low, high) {
     var _a, _b, _c, _d;
-    const earlier = [], active = [], notes = [];
+    const earlier = [], active = [], notes = [], deadlines = [];
     for (const leg of book.legs) {
       const expiry = E.expiryTime(leg.expiry);
       need(expiry >= now, "Reconcile expired open contract " + leg.id + " before modelling.");
@@ -1666,10 +1687,12 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     const futuresNeedMarks = active.filter((leg) => leg.type === "FUT" && horizon < E.expiryTime(leg.expiry) && basis !== "carry");
     if (futuresNeedMarks.length) {
       need(E.finite(p.baseSpot) || priced(market.spot, now), "Current HAL spot or an explicit base spot is required for observed basis.");
+      if (!E.finite(p.baseSpot)) deadlines.push(freshThrough(market.spot, ["quoteAt", "tradeAt"]));
       for (const leg of futuresNeedMarks) {
         const mark = E.resolveMark(leg, market, { now });
         const manual = mark.source === "Manual" && E.finite(E.time(mark.quoteAt)) && E.time(mark.quoteAt) <= now;
         need(manual || priced(mark.quote, now), "A timestamped manual futures mark or fresh exact-contract quote is required for " + leg.id + ".");
+        if (!manual) deadlines.push(freshThrough(mark.quote, ["quoteAt", "tradeAt"]));
         if (manual) notes.push("Manual futures basis mark for " + leg.id + " at " + mark.quoteAt + ".");
       }
     }
@@ -1685,6 +1708,12 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
         return { leg, kind: row.kind, linear: true, price: (spot) => row.modelPrice + (spot - low) * slope };
       }
       const explicit = E.finite((_b2 = (_a2 = p.ivByLeg) == null ? void 0 : _a2[leg.id]) != null ? _b2 : p.fallbackIV);
+      if (T > 0 && !explicit) {
+        const match = E.matchContract(leg, market);
+        const quote = match.contract && market.quotes[match.contract.instrumentKey];
+        need(priced(quote, now), "Fresh exact-contract prices and IV are required for " + leg.id + ".");
+        deadlines.push(freshThrough(quote, ["quoteAt", "tradeAt", "greeksAt"]));
+      }
       if (T > 0) notes.push(leg.id + " uses " + iv + "% IV (" + (explicit ? "user assumption" : "provider Greeks") + ").");
       return {
         leg,
@@ -1695,7 +1724,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
         price: (spot) => E.putPrice(spot, leg.strike, T, (iv != null ? iv : 0) / 100, rate / 100, dividend / 100)
       };
     }).concat(earlier);
-    return { rows, notes, kind: earlier.length ? "Conditional expiry path" : rows.every((r) => r.kind === "expiry payoff") ? "Exact expiry payoff" : "Model estimate" };
+    return { rows, notes, modelDeadline: deadlines.length ? Math.min(...deadlines) : null, kind: earlier.length ? "Conditional expiry path" : rows.every((r) => r.kind === "expiry payoff") ? "Exact expiry payoff" : "Model estimate" };
   }
   function evaluate(bookInput, input = {}, p = {}, now = Date.now()) {
     var _a, _b, _c, _d;
@@ -1721,6 +1750,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     };
     try {
       let view = function(target) {
+        need(E.finite(target), "The combined cost exceeds the supported numeric range.");
         const solution = solve((spot) => gross(spot) - target, lo, hi, corners, isLinear);
         const roots = solution.roots.map((price) => ({
           price,
@@ -1754,6 +1784,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
       out.horizon = E.iso(horizon);
       out.range = { min: lo, max: hi };
       const model = prepare(book, market, p, now, horizon, lo, hi);
+      out.modelDeadline = model.modelDeadline;
       const ledger = E.ledger(book, input, { now });
       need(E.finite(ledger.realized) && E.finite(ledger.charges), "Recorded realised P&L or charges are invalid.");
       out.lifetimeRecordedNet = ledger.realized - ledger.charges;
@@ -1761,9 +1792,17 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
         out.currentSpot = market.spot.price;
         out.quoteAt = market.spot.quoteAt;
         out.tradeAt = market.spot.tradeAt;
+        out.spotDeadline = freshThrough(market.spot, ["quoteAt", "tradeAt"]);
       }
-      if (ledger.complete && ledger.rows.every((r) => priced(r.mark.quote, now))) out.currentOpenGross = ledger.open;
-      const gross = (spot) => model.rows.reduce((sum, r) => sum + (r.price(spot) - r.leg.entry) * E.units(r.leg), 0);
+      if (ledger.complete && ledger.rows.every((r) => priced(r.mark.quote, now))) {
+        out.currentOpenGross = ledger.open;
+        out.marksDeadline = Math.min(...ledger.rows.map((r) => freshThrough(r.mark.quote, ["quoteAt", "tradeAt"])));
+      }
+      const gross = (spot) => {
+        const total = model.rows.reduce((sum, r) => sum + (r.price(spot) - r.leg.entry) * E.units(r.leg), 0);
+        need(Number.isFinite(total), "The assumptions exceed the numeric range of the pricing model.");
+        return total;
+      };
       const corners = model.rows.map((r) => r.corner).filter(E.finite), isLinear = model.rows.every((r) => r.linear);
       const netTarget = E.finite(p.newCosts) && E.finite(p.openRecordedCharges) ? p.newCosts + p.openRecordedCharges : null;
       const lifetimeTarget = E.finite(p.newCosts) ? p.newCosts - out.lifetimeRecordedNet : null;
@@ -1797,7 +1836,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     }
     return out;
   }
-  const api = { evaluate };
+  const api = { evaluate, asOf };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.HAL5Recovery = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
@@ -9200,11 +9239,9 @@ window.createHalRecovery = function createHalRecovery(api) {
   }
   function currentResult() {
     if (result && (result.bookRevision !== get().book.revision || E.time(result.horizon) < Date.now())) invalidate();
-    if (result && result.currentSpot !== null) {
-      const q = E.normalizeMarket(get().market).spot;
-      if (!E.quoteQuality(q, { requireFresh: true, requireTrade: true }).valid) invalidate();
-    }
-    return result;
+    const visible = R.asOf(result, Date.now());
+    if (result && !visible) invalidate();
+    return visible;
   }
   function prices(view) {
     if (!(view == null ? void 0 : view.available)) return "Unavailable";
