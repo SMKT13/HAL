@@ -7,8 +7,225 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     return out.concat(fn.call(self, x, i, a));
   }, []);
 } });
+(function historyModule(root) {
+  "use strict";
+  const limit = 12e3;
+  const copy = (value) => JSON.parse(JSON.stringify(value));
+  const types = ["FUT", "PE", "CE"];
+  function check(ok, message) {
+    if (!ok) throw Error(message);
+  }
+  function text(value, name, max = 240) {
+    check(typeof value === "string" && value.trim().length > 0 && value.length <= max, "Invalid " + name + ".");
+    return value.trim();
+  }
+  function amount(value, name, least = -1e12, greatest = 1e12) {
+    check(typeof value === "number" && Number.isFinite(value) && value >= least && value <= greatest, "Invalid " + name + ".");
+    return value;
+  }
+  function day(value) {
+    return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+  }
+  function list(v, name) {
+    check(Array.isArray(v) && v.length <= limit, "Invalid " + name + ".");
+    return v;
+  }
+  function paise(v) {
+    return Math.sign(v) * Math.round((Math.abs(v) + Number.EPSILON) * 100);
+  }
+  function total(values) {
+    const sum = values.reduce((n, v) => n + paise(v), 0);
+    check(Number.isSafeInteger(sum), "Ledger exceeds the supported accounting range.");
+    return sum / 100;
+  }
+  function nowDate() {
+    return new Date(Date.now() + 198e5).toISOString().slice(0, 10);
+  }
+  function initial() {
+    return { version: 1, records: [], revisions: [], imports: [], excludedJournalIds: [], excludeLegacyRealized: false, charges: null };
+  }
+  function validateRecord(r) {
+    var _a, _b, _c, _d, _e, _f;
+    check(r && types.includes(r.type) && /^\d{4}-(0[1-9]|1[0-2])$/.test(r.contractMonth), "Invalid historical contract type or month.");
+    check(r.expiry == null || day(r.expiry) && r.expiry.slice(0, 7) === r.contractMonth, "Invalid historical expiry.");
+    check(r.date == null || day(r.date), "Invalid historical close date.");
+    check(Number.isSafeInteger(r.units) && r.units > 0 && r.units <= 1e9, "Historical units must be a positive whole number.");
+    if (r.type === "FUT") check(r.strike == null, "A future cannot have a put or call strike.");
+    else amount(r.strike, "option strike", 1e-6, 1e7);
+    const source = { id: text((_a = r.source) == null ? void 0 : _a.id, "source ID", 160), name: text((_b = r.source) == null ? void 0 : _b.name, "source name"), row: text((_c = r.source) == null ? void 0 : _c.row, "source row", 100) };
+    const id = encodeURIComponent(source.id) + "/" + encodeURIComponent(source.row);
+    check(r.id === id, "Source row identity mismatch.");
+    return { id, type: r.type, contractMonth: r.contractMonth, expiry: (_d = r.expiry) != null ? _d : null, date: (_e = r.date) != null ? _e : null, strike: (_f = r.strike) != null ? _f : null, units: r.units, entry: r.entry == null ? null : amount(r.entry, "entry price", 0, 1e7), exit: r.exit == null ? null : amount(r.exit, "exit price", 0, 1e7), gross: total([amount(r.gross, "gross realised P&L")]), source, note: typeof r.note === "string" ? r.note.slice(0, 1e3) : "" };
+  }
+  function chargesRecord(c) {
+    if (c == null) return null;
+    check(day(c.asOf) && c.coversExisting === true, "A cumulative charge statement requires an inclusive date and coverage confirmation.");
+    return { amount: total([amount(c.amount, "lifetime charges", 0)]), asOf: c.asOf, source: text(c.source, "charge source"), coversExisting: true };
+  }
+  function validate(h, book) {
+    var _a, _b, _c;
+    if (h == null) return initial();
+    check(h.version === 1, "Unsupported history format.");
+    const records = list(h.records, "history records").map(validateRecord);
+    check(new Set(records.map((r) => r.id)).size === records.length, "Duplicate historical source rows.");
+    const closes = new Set((book.journal || []).filter((j) => j.kind === "close").map((j) => j.id));
+    const excluded = list((_a = h.excludedJournalIds) != null ? _a : [], "reconciled journal IDs").map((id) => text(id, "journal ID", 100));
+    check(excluded.every((id) => closes.has(id)) && new Set(excluded).size === excluded.length, "Missing or duplicate reconciled journal close.");
+    check(h.excludeLegacyRealized == null || typeof h.excludeLegacyRealized === "boolean", "Invalid legacy reconciliation.");
+    const revisions = list((_b = h.revisions) != null ? _b : [], "history amendments").map((a) => {
+      check(day(a.date) && !!a.record !== !!a.charges, "Invalid history amendment.");
+      return { date: a.date, reason: text(a.reason, "amendment reason", 500), ...a.record ? { record: validateRecord(a.record) } : { charges: chargesRecord(a.charges) } };
+    });
+    const imports = list((_c = h.imports) != null ? _c : [], "history import log").map((a) => {
+      check(day(a.date) && ["incremental", "cumulative"].includes(a.mode) && Number.isInteger(a.added) && a.added >= 0 && Number.isInteger(a.replaced) && a.replaced >= 0, "Invalid history import log.");
+      return { date: a.date, mode: a.mode, sourceName: text(a.sourceName, "source name"), sourceId: text(a.sourceId, "source ID", 160), added: a.added, replaced: a.replaced };
+    });
+    return { version: 1, records, revisions, imports, excludedJournalIds: excluded, excludeLegacyRealized: h.excludeLegacyRealized === true, charges: chargesRecord(h.charges) };
+  }
+  function totals(book) {
+    var _a, _b, _c, _d, _e, _f;
+    const h = book.history || initial(), excluded = new Set(h.excludedJournalIds);
+    const byType = { FUT: 0, PE: 0, CE: 0 }, journal = book.journal || [];
+    const legacyGross = h.excludeLegacyRealized ? 0 : (_b = (_a = book.legacy) == null ? void 0 : _a.realized) != null ? _b : 0;
+    const gross = [legacyGross], fees = [(_f = (_e = (_c = h.charges) == null ? void 0 : _c.amount) != null ? _e : (_d = book.legacy) == null ? void 0 : _d.costs) != null ? _f : 0];
+    let count = 0;
+    function record(type, value) {
+      gross.push(value);
+      byType[type] += paise(value);
+      count++;
+    }
+    h.records.forEach((r) => record(r.type, r.gross));
+    for (const j of journal) {
+      if (j.kind === "close" && !excluded.has(j.id)) record(j.leg.type, (j.exit - j.leg.entry) * j.leg.lots * j.leg.lotSize);
+      if (!h.charges || j.date > h.charges.asOf) {
+        if (j.kind === "close") fees.push(j.fees);
+        if (j.kind === "fee") fees.push(j.amount);
+      }
+    }
+    types.forEach((t) => byType[t] /= 100);
+    const realized = total(gross), charges = total(fees);
+    return { realized, charges, net: total([realized, -charges]), byType, count, legacyGross, chargesConfirmed: !!h.charges, hasHistory: !!(count || h.charges || book.legacy || charges) };
+  }
+  function normalized(payload) {
+    check(payload && ["incremental", "cumulative"].includes(payload.mode), "Choose incremental or cumulative source coverage.");
+    const sourceId = text(payload.sourceId, "source ID", 160), sourceName = text(payload.sourceName, "source name");
+    const records = list(payload.records, "history report").map((r, i) => {
+      var _a, _b, _c;
+      const row = String((_c = (_b = r.sourceRow) != null ? _b : (_a = r.source) == null ? void 0 : _a.row) != null ? _c : i + 1);
+      const source = { id: sourceId, name: sourceName, row };
+      return validateRecord({ ...r, id: encodeURIComponent(sourceId) + "/" + encodeURIComponent(row), source });
+    });
+    check(records.length && new Set(records.map((r) => r.id)).size === records.length, "A report must have unique source rows.");
+    return { sourceId, sourceName, mode: payload.mode, records };
+  }
+  function economic(r) {
+    return JSON.stringify([r.type, r.contractMonth, r.expiry, r.strike, r.units, r.entry, r.exit, r.gross, r.date]);
+  }
+  function key(r) {
+    var _a;
+    return [r.type, r.contractMonth, (_a = r.strike) != null ? _a : ""].join("|");
+  }
+  function fingerprint(b) {
+    return JSON.stringify([b.revision, b.history, b.legacy, b.journal]);
+  }
+  function previewImport(book, raw) {
+    var _a;
+    const payload = normalized(raw), h = book.history || initial(), additions = [], duplicates = [], conflicts = [], warnings = [];
+    const index = /* @__PURE__ */ new Map();
+    function indexRow(r, kind) {
+      const k = key(r), entries = index.get(k) || [];
+      entries.push({ kind, id: r.id, expiry: r.expiry });
+      index.set(k, entries);
+    }
+    h.records.forEach((r) => indexRow(r, "history"));
+    const excluded = new Set(h.excludedJournalIds), prior = new Map(h.records.map((r) => [r.id, r]));
+    for (const j of book.journal || []) if (j.kind === "close" && !excluded.has(j.id)) indexRow({ ...j.leg, id: j.id, contractMonth: j.leg.expiry.slice(0, 7) }, "journal");
+    for (const r of payload.records) {
+      const previous = prior.get(r.id);
+      if (previous && economic(previous) === economic(r)) {
+        duplicates.push(r);
+        continue;
+      }
+      additions.push(r);
+      if (previous) conflicts.push({ kind: "source-row", incomingId: r.id, id: r.id });
+      for (const other of index.get(key(r)) || []) {
+        if (other.id === r.id || r.expiry && other.expiry && other.expiry !== r.expiry) continue;
+        conflicts.push({ kind: other.kind, incomingId: r.id, id: other.id });
+        check(conflicts.length <= limit, "Report contains too many ambiguous overlaps. Split it into smaller reviewed batches.");
+      }
+      indexRow(r, "incoming");
+    }
+    if (additions.length && !h.excludeLegacyRealized && book.legacy && (book.legacy.realized !== 0 || ((_a = book.legacy.journal) == null ? void 0 : _a.some((j) => j.kind === "close")))) conflicts.push({ kind: "legacy", id: "legacy", incomingId: null });
+    if (payload.mode === "cumulative" && h.records.some((r) => r.source.id === payload.sourceId && !payload.records.some((p) => p.id === r.id))) warnings.push("Previously accepted rows omitted from this statement will be retained.");
+    return { payload, fingerprint: fingerprint(book), additions, duplicates, conflicts, warnings };
+  }
+  function applyImport(book, preview, choices = {}) {
+    var _a, _b;
+    check(preview.fingerprint === fingerprint(book), "The ledger changed. Reopen the import preview.");
+    const p = previewImport(book, preview.payload), skip = new Set(choices.skipIncomingIds || []), replace = /* @__PURE__ */ new Set(), excluded = /* @__PURE__ */ new Set();
+    const pending = p.additions.filter((r) => !skip.has(r.id));
+    if (!pending.length) return copy(book);
+    for (const c of p.conflicts) {
+      if (skip.has(c.incomingId) || c.kind === "incoming" && skip.has(c.id)) continue;
+      const uid = [c.kind, c.incomingId || "", c.id].join("\n"), choice = (_a = choices.byConflict) == null ? void 0 : _a[uid];
+      if (c.kind === "source-row") check(choice === "replace", "Choose whether to correct the changed source row or skip it.");
+      else check(choice === "replace" && c.kind !== "incoming" || choice === "distinct", "Resolve each overlapping record.");
+      if (choice === "replace" && ["history", "source-row"].includes(c.kind)) replace.add(c.id);
+      if (choice === "replace" && c.kind === "journal") excluded.add(c.id);
+    }
+    const next = copy(book), h = next.history || initial();
+    for (const r of h.records.filter((r2) => replace.has(r2.id))) h.revisions.push({ date: nowDate(), reason: "Reconciled against " + p.payload.sourceName, record: r });
+    h.records = h.records.filter((r) => !replace.has(r.id)).concat(pending);
+    h.excludedJournalIds = [...new Set(h.excludedJournalIds.concat([...excluded]))];
+    if (((_b = choices.byConflict) == null ? void 0 : _b["legacy\n\nlegacy"]) === "replace") h.excludeLegacyRealized = true;
+    h.imports.push({ date: nowDate(), sourceId: p.payload.sourceId, sourceName: p.payload.sourceName, mode: p.payload.mode, added: pending.length, replaced: replace.size });
+    next.history = validate(h, next);
+    return next;
+  }
+  function setCharges(book, statement, confirmed) {
+    var _a, _b, _c;
+    check(confirmed === true, "Confirm that the cumulative amount includes all HAL transaction fees through this date.");
+    const c = chargesRecord({ ...statement, coversExisting: true });
+    check(c.asOf <= nowDate(), "The charge statement date is in the future.");
+    const current = (_a = book.history) == null ? void 0 : _a.charges;
+    if (current) check(c.asOf >= current.asOf, "Use the current or a later coverage date when replacing a cumulative statement.");
+    const known = total([(_c = (_b = book.legacy) == null ? void 0 : _b.costs) != null ? _c : 0, ...(book.journal || []).filter((j) => j.date <= c.asOf).map((j) => j.kind === "close" ? j.fees : j.kind === "fee" ? j.amount : 0)]);
+    check(c.amount >= known, "The stated total is less than the already itemised charges in its coverage.");
+    const next = copy(book), h = next.history || initial();
+    if (current && JSON.stringify(current) === JSON.stringify(c)) return next;
+    if (current) h.revisions.push({ date: nowDate(), reason: "Previous cumulative fee statement", charges: current });
+    h.charges = c;
+    next.history = validate(h, next);
+    return next;
+  }
+  function correct(book, id, patch, reason) {
+    const next = copy(book), h = next.history, i = h == null ? void 0 : h.records.findIndex((r) => r.id === id);
+    check(Number.isInteger(i) && i >= 0, "The historical record is unavailable.");
+    const old = h.records[i], updated = validateRecord({ ...old, ...patch, source: old.source, id: old.id });
+    h.revisions.push({ date: nowDate(), reason: text(reason, "correction reason", 500), record: old });
+    h.records[i] = updated;
+    next.history = validate(h, next);
+    return next;
+  }
+  function csv(book) {
+    var _a;
+    const rows = [["Source", "Source row", "Type", "Contract month", "Contract expiry", "Close date", "Units", "Strike", "Average buy", "Average sell", "Reported gross P&L"]];
+    for (const r of ((_a = book.history) == null ? void 0 : _a.records) || []) rows.push([r.source.name, r.source.row, r.type, r.contractMonth, r.expiry, r.date, r.units, r.strike, r.entry, r.exit, r.gross]);
+    const safe = (x) => {
+      let s = String(x != null ? x : "");
+      if (typeof x === "string" && /^\s*[=+\-@]/.test(s)) s = "'" + s;
+      return '"' + s.replace(/"/g, '""') + '"';
+    };
+    return rows.map((row) => row.map(safe).join(",")).join("\r\n");
+  }
+  const api = { validate, totals, previewImport, applyImport, setCharges, correct, csv };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.HAL5History = api;
+})(this);
+;
 (function(root) {
   "use strict";
+  const H = typeof module === "object" && module.exports ? require("./history5.js") : root.HAL5History;
   const DAY = 864e5, IST = 198e5, YEAR = 365 * DAY;
   const finite = (x) => typeof x === "number" && Number.isFinite(x);
   const value = (x) => x === "" || x == null || typeof x === "boolean" ? null : Number.isFinite(Number(x)) ? Number(x) : null;
@@ -126,6 +343,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     if (input.rollover != null) out.legacyRolloverPreferences = clone(input.rollover);
     if (input.legacyRolloverPreferences != null) out.legacyRolloverPreferences = clone(input.legacyRolloverPreferences);
     if (input.migration != null) out.migration = clone(input.migration);
+    if (input.history != null) out.history = H.validate(input.history, out);
     if (input.version === 2) out.migration = { fromVersion: 2, reviewRequired: true };
     return out;
   }
@@ -217,15 +435,13 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     return { ...base, ...quality, price, source: q.source === "CACHE" ? "Cached REST" : opts.markMode === "bid" && leg.type === "PE" ? "REST bid" : "REST LTP", warnings: [...warnings, ...quality.warnings], quote: q };
   }
   function ledger(book, input = {}, opts = {}) {
-    var _a, _b;
     const b = validateBook(book);
     const rows = b.legs.map((leg) => {
       const mark = resolveMark(leg, input, { ...opts, markMode: opts.markMode || b.preferences.markMode });
       return { leg, mark, units: units(leg), pnl: finite(mark.price) ? (mark.price - leg.entry) * units(leg) : null };
     });
     const complete = rows.every((r) => finite(r.pnl)), open = complete ? sum(rows.map((r) => r.pnl)) : null;
-    const realized = (((_a = b.legacy) == null ? void 0 : _a.realized) || 0) + sum(b.journal.filter((j) => j.kind === "close").map((j) => (j.exit - j.leg.entry) * units(j.leg)));
-    const charges = (((_b = b.legacy) == null ? void 0 : _b.costs) || 0) + sum(b.journal.map((j) => j.kind === "close" ? j.fees : j.kind === "fee" ? j.amount : 0));
+    const { realized, charges } = H.totals(b);
     return { rows, open, realized, charges, net: complete ? realized + open - charges : null, complete, openPutPremium: sum(b.legs.filter((l) => l.type === "PE").map((l) => l.entry * units(l))), settlements: sum(b.journal.filter((j) => j.kind === "settlement").map((j) => j.amount)), fundingMovements: sum(b.journal.filter((j) => j.kind === "funding").map((j) => j.amount)), unavailableLegs: rows.filter((r) => r.pnl === null).map((r) => r.leg.id), manual: rows.some((r) => r.mark.source === "Manual"), stale: rows.some((r) => r.mark.status === "stale") };
   }
   function closeLeg(book, idOrIndex, lots, exit, fees, date, options = {}) {
@@ -760,14 +976,21 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   function contract(leg) {
     return select(leg, ["id", "type", "expiry", "strike", "lots", "lotSize", "entry", "manual", "manualAt", "instrumentKey"]);
   }
-  function materialFingerprint(book) {
+  function confirmationFingerprint(book) {
     var _a;
     return fingerprint({ legs: array(book == null ? void 0 : book.legs).map(contract), journal: array(book == null ? void 0 : book.journal).map((j) => ({ id: j.id, kind: j.kind, date: j.date, leg: j.leg ? contract(j.leg) : null, exit: number(j.exit), fees: number(j.fees), amount: number(j.amount) })), legacy: select(book == null ? void 0 : book.legacy, ["realized", "costs"]), funding: select(book == null ? void 0 : book.funding, ["margin", "free", "at"]), markMode: ((_a = book == null ? void 0 : book.preferences) == null ? void 0 : _a.markMode) || "ltp", riskProfile: select(book == null ? void 0 : book.riskProfile, ["capital", "maxLoss", "hedgeBudget", "reserve", "minCoverage", "maxMarginUsage", "reviewBelow", "reviewAbove", "expiryWarningDays"]) });
+  }
+  function materialFingerprint(book) {
+    const approved = confirmationFingerprint(book), history = book == null ? void 0 : book.history;
+    if (!history || !(array(history.records).length || history.charges || array(history.excludedJournalIds).length || history.excludeLegacyRealized)) return approved;
+    const rows = array(history.records).map((r) => select(r, ["id", "type", "contractMonth", "expiry", "strike", "units", "entry", "exit", "gross", "date"]));
+    const charges = select(history.charges, ["amount", "asOf", "coversExisting"]);
+    return fingerprint({ approved, rows, charges, omitted: array(history.excludedJournalIds).slice().sort(), excludeLegacy: history.excludeLegacyRealized === true });
   }
   function isBookConfirmed(book, now = Date.now()) {
     var _a, _b;
     const at = Date.parse((_a = book == null ? void 0 : book.riskProfile) == null ? void 0 : _a.confirmedAt);
-    return Number.isFinite(at) && at <= now + 6e4 && ((_b = book == null ? void 0 : book.riskProfile) == null ? void 0 : _b.confirmedBook) === materialFingerprint(book);
+    return Number.isFinite(at) && at <= now + 6e4 && ((_b = book == null ? void 0 : book.riskProfile) == null ? void 0 : _b.confirmedBook) === confirmationFingerprint(book);
   }
   function marketEvidence(market = {}) {
     const quote = (q) => {
@@ -777,7 +1000,10 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     return { spot: quote(market.spot), nifty: quote(market.nifty), vix: quote(market.vix), status: select(market.status, ["state", "status", "market", "exchange", "source", "asOf", "retrievedAt"]), lastSuccess: stamp(market.lastSuccess), lastFailure: stamp(market.lastFailure), failureReason: text(market.error || market.failureReason) };
   }
   function normalizeNews(raw) {
-    return array(raw).map((n) => ({ id: text(n.id, 120), title: text(n.title || n.headline, 260), url: safeURL(n.url || n.link), source: text(n.source, 100), publishedAt: stamp(n.publishedAt || n.published_at || n.date), retrievedAt: stamp(n.retrievedAt || n.retrieved_at), official: n.official === true, topic: text(n.topic, 60), summary: text(n.summary, 500) })).filter((n) => n.title);
+    return array(raw).map((n) => {
+      var _a;
+      return { id: text(n.id, 120), title: text(n.title || n.headline, 260), url: safeURL(n.url || n.link), source: text(n.source, 100), publishedAt: stamp(n.publishedAt || n.published_at || n.date), retrievedAt: stamp(n.retrievedAt || n.retrieved_at), eventDate: typeof n.eventDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(n.eventDate) && ((_a = stamp(n.eventDate)) == null ? void 0 : _a.slice(0, 10)) === n.eventDate ? n.eventDate : null, official: n.official === true, topic: text(n.topic, 60), summary: text(n.summary, 500) };
+    }).filter((n) => n.title);
   }
   function newsGroups(raw) {
     const groups = /* @__PURE__ */ new Map();
@@ -898,9 +1124,45 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     return items.slice(0, 24);
   }
   function checkpoint(input = {}, now = Date.now()) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     const v = input.valuation || input.ledger || {}, r = input.risk || {}, spot = ((_a = input.market) == null ? void 0 : _a.spot) || {};
-    return { version: 4, savedAt: iso(now), bookRevision: materialFingerprint(input.book), quoteAsOf: stamp(spot.quoteAt), spot: number((_b = spot.price) != null ? _b : spot.last_price), open: number(v.open), complete: v.complete === true, coverage: number(r.coverage), delta: number(r.delta), theta: number(r.theta), rsi: number((_e = (_c = input.technical) == null ? void 0 : _c.rsi) != null ? _e : (_d = input.technical) == null ? void 0 : _d.rsi14), newsURLs: normalizeNews(input.news).map((n) => n.url).filter(Boolean).slice(0, 100), legs: array((_f = input.book) == null ? void 0 : _f.legs).map(contract) };
+    const funding = input.funding || ((_b = input.book) == null ? void 0 : _b.funding) || {}, t = input.technical || {}, news = normalizeNews(input.news);
+    const technicalAt = finite(t.asOf) && Math.abs(t.asOf) <= 864e13 ? iso(t.asOf) : stamp(t.asOf);
+    const legs = array((_c = input.book) == null ? void 0 : _c.legs).map(contract);
+    return {
+      version: 4,
+      savedAt: iso(now),
+      bookRevision: materialFingerprint(input.book),
+      legs,
+      markMode: ((_e = (_d = input.book) == null ? void 0 : _d.preferences) == null ? void 0 : _e.markMode) || "ltp",
+      quoteAsOf: stamp(spot.quoteAt),
+      spot: number((_f = spot.price) != null ? _f : spot.last_price),
+      open: number(v.open),
+      complete: v.complete === true,
+      realized: number(v.realized),
+      charges: number(v.charges),
+      net: number(v.net),
+      bookedNet: finite(v.realized) && finite(v.charges) ? v.realized - v.charges : null,
+      marksManual: v.manual === true,
+      marksStale: v.stale === true,
+      spotSource: text(spot.source, 40),
+      tradeAt: stamp(spot.tradeAt),
+      coverage: number(r.coverage),
+      delta: number(r.delta),
+      theta: number(r.theta),
+      futureUnits: number(r.futureUnits),
+      putUnits: number(r.putUnits),
+      free: number(funding.free),
+      margin: number(funding.margin),
+      fundingAt: stamp(funding.at),
+      technicalAt,
+      technicalStale: t.stale === true,
+      rsi: number((_g = t.rsi) != null ? _g : t.rsi14),
+      atr: number((_h = t.atr) != null ? _h : t.atr14),
+      bias: text(t.bias, 120),
+      newsURLs: news.map((n) => n.url).filter(Boolean).slice(0, 100),
+      news: news.filter((n) => n.url && n.publishedAt).slice(0, 12).map((n) => ({ url: n.url, title: n.title, source: n.source, publishedAt: n.publishedAt, eventDate: n.eventDate, official: n.official }))
+    };
   }
   function changes(previous, current, news = []) {
     const base = { ready: false, reason: null, sameBook: false, from: (previous == null ? void 0 : previous.savedAt) || null, to: (current == null ? void 0 : current.savedAt) || null };
@@ -913,7 +1175,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   function canUseAnswer(answer, book) {
     return Boolean(answer && answer.portfolioIncluded === false || answer && answer.bookRevision && answer.bookRevision === materialFingerprint(book));
   }
-  const api = { safeURL, canonical, materialFingerprint, isBookConfirmed, contract, normalizeNews, newsGroups, fundamentalEvidence, providerFundamentals, evidencePacket, coach, checkpoint, changes, canUseAnswer };
+  const api = { safeURL, canonical, materialFingerprint, confirmationFingerprint, isBookConfirmed, contract, normalizeNews, newsGroups, fundamentalEvidence, providerFundamentals, evidencePacket, coach, checkpoint, changes, canUseAnswer };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.HAL4Insights = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
@@ -1018,7 +1280,94 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
       events: (notes || []).filter((n) => E.validDate(n.eventDate) && n.eventDate >= today).slice().sort((a, b) => a.eventDate.localeCompare(b.eventDate)).slice(0, 8)
     };
   }
-  const api = { latestReview, canCaptureReview, strategy, priority, compareReduction, businessReview };
+  function reviewPeriods(now = Date.now()) {
+    const offset = 198e5, day = 864e5;
+    const local = new Date(now + offset);
+    if (!Number.isFinite(local.getTime())) throw Error("Invalid review clock.");
+    const y = local.getUTCFullYear(), m = local.getUTCMonth(), d = local.getUTCDate();
+    const today = Date.UTC(y, m, d) - offset, week = today - (local.getUTCDay() + 6) % 7 * day, month = Date.UTC(y, m, 1) - offset;
+    const periods = [["since-review", "Since previous checkpoint", null, now, true], ["day", "Previous calendar day", today - day, today, false], ["week", "Previous week", week - 7 * day, week, false], ["month", "Previous month", Date.UTC(y, m - 1, 1) - offset, month, false], ["week-to-date", "Week to date", week, now, true], ["month-to-date", "Month to date", month, now, true]];
+    return periods.map(([id, label, start, end, toDate]) => ({ id, label, start: start === null ? null : new Date(start).toISOString(), end: new Date(end).toISOString(), toDate }));
+  }
+  function reviewSummary(input, checkpoints, period = "since-review", now = Date.now()) {
+    const bounds = reviewPeriods(now).find((p) => p.id === period);
+    if (!bounds) throw Error("Choose a supported review period.");
+    const saved = (checkpoints || []).filter((c) => (c == null ? void 0 : c.version) === 4 && typeof c.bookRevision === "string" && Number.isFinite(Date.parse(c.savedAt)) && Date.parse(c.savedAt) <= now).slice().sort((a, b) => Date.parse(a.savedAt) - Date.parse(b.savedAt));
+    const current = I.checkpoint(input, now), unique = new Map(saved.map((c) => [Date.parse(c.savedAt), c]));
+    if (bounds.toDate) unique.set(now, current);
+    const start = Date.parse(bounds.start), end = Date.parse(bounds.end);
+    const periodPoints = [...unique.values()].filter((c) => {
+      const at = Date.parse(c.savedAt);
+      return (bounds.start === null || at >= start) && (bounds.toDate ? at <= end : at < end);
+    });
+    const since = period === "since-review";
+    const first = since ? saved.filter((c) => Date.parse(c.savedAt) < now).slice(-1)[0] : periodPoints[0];
+    const last = since ? current : periodPoints[periodPoints.length - 1];
+    const newsStart = since ? Date.parse(first == null ? void 0 : first.savedAt) : start;
+    const articles = [...input.news || []];
+    for (const c of periodPoints) articles.push(...Array.isArray(c.news) ? c.news : []);
+    const uniqueArticles = /* @__PURE__ */ new Map();
+    for (const n of I.normalizeNews(articles)) {
+      const pub = Date.parse(n.publishedAt);
+      if (!n.url || !Number.isFinite(pub) || !(pub >= newsStart) || pub > end || !bounds.toDate && pub === end) continue;
+      const key = n.url + "|" + n.publishedAt;
+      if (!uniqueArticles.has(key)) uniqueArticles.set(key, n);
+    }
+    const news = I.newsGroups([...uniqueArticles.values()]).slice(0, 60);
+    const result = {
+      ...bounds,
+      period,
+      start: bounds.start || (first == null ? void 0 : first.savedAt) || null,
+      ready: false,
+      reason: null,
+      completePeriodCoverage: false,
+      from: (first == null ? void 0 : first.savedAt) || null,
+      to: (last == null ? void 0 : last.savedAt) || null,
+      fromQuote: (first == null ? void 0 : first.quoteAsOf) || null,
+      toQuote: (last == null ? void 0 : last.quoteAsOf) || null,
+      changes: {},
+      summary: [],
+      warnings: [],
+      news,
+      observations: since ? first ? 2 : 1 : periodPoints.length
+    };
+    if (!first || !last || Date.parse(first.savedAt) >= Date.parse(last.savedAt)) {
+      result.reason = since ? "Save a checkpoint to compare against a later review." : "Two distinct saved observations in this period are required for a comparison.";
+      return result;
+    }
+    result.ready = true;
+    if (!since && (Date.parse(first.savedAt) > start || !bounds.toDate && Date.parse(last.savedAt) < end - 1)) {
+      result.warnings.push("Changes use the first and last available observations within this period. Activity before or after these observations is outside the comparison.");
+    } else result.completePeriodCoverage = true;
+    const diff = (field) => E.finite(first[field]) && E.finite(last[field]) ? last[field] - first[field] : null;
+    const usableTime = (c, key) => Number.isFinite(Date.parse(c[key])) && Date.parse(c[key]) <= Date.parse(c.savedAt) + 5e3;
+    const comparableQuotes = usableTime(first, "quoteAsOf") && usableTime(last, "quoteAsOf") && Date.parse(last.quoteAsOf) >= Date.parse(first.quoteAsOf);
+    const sameBook = Array.isArray(first.legs) && Array.isArray(last.legs) ? I.canonical(first.legs) === I.canonical(last.legs) && (first.markMode || "ltp") === (last.markMode || "ltp") : first.bookRevision === last.bookRevision;
+    const technicalOk = [first, last].every((c) => usableTime(c, "technicalAt") && c.technicalStale === false) && Date.parse(first.technicalAt) <= Date.parse(last.technicalAt);
+    result.sameBook = sameBook;
+    const changes = result.changes;
+    for (const k of ["realized", "charges", "net", "bookedNet", "coverage", "futureUnits", "putUnits"]) changes[k] = diff(k);
+    for (const k of ["margin", "free"]) changes[k] = usableTime(first, "fundingAt") && usableTime(last, "fundingAt") ? diff(k) : null;
+    changes.spot = comparableQuotes ? diff("spot") : null;
+    changes.open = sameBook && first.complete && last.complete ? diff("open") : null;
+    changes.rsi = technicalOk ? diff("rsi") : null;
+    changes.atr = technicalOk ? diff("atr") : null;
+    result.fundingAt = last.fundingAt || null;
+    result.technicalAt = last.technicalAt || null;
+    const fmt = (value) => Math.abs(value).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+    if (!sameBook) result.summary.push("The saved position or mark basis changed. Open P&L movements cannot be compared on the same holdings.");
+    if (E.finite(changes.bookedNet)) result.summary.push(changes.bookedNet === 0 ? "Booked P&L after recorded charges was unchanged." : "Booked P&L after recorded charges " + (changes.bookedNet > 0 ? "improved" : "fell") + " by \u20B9" + fmt(changes.bookedNet) + ".");
+    if (E.finite(changes.futureUnits) && changes.futureUnits !== 0) result.summary.push("Futures exposure " + (changes.futureUnits > 0 ? "increased" : "decreased") + " by " + fmt(changes.futureUnits) + " underlying units.");
+    if (technicalOk && first.bias && last.bias && first.bias !== last.bias) result.summary.push("Recorded daily technical assessment changed from " + first.bias + " to " + last.bias + ".");
+    if (!comparableQuotes) result.warnings.push("Spot change needs dated provider quotes in chronological order.");
+    if (comparableQuotes && (Date.parse(first.quoteAsOf) < Date.parse(first.savedAt) - 12e4 || Date.parse(last.quoteAsOf) < Date.parse(last.savedAt) - 12e4)) result.warnings.push("At least one spot observation used a quote over two minutes old.");
+    if (first.marksStale || last.marksStale || first.marksManual || last.marksManual) result.warnings.push("One or both portfolio valuations include older or manual marks.");
+    if (!technicalOk) result.warnings.push("Indicator changes require dated, completed and current technical observations at both endpoints.");
+    if (!result.fundingAt || !usableTime(last, "fundingAt") || Date.parse(last.savedAt) - Date.parse(last.fundingAt) > 864e5) result.warnings.push("The ending funding snapshot is unavailable or more than one day old.");
+    if (!E.finite(changes.bookedNet)) result.warnings.push("At least one checkpoint lacks a recorded realised balance or charge total.");
+    return result;
+  }
+  const api = { latestReview, canCaptureReview, strategy, priority, compareReduction, businessReview, reviewSummary, reviewPeriods };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.HAL4Workflow = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
@@ -1232,6 +1581,226 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   if (typeof module === "object" && module.exports) module.exports = api;
   root.HAL4Data = api;
 })(typeof globalThis === "undefined" ? this : globalThis);
+;
+(function Recovery(root) {
+  "use strict";
+  const E = typeof module !== "undefined" && module.exports ? require("./engine4.js") : root.HAL4Engine;
+  const cashTolerance = 1e-6;
+  function need(ok, message) {
+    if (!ok) throw Error(message);
+  }
+  function priced(q, now) {
+    return q && !/manual|cache|stream|model/i.test(q.source || "") && E.quoteQuality(q, { now, requireFresh: true, requireTrade: true }).valid;
+  }
+  function unavailable(reason) {
+    return { available: false, status: "unavailable", roots: [], flatRanges: [], reason, requiredGrossPnl: null, requiredAdditionalPnl: null };
+  }
+  function minimum(fn, left, right) {
+    const ratio = (Math.sqrt(5) - 1) / 2;
+    let a = left, b = right, c = b - ratio * (b - a), d = a + ratio * (b - a);
+    let fc = fn(c), fd = fn(d);
+    for (let i = 0; i < 80 && b - a > 1e-9; i++) {
+      if (fc <= fd) {
+        b = d;
+        d = c;
+        fd = fc;
+        c = b - ratio * (b - a);
+        fc = fn(c);
+      } else {
+        a = c;
+        c = d;
+        fc = fd;
+        d = a + ratio * (b - a);
+        fd = fn(d);
+      }
+    }
+    return (a + b) / 2;
+  }
+  function bisect(fn, a, b) {
+    const sign = Math.sign(fn(a));
+    for (let n = 0; n < 90; n++) {
+      const mid = (a + b) / 2, y = fn(mid);
+      if (Math.abs(y) < cashTolerance || b - a <= 1e-10) return mid;
+      if (sign === Math.sign(y)) a = mid;
+      else b = mid;
+    }
+    return (a + b) / 2;
+  }
+  function solve(fn, lo, hi, corners, isLinear) {
+    const xs = [lo, ...corners.filter((x) => x > lo && x < hi), hi];
+    if (!isLinear) xs.push(minimum(fn, lo, hi));
+    xs.sort((a, b) => a - b);
+    const cuts = xs.filter((v, i) => !i || v - xs[i - 1] > 1e-10), roots = [], flats = [];
+    for (let i = 0; i < cuts.length; i++) {
+      const x = cuts[i], a = fn(x);
+      if (Math.abs(a) <= cashTolerance) roots.push(x);
+      if (i + 1 === cuts.length) continue;
+      const y = cuts[i + 1], b = fn(y);
+      if (isLinear && Math.abs(a) <= cashTolerance && Math.abs(b) <= cashTolerance) {
+        const last = flats[flats.length - 1];
+        if (last && last.to === x) last.to = y;
+        else flats.push({ from: x, to: y });
+      } else if (a * b < 0 && Math.abs(a) > cashTolerance && Math.abs(b) > cashTolerance) roots.push(bisect(fn, x, y));
+    }
+    return { roots: roots.sort((a, b) => a - b).filter((v, i, all) => (i === 0 || v - all[i - 1] > 1e-7) && !flats.some((r) => v >= r.from && v <= r.to)), flatRanges: flats };
+  }
+  function prepare(book, market, p, now, horizon, low, high) {
+    var _a, _b, _c, _d;
+    const earlier = [], active = [], notes = [];
+    for (const leg of book.legs) {
+      const expiry = E.expiryTime(leg.expiry);
+      need(expiry >= now, "Reconcile expired open contract " + leg.id + " before modelling.");
+      const match = E.matchContract(leg, market);
+      need(!match.mismatch, "Provider lot size conflicts with saved contract " + leg.id + ".");
+      if (!match.contract) notes.push(leg.id + " uses the saved contract quantity; provider identity is unverified.");
+      if (expiry < horizon) {
+        const settlement = (_a = p.expirySpots) == null ? void 0 : _a[leg.expiry];
+        need(E.finite(settlement) && settlement >= 0, "Enter the earlier HAL settlement spot for " + leg.expiry + " or select a nearer valuation date.");
+        const fixed = leg.type === "FUT" ? settlement : Math.max(leg.strike - settlement, 0);
+        earlier.push({ leg, kind: "Assumed earlier expiry settlement", at: leg.expiry, price: () => fixed, linear: true });
+        notes.push("User-assumed HAL settlement spot on " + leg.expiry + ": \u20B9" + settlement + ".");
+      } else active.push(leg);
+    }
+    const basis = p.basis || "carry", rate = (_b = p.rate) != null ? _b : 6, dividend = (_c = p.dividend) != null ? _c : 0;
+    const params = { horizon, rate, dividend, basis, ivShift: (_d = p.ivShift) != null ? _d : 0, fallbackIV: p.fallbackIV, ivByLeg: p.ivByLeg, baseSpot: p.baseSpot };
+    const futuresNeedMarks = active.filter((leg) => leg.type === "FUT" && horizon < E.expiryTime(leg.expiry) && basis !== "carry");
+    if (futuresNeedMarks.length) {
+      need(E.finite(p.baseSpot) || priced(market.spot, now), "Current HAL spot or an explicit base spot is required for observed basis.");
+      for (const leg of futuresNeedMarks) {
+        const mark = E.resolveMark(leg, market, { now });
+        const manual = mark.source === "Manual" && E.finite(E.time(mark.quoteAt)) && E.time(mark.quoteAt) <= now;
+        need(manual || priced(mark.quote, now), "A timestamped manual futures mark or fresh exact-contract quote is required for " + leg.id + ".");
+        if (manual) notes.push("Manual futures basis mark for " + leg.id + " at " + mark.quoteAt + ".");
+      }
+    }
+    const start = E.scenario(active, market, { ...params, spot: low }, now);
+    need(start.complete, start.errors.join(" "));
+    const finish = E.scenario(active, market, { ...params, spot: high }, now);
+    need(finish.complete, finish.errors.join(" "));
+    const rows = start.rows.map((row, i) => {
+      var _a2, _b2;
+      const { leg, iv } = row, T = (E.expiryTime(leg.expiry) - horizon) / E.YEAR;
+      if (leg.type === "FUT") {
+        const slope = (finish.rows[i].modelPrice - row.modelPrice) / (high - low);
+        return { leg, kind: row.kind, linear: true, price: (spot) => row.modelPrice + (spot - low) * slope };
+      }
+      const explicit = E.finite((_b2 = (_a2 = p.ivByLeg) == null ? void 0 : _a2[leg.id]) != null ? _b2 : p.fallbackIV);
+      if (T > 0) notes.push(leg.id + " uses " + iv + "% IV (" + (explicit ? "user assumption" : "provider Greeks") + ").");
+      return {
+        leg,
+        kind: row.kind,
+        iv,
+        linear: T === 0 || iv === 0,
+        corner: T === 0 ? leg.strike : iv === 0 ? leg.strike * Math.exp((dividend - rate) * T / 100) : null,
+        price: (spot) => E.putPrice(spot, leg.strike, T, (iv != null ? iv : 0) / 100, rate / 100, dividend / 100)
+      };
+    }).concat(earlier);
+    return { rows, notes, kind: earlier.length ? "Conditional expiry path" : rows.every((r) => r.kind === "expiry payoff") ? "Exact expiry payoff" : "Model estimate" };
+  }
+  function evaluate(bookInput, input = {}, p = {}, now = Date.now()) {
+    var _a, _b, _c, _d;
+    const out = {
+      complete: false,
+      errors: [],
+      assumptions: [],
+      priceReference: "HAL spot",
+      kind: "Model estimate",
+      horizon: null,
+      range: null,
+      calculatedAt: E.iso(now),
+      bookRevision: null,
+      currentSpot: null,
+      quoteAt: null,
+      tradeAt: null,
+      currentOpenGross: null,
+      lifetimeRecordedNet: null,
+      curves: [],
+      openGross: unavailable("Calculation unavailable."),
+      openNet: unavailable("Calculation unavailable."),
+      lifetime: unavailable("Calculation unavailable.")
+    };
+    try {
+      let view = function(target) {
+        const solution = solve((spot) => gross(spot) - target, lo, hi, corners, isLinear);
+        const roots = solution.roots.map((price) => ({
+          price,
+          change: out.currentSpot === null ? null : price - out.currentSpot,
+          changePct: out.currentSpot > 0 ? (price / out.currentSpot - 1) * 100 : null,
+          futures: model.rows.filter((r) => r.leg.type === "FUT").map((r) => ({ id: r.leg.id, expiry: r.leg.expiry, price: r.price(price) }))
+        }));
+        const status = solution.flatRanges.length ? "flat" : roots.length ? "roots" : "no_crossing";
+        return {
+          available: true,
+          status,
+          roots,
+          flatRanges: solution.flatRanges,
+          reason: status === "no_crossing" ? "No crossing within the selected price range." : "",
+          requiredGrossPnl: target,
+          requiredAdditionalPnl: out.currentOpenGross === null ? null : target - out.currentOpenGross
+        };
+      };
+      const book = E.validateBook(bookInput), market = E.normalizeMarket(input);
+      out.bookRevision = book.revision;
+      need(book.legs.length, "Record an open position before calculating break-even.");
+      now = E.time(now);
+      const horizon = E.validDate(p.horizon) ? E.expiryTime(p.horizon) : E.time(p.horizon);
+      need(E.finite(now) && E.finite(horizon) && horizon >= now, "Select a valuation date on or after the current time.");
+      const lo = p.minSpot, hi = p.maxSpot;
+      need(E.finite(lo) && E.finite(hi) && lo >= 0 && hi > lo && hi <= 1e8, "Enter a non-negative spot range with an upper bound greater than its lower bound (up to \u20B910 crore).");
+      const rate = (_a = p.rate) != null ? _a : 6, dividend = (_b = p.dividend) != null ? _b : 0, ivShift = (_c = p.ivShift) != null ? _c : 0;
+      need(E.finite(rate) && rate >= -10 && rate <= 100 && E.finite(dividend) && dividend >= 0 && dividend <= 100 && E.finite(ivShift), "Interest, dividend and IV shift must be valid percentages.");
+      need(p.fallbackIV == null || E.finite(p.fallbackIV) && p.fallbackIV >= 0 && p.fallbackIV <= 500, "Fallback IV must be between 0% and 500%.");
+      for (const v of [p.newCosts, p.openRecordedCharges]) need(v == null || E.finite(v) && v >= 0, "Charges and slippage must be non-negative amounts.");
+      out.horizon = E.iso(horizon);
+      out.range = { min: lo, max: hi };
+      const model = prepare(book, market, p, now, horizon, lo, hi);
+      const ledger = E.ledger(book, input, { now });
+      need(E.finite(ledger.realized) && E.finite(ledger.charges), "Recorded realised P&L or charges are invalid.");
+      out.lifetimeRecordedNet = ledger.realized - ledger.charges;
+      if (priced(market.spot, now)) {
+        out.currentSpot = market.spot.price;
+        out.quoteAt = market.spot.quoteAt;
+        out.tradeAt = market.spot.tradeAt;
+      }
+      if (ledger.complete && ledger.rows.every((r) => priced(r.mark.quote, now))) out.currentOpenGross = ledger.open;
+      const gross = (spot) => model.rows.reduce((sum, r) => sum + (r.price(spot) - r.leg.entry) * E.units(r.leg), 0);
+      const corners = model.rows.map((r) => r.corner).filter(E.finite), isLinear = model.rows.every((r) => r.linear);
+      const netTarget = E.finite(p.newCosts) && E.finite(p.openRecordedCharges) ? p.newCosts + p.openRecordedCharges : null;
+      const lifetimeTarget = E.finite(p.newCosts) ? p.newCosts - out.lifetimeRecordedNet : null;
+      const hasStatement = !!((_d = book.history) == null ? void 0 : _d.charges);
+      const includedChargeCoverage = p.lifetimeChargesConfirmed === true || hasStatement;
+      out.openGross = view(0);
+      out.openNet = netTarget === null ? unavailable("Enter allocated open charges and additional exit costs.") : view(netTarget);
+      out.lifetime = !includedChargeCoverage ? unavailable("Confirm lifetime ledger and fee coverage, or import a cumulative charge statement.") : lifetimeTarget === null ? unavailable("Enter additional exit costs, including slippage.") : view(lifetimeTarget);
+      const points = [lo, hi, ...corners.filter((x) => x >= lo && x <= hi)];
+      for (let i = 1; i < 72; i++) points.push(lo + (hi - lo) * i / 72);
+      for (const v of [out.openGross, out.openNet, out.lifetime]) for (const r of v.roots) points.push(r.price);
+      out.curves = [...new Set(points)].sort((a, b) => a - b).map((price) => {
+        const g = gross(price);
+        return { price, openGross: g, openNet: out.openNet.available ? g - netTarget : null, lifetime: out.lifetime.available ? g - lifetimeTarget : null };
+      });
+      out.assumptions = [
+        "HAL spot on the selected date. Futures are valued using " + (p.basis || "carry") + " basis.",
+        "Annual interest " + rate + "%, dividend yield " + dividend + "%, IV shift " + ivShift + " percentage points. European Black\u2013Scholes, ACT/365.",
+        "Each open leg uses remaining units and its recorded entry. Recorded lifetime charges enter the lifetime balance once.",
+        "Estimated additional exit costs and slippage: " + (E.finite(p.newCosts) ? "\u20B9" + p.newCosts : "unspecified") + ".",
+        "Allocated open-book charges: " + (E.finite(p.openRecordedCharges) ? "\u20B9" + p.openRecordedCharges : "unknown") + ".",
+        ...new Set(model.notes)
+      ];
+      out.kind = model.kind;
+      out.complete = true;
+    } catch (e) {
+      out.errors.push(e.message);
+      out.openGross = unavailable(e.message);
+      out.openNet = unavailable(e.message);
+      out.lifetime = unavailable(e.message);
+    }
+    return out;
+  }
+  const api = { evaluate };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.HAL5Recovery = api;
+})(typeof globalThis !== "undefined" ? globalThis : this);
 ;
 /*!
  * @license
@@ -8382,6 +8951,434 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   window.LightweightCharts = vr;
 })();
 ;
+(function historyViewsModule(root) {
+  "use strict";
+  function csvRows(raw) {
+    const s = raw.replace(/^\uFEFF/, "");
+    const rows = [];
+    let row = [], field = "", quoted = false, closed = false;
+    function endField() {
+      row.push(field.trim());
+      field = "";
+      closed = false;
+    }
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (quoted) {
+        if (c !== '"') field += c;
+        else if (s[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          quoted = false;
+          closed = true;
+        }
+        continue;
+      }
+      if (c === ",") endField();
+      else if (c === "\r" || c === "\n") {
+        if (c === "\r" && s[i + 1] === "\n") i++;
+        endField();
+        rows.push(row);
+        row = [];
+      } else if (c === '"' && !field && !closed) quoted = true;
+      else if (c === '"' || closed && c.trim()) throw Error("Invalid quoted CSV field.");
+      else field += c;
+    }
+    if (quoted) throw Error("Unclosed CSV field.");
+    if (field || closed || row.length) {
+      endField();
+      rows.push(row);
+    }
+    return rows;
+  }
+  function numeric(x) {
+    const s = String(x != null ? x : "").trim().replace(/^₹/, "").replace(/,/g, "");
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(s) || !Number.isFinite(Number(s))) throw Error("Missing or invalid statement amount.");
+    return Number(s);
+  }
+  function statementRows(rows) {
+    const result = [];
+    let columns = null;
+    const months = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split(" ");
+    rows.forEach((r, i) => {
+      const fields = r.map((x) => String(x != null ? x : "").trim());
+      if (!fields.some((x) => x) || fields.slice(1).every((x) => !x) && /^(Futures|Options)$/i.test(fields[0])) return;
+      if (/^scrip name$/i.test(fields[0])) {
+        columns = ["scrip name", "quantity", "avg buy price", "avg sell price", "realized p&l"].map((c) => fields.findIndex((v) => v.toLowerCase().replace("realised", "realized") === c));
+        if (columns.includes(-1)) throw Error("Expected Scrip Name, Quantity, Avg Buy Price, Avg Sell Price and Realized P&L.");
+        return;
+      }
+      if (!columns) throw Error("HAL summary column headers are missing.");
+      const [name, units, buy, sell, gross] = columns.map((c) => fields[c]);
+      const m = /^HAL\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{2}|\d{4})\s+(?:(\d+(?:\.\d+)?)\s+)?(Fut|Future|Futures|Put|Call|PE|CE)$/i.exec(name);
+      if (!m) throw Error("Unrecognised HAL contract in row " + (i + 1) + ".");
+      const type = /^FUT/i.test(m[5]) ? "FUT" : /^(PE|Put)$/i.test(m[5]) ? "PE" : "CE";
+      const expiry = (m[3].length === 2 ? "20" : "") + m[3] + "-" + String(months.indexOf(m[2].toUpperCase()) + 1).padStart(2, "0") + "-" + m[1].padStart(2, "0");
+      result.push({ sourceRow: String(i + 1), type, contractMonth: expiry.slice(0, 7), expiry, strike: m[4] ? numeric(m[4]) : null, units: numeric(units), entry: numeric(buy), exit: numeric(sell), gross: numeric(gross) });
+    });
+    return result;
+  }
+  function makeView(api) {
+    const { getBook, commit, render, modal, esc, money, num, date, row, table, card, btn, input, select, empty, native } = api;
+    const H = root.HAL5History;
+    const get = (id) => document.getElementById(id);
+    const field = (id) => {
+      var _a, _b;
+      return (_b = (_a = get(id)) == null ? void 0 : _a.value) != null ? _b : "";
+    };
+    const number = (id) => field(id).trim() === "" ? null : Number(field(id));
+    let pending = null, type = "all", year = "all", page = 0;
+    function filters() {
+      var _a;
+      const records = ((_a = getBook().history) == null ? void 0 : _a.records) || [];
+      return records.filter((r) => (type === "all" || type === r.type) && (year === "all" || year === r.contractMonth.slice(0, 4))).slice().sort((a, b) => b.contractMonth.localeCompare(a.contractMonth));
+    }
+    function view() {
+      var _a, _b, _c;
+      const book = getBook(), h = H.totals(book), years = [...new Set((((_a = book.history) == null ? void 0 : _a.records) || []).map((r) => r.contractMonth.slice(0, 4)))].sort().reverse();
+      const filtered = filters(), last = Math.max(0, Math.ceil(filtered.length / 25) - 1);
+      page = Math.min(Math.max(0, page), last);
+      const records = filtered.slice(page * 25, page * 25 + 25);
+      let totals = h.hasHistory ? '<div class="hero-value '.concat(h.net < 0 ? "negative" : "positive", '">').concat(money(h.net), '</div><p class="fine">Realised result after recorded charges</p>') + row("Gross realised P&L", money(h.realized)) + row("Recorded charges", money(h.charges)) + row("Closed contract records", String(h.count)) + (h.chargesConfirmed ? row("Charge coverage through", date(book.history.charges.asOf)) : '<p class="fine">Cumulative lifetime charge coverage is unconfirmed.</p>') : empty("No closed history", "Import a HAL statement or record a completed close.");
+      const list = records.map((r) => "<details><summary>".concat(esc(r.contractMonth), " \xB7 ").concat(esc(r.type === "FUT" ? "Future" : num(r.strike) + " " + r.type), " \xB7 ").concat(money(r.gross), "</summary>").concat(row("Units", num(r.units, 0))).concat(row("Average buy / sell", money(r.entry) + " / " + money(r.exit))).concat(row("Execution date", r.date ? date(r.date) : "Not supplied")).concat(row("Source", r.source.name + " \xB7 " + r.source.row)).concat(btn("history-correct", "Correct gross amount", 'data-id="'.concat(esc(r.id), '" class="text-button"')), "</details>")).join("");
+      return card("Lifetime history", totals) + card("History sources", '<div class="toolbar">'.concat(btn("history-import", "Import statement", 'class="primary"')).concat(btn("history-charges", "Lifetime charges")).concat(btn("history-csv", "Export summaries CSV"), '</div><p class="fine">Open one HAL contract-summary XLSX or CSV, or a HAL history JSON. Check overlaps and resulting totals before saving.</p>')) + (h.hasHistory ? card("Gross result by instrument", table(["Futures", "Puts", "Calls"], [[money(h.byType.FUT), money(h.byType.PE), money(h.byType.CE)]]) + (h.legacyGross ? row("Unclassified legacy result", money(h.legacyGross)) : "")) : "") + card("Contract summaries", '<div class="form-grid">'.concat(select("history-type", "Instrument", [["all", "All"], ["FUT", "Futures"], ["PE", "Puts"], ["CE", "Calls"]], type)).concat(select("history-year", "Contract expiry year", [["all", "All"], ...years.map((y) => [y, y])], year), "</div>") + (list || empty("No matching imported summaries")) + (filtered.length > 25 ? '<div class="toolbar">'.concat(btn("history-prev", "Previous", page ? "" : "disabled"), " ").concat(page + 1, " / ").concat(last + 1, " ").concat(btn("history-next", "Next", page < last ? "" : "disabled"), "</div>") : "")) + card("Reconciliation log", (((_b = book.history) == null ? void 0 : _b.imports) || []).slice(-10).reverse().map((i) => row(date(i.date) + " \xB7 " + i.sourceName, i.added + " accepted, " + i.replaced + " replaced")).join("") + (((_c = book.history) == null ? void 0 : _c.revisions) || []).slice(-10).reverse().map((r) => row(date(r.date) + " \xB7 " + r.reason, r.record ? money(r.record.gross) : money(r.charges.amount))).join("") + row("Detailed journal entries", String(book.journal.length)) + btn("history-journal", "Open journal & funding", 'class="text-button"'));
+    }
+    function charges() {
+      var _a;
+      const b = getBook(), c = ((_a = b.history) == null ? void 0 : _a.charges) || {};
+      modal("Lifetime HAL charges", input("history-fee", "Cumulative expense (\u20B9)", c.amount) + input("history-asof", "Coverage through", c.asOf || root.HAL4Engine.istDate(Date.now()), "date") + input("history-source", "Source", c.source || "User statement", "text") + '<label><input type="checkbox" id="history-covers">This includes the legacy charges and all recorded HAL fees through the coverage date.</label>', "Save cumulative charges", () => {
+        if (getBook() !== b) throw Error("The book changed. Reopen this form.");
+        commit(H.setCharges(b, { amount: number("history-fee"), asOf: field("history-asof"), source: field("history-source") }, get("history-covers").checked));
+      });
+    }
+    function correct(button) {
+      var _a;
+      const b = getBook(), r = (_a = b.history) == null ? void 0 : _a.records.find((r2) => r2.id === button.dataset.id);
+      if (!r) throw Error("The record is unavailable.");
+      modal("Correct gross realised amount", row("Source", r.source.name + " \xB7 " + r.source.row) + input("history-gross", "New reported gross P&L (\u20B9)", r.gross) + input("history-reason", "Reason for amendment", "", "text"), "Save amendment", () => {
+        if (getBook() !== b) throw Error("The ledger changed. Reopen this form.");
+        commit(H.correct(b, r.id, { gross: number("history-gross") }, field("history-reason")));
+      });
+    }
+    function propose() {
+      var _a, _b;
+      const { p, charges: charges2, legs } = pending;
+      const choices = { skipIncomingIds: [], byConflict: {} };
+      p.conflicts.forEach((c, i) => {
+        const decision = field("his-conf-" + i);
+        if (decision === "skip") choices.skipIncomingIds.push(c.incomingId);
+        choices.byConflict[[c.kind, c.incomingId || "", c.id].join("\n")] = decision;
+      });
+      let next = H.applyImport(getBook(), p, choices);
+      if (charges2 && ((_a = get("history-include-charges")) == null ? void 0 : _a.checked)) next = H.setCharges(next, charges2, true);
+      if (legs.length && ((_b = get("history-include-legs")) == null ? void 0 : _b.checked)) {
+        if (getBook().legs.length) throw Error("Open holdings already exist. Review them in Book.");
+        next.legs = legs.map((l, i) => {
+          const expiry = field("history-expiry-" + i);
+          if (!expiry || !expiry.startsWith(l.contractMonth + "-")) throw Error("Verify each exact open-contract expiry against your broker.");
+          return root.HAL4Engine.validateLeg({ id: "reviewed-" + i, type: l.type, lots: l.lots, lotSize: l.lotSize, entry: l.entry, strike: l.strike, expiry, manual: null, instrumentKey: null }, i);
+        });
+        next.riskProfile.confirmedBook = null;
+        next.riskProfile.confirmedAt = null;
+      }
+      return root.HAL4Engine.validateBook(next);
+    }
+    function effect() {
+      const el = get("history-effect");
+      if (!el || !pending) return;
+      try {
+        const before = H.totals(getBook()), after = H.totals(propose());
+        el.innerHTML = row("Current \u2192 reviewed gross", money(before.realized) + " \u2192 " + money(after.realized)) + row("Reviewed charges", money(after.charges)) + row("Current \u2192 reviewed net", money(before.net) + " \u2192 " + money(after.net));
+      } catch (e) {
+        el.textContent = e.message;
+      }
+    }
+    function preview(data) {
+      const b = getBook();
+      const packet = data.format === "HALDeskHistory";
+      const payload = packet ? data.payload : { sourceId: data.sourceId, sourceName: data.sourceName, mode: "incremental", records: statementRows(data.rows || csvRows(data.csv || "")) };
+      const p = H.previewImport(b, payload), charges2 = packet ? data.charges : null, legs = packet ? data.openCandidates || [] : [];
+      if (!Array.isArray(legs) || legs.length > 100) throw Error("Invalid proposed open positions.");
+      for (const l of legs) {
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(l.contractMonth)) throw Error("Invalid open contract month.");
+        root.HAL4Engine.validateLeg({ ...l, expiry: l.contractMonth + "-01" });
+      }
+      pending = { p, charges: charges2, legs };
+      const conflicts = p.conflicts.map((c, i) => {
+        var _a;
+        const incoming = p.additions.find((r) => r.id === c.incomingId);
+        const options = [["", "Choose how to reconcile"]];
+        if (c.incomingId) options.push(["skip", "Skip incoming record"]);
+        if (c.kind !== "incoming") options.push(["replace", "Count incoming result in place of existing result"]);
+        if (c.kind !== "source-row") options.push(["distinct", "I verified separate trading activity"]);
+        return select("his-conf-" + i, (incoming ? incoming.contractMonth + " " + incoming.type + " " + ((_a = incoming.strike) != null ? _a : "") + " \xB7 " : "") + c.kind + " " + c.id, options, "");
+      }).join("");
+      const display = p.payload.records.map((r) => {
+        var _a;
+        return [r.contractMonth, r.type, (_a = r.strike) != null ? _a : "\u2014", r.units, money(r.gross), r.source.row];
+      });
+      const mode = select("history-mode", "Report coverage", [["incremental", "Incremental"], ["cumulative", "Cumulative"]], payload.mode);
+      modal(
+        "Review HAL history",
+        row("Source", p.payload.sourceName) + mode + row("New or changed summaries", String(p.additions.length)) + row("Already imported", String(p.duplicates.length)) + (conflicts ? "<h3>Review overlaps</h3>" + conflicts : "") + (p.warnings || []).map((t) => '<p class="fine">' + esc(t) + "</p>").join("") + "<details><summary>Inspect ".concat(display.length, " contract summaries</summary>").concat(table(["Month", "Type", "Strike", "Units", "Gross P&L", "Source row"], display), "</details>") + (charges2 ? '<label><input type="checkbox" id="history-include-charges">Apply '.concat(esc(money(charges2.amount)), " cumulative HAL charges covering all recorded fees through ").concat(esc(date(charges2.asOf)), ".</label>") : "") + (legs.length ? "<details><summary>Review ".concat(legs.length, " proposed open positions</summary>").concat(table(["Contract month", "Contract", "Lots \xD7 units", "Entry"], legs.map((l) => [l.contractMonth, l.type === "FUT" ? "Future" : l.strike + " PE", l.lots + " \xD7 " + l.lotSize, money(l.entry)]))).concat(b.legs.length ? "<p>Open holdings are already recorded in Book.</p>" : legs.map((l, i) => input("history-expiry-" + i, "Verified expiry \xB7 " + l.contractMonth + " " + (l.strike || "") + " " + l.type, "", "date")).join("") + '<label><input id="history-include-legs" type="checkbox">I verified these open positions and dates against my broker. Add them to the empty book.</label>', "</details>") : "") + '<div id="history-effect" aria-live="polite"></div><label><input type="checkbox" id="history-reviewed">I reviewed the source and the resulting totals.</label>',
+        "Save reviewed history",
+        () => {
+          if (!get("history-reviewed").checked) throw Error("Review and confirm the totals.");
+          const next = propose();
+          commit(next);
+          pending = null;
+        }
+      );
+      effect();
+    }
+    function change(id) {
+      if (id === "history-mode" && pending) {
+        pending.p = H.previewImport(getBook(), { ...pending.p.payload, mode: field(id) });
+        effect();
+      }
+      if (id.startsWith("his-conf-") || id.startsWith("history-include-") || id.startsWith("history-expiry-")) effect();
+      if (id === "history-type" || id === "history-year") {
+        if (id === "history-type") type = field(id);
+        else year = field(id);
+        page = 0;
+        render();
+      }
+    }
+    return { view, preview, change, actions: { "history-import": () => native("importHistory"), "history-charges": charges, "history-correct": correct, "history-csv": () => native("exportCSV", H.csv(getBook())), "history-prev": () => {
+      page--;
+      render();
+    }, "history-next": () => {
+      page++;
+      render();
+    }, "history-journal": () => api.navigate("position", "journal") } };
+  }
+  root.HALHistoryViews = makeView;
+  if (typeof module !== "undefined" && module.exports) module.exports = { csvRows, statementRows, makeView };
+})(this);
+;
+"use strict";
+window.createHalRecovery = function createHalRecovery(api) {
+  "use strict";
+  const { get, esc, money, num, pct, date, when, input, select, btn, card, row, table, empty, navigate, render } = api;
+  const E = window.HAL4Engine, R = window.HAL5Recovery;
+  let draft = null, result = null, selectedPoint = 0;
+  const value = (id) => {
+    var _a;
+    return (_a = document.getElementById(id)) == null ? void 0 : _a.value;
+  };
+  const numOrNull = (raw) => E.value(raw);
+  const day = () => E.istDate(Date.now());
+  function initialize() {
+    var _a, _b, _c;
+    if (draft) return;
+    const { book, market } = get();
+    const q = E.normalizeMarket(market).spot;
+    const fresh = E.quoteQuality(q, { requireFresh: true, requireTrade: true }).valid;
+    const anchor = fresh ? q.price : (_c = (_a = book.legs.find((l) => l.type === "FUT")) == null ? void 0 : _a.entry) != null ? _c : (_b = book.legs[0]) == null ? void 0 : _b.strike;
+    const expiries = book.legs.map((l) => l.expiry).filter((d) => E.expiryTime(d) >= Date.now()).sort();
+    draft = {
+      date: expiries[0] || day(),
+      low: anchor > 0 ? Math.floor(anchor * 0.5) : "",
+      high: anchor > 0 ? Math.ceil(anchor * 2) : "",
+      basis: "carry",
+      rate: "6",
+      dividend: "0",
+      iv: "",
+      shift: "0",
+      baseSpot: "",
+      enter: "",
+      exit: "",
+      slippage: "",
+      paths: {}
+    };
+  }
+  function invalidate() {
+    result = null;
+    const output = document.getElementById("be-results");
+    if (output) output.remove();
+  }
+  function currentResult() {
+    if (result && (result.bookRevision !== get().book.revision || E.time(result.horizon) < Date.now())) invalidate();
+    if (result && result.currentSpot !== null) {
+      const q = E.normalizeMarket(get().market).spot;
+      if (!E.quoteQuality(q, { requireFresh: true, requireTrade: true }).valid) invalidate();
+    }
+    return result;
+  }
+  function prices(view) {
+    if (!(view == null ? void 0 : view.available)) return "Unavailable";
+    const roots = view.roots.map((r) => money(r.price));
+    const ranges = view.flatRanges.map((r) => money(r.from) + " \u2013 " + money(r.to));
+    return [...roots, ...ranges].join(" \xB7 ") || "No crossing in range";
+  }
+  function cards(lifetimeOnly = false) {
+    const report = currentResult(), book = get().book;
+    const open = (report == null ? void 0 : report.openNet.available) ? report.openNet : report == null ? void 0 : report.openGross;
+    const summary = (label, v, scope) => card(
+      label,
+      report ? '<div class="hero-value">'.concat(esc(prices(v)), '</div><p class="fine">').concat(esc((v == null ? void 0 : v.reason) || scope), " \xB7 ").concat(esc(report.priceReference), " \xB7 ").concat(esc(when(report.horizon)), "</p>") : '<p class="fine">'.concat(esc(book.legs.length ? "Select a scenario date and costs to calculate the HAL spot price." : "An open book is required to calculate a HAL price."), "</p>"),
+      btn("go-breakeven", report ? "Inspect" : "Calculate", 'class="text-button"')
+    );
+    return (lifetimeOnly ? "" : summary("Open position break-even", open, (report == null ? void 0 : report.openNet.available) ? "After costs" : "Gross open P&L")) + summary("Lifetime recovery break-even", report == null ? void 0 : report.lifetime, "After recorded and additional costs");
+  }
+  function field(key, label, type = "number") {
+    return input("be-" + key, label, draft[key], type);
+  }
+  function earlierDates(book) {
+    return [...new Set(book.legs.map((l) => l.expiry).filter((d) => d < draft.date))].sort();
+  }
+  function chart(report) {
+    const points = report.curves;
+    if (points.length < 2) return "";
+    const series = [["openGross", "Open gross", "#799aba"], ["openNet", "Open net", "#d39536"], ["lifetime", "Lifetime net", "#36a894"]].filter(([key]) => points.some((p) => E.finite(p[key])));
+    const ys = [0];
+    for (const point of points) for (const [k] of series) ys.push(point[k]);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const x = (v) => 20 + (v - report.range.min) / (report.range.max - report.range.min) * 284;
+    const y = (v) => 20 + (maxY - v) / (maxY - minY || 1) * 122;
+    const curves = series.map(([key, , color]) => {
+      const d = points.map((point, i) => (i === 0 ? "M" : "L") + x(point.price).toFixed(2) + " " + y(point[key]).toFixed(2)).join(" ");
+      return '<path d="'.concat(d, '" fill="none" stroke="').concat(color, '" stroke-width="2"/>');
+    }).join("");
+    selectedPoint = Math.min(selectedPoint, points.length - 1);
+    return '<figure style="margin:14px 0"><figcaption>Scenario P&amp;L against HAL spot</figcaption><p class="fine">'.concat(series.map(([, name, col]) => '<span style="border-bottom:2px solid '.concat(col, '">').concat(esc(name), "</span>")).join("\u3000"), '</p>\n      <svg width="100%" viewBox="0 0 324 172" role="img" aria-label="Break-even chart with zero P and L axis"><g font-family="sans-serif" font-size="10" fill="currentColor">\n      <line x1="16" x2="308" y1="').concat(y(0), '" y2="').concat(y(0), '" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="3 4"/><text x="17" y="').concat(Math.max(12, y(0) - 3), '">\u20B90</text>\n      ').concat(curves, '<text x="20" y="164">').concat(esc(money(report.range.min)), '</text><text text-anchor="end" x="304" y="164">').concat(esc(money(report.range.max)), '</text></g></svg>\n      <label>Inspect scenario spot<input id="be-chart-point" type="range" min="0" max="').concat(points.length - 1, '" value="').concat(selectedPoint, '" step="1"></label>\n      <output id="be-point-output">').concat(esc(pointText(points[selectedPoint])), "</output></figure>");
+  }
+  function pointText(point) {
+    return "Spot " + money(point.price) + " \xB7 Open gross " + money(point.openGross) + (E.finite(point.openNet) ? " \xB7 Open net " + money(point.openNet) : "") + (E.finite(point.lifetime) ? " \xB7 Lifetime " + money(point.lifetime) : "");
+  }
+  function details(report) {
+    if (!report.complete) return card("Calculation unavailable", report.errors.map((e) => '<p class="warning">' + esc(e) + "</p>").join(""));
+    const views = [["Open gross", report.openGross], ["Open after costs", report.openNet], ["Lifetime recovery", report.lifetime]];
+    const body = views.map(([label, v]) => {
+      const text = v.available ? prices(v) : v.reason;
+      const distances = v.roots.map((r) => E.finite(r.change) ? money(r.change) + " / " + pct(r.changePct) : "Current spot unavailable");
+      return [label, text, distances.join(" \xB7 ") || "\u2014"];
+    });
+    const futures = views.filter(([, v]) => v.available).flatMap(([label, v]) => v.roots.flatMap((r) => r.futures.map((f) => [label, money(r.price), date(f.expiry), money(f.price)])));
+    const facts = report.assumptions.map((t) => '<p class="fine">' + esc(t) + "</p>").join("");
+    return card(
+      "Estimated HAL spot at break-even",
+      "<p>".concat(esc(report.kind), " \xB7 ").concat(esc(when(report.horizon)), "</p>").concat(table(["Scope", "HAL spot", "Move from current spot"], body)).concat(chart(report), "\n       ").concat(row("Recorded lifetime P&L after charges", money(report.lifetimeRecordedNet)), "\n       ").concat(row("Required open gross P&L since entry", money(report.lifetime.requiredGrossPnl)), "\n       ").concat(row("Additional P&L from fresh current marks", money(report.lifetime.requiredAdditionalPnl)), "\n       <details><summary>Calculation details</summary>").concat(row("Calculated", when(report.calculatedAt))).concat(row("Book revision", String(report.bookRevision)), "\n       ").concat(row("Current HAL spot", money(report.currentSpot))).concat(row("Provider quote", when(report.quoteAt))).concat(row("Last spot trade", when(report.tradeAt)), "\n       ").concat(futures.length ? table(["Scope", "HAL spot", "Futures expiry", "Model futures price"], futures) : "").concat(facts, "</details>")
+    );
+  }
+  function form() {
+    initialize();
+    const { book } = get();
+    if (!book.legs.length) return card("Break-even", empty("No open position", "Use Book to record the exact long futures or protective puts to model."));
+    const paths = earlierDates(book);
+    const form2 = card(
+      "Break-even assumptions",
+      '<div class="form-grid">'.concat(field("date", "Valuation date \xB7 IST", "date")).concat(select("be-basis", "Futures basis", [["carry", "Cost of carry"], ["constant", "Constant observed basis"], ["decay", "Decay observed basis"]], draft.basis), "\n       ").concat(field("low", "Lower HAL spot (\u20B9)")).concat(field("high", "Upper HAL spot (\u20B9)")).concat(field("iv", "Put IV override (%)")).concat(field("shift", "IV shift (percentage points)"), "\n       ").concat(field("rate", "Annual interest rate (%)")).concat(field("dividend", "Annual dividend yield (%)")).concat(draft.basis === "carry" ? "" : field("baseSpot", "Manual basis reference spot (\u20B9)"), '</div>\n       <div class="form-grid">').concat(field("enter", "Allocated entry charges already recorded (\u20B9)")).concat(field("exit", "Additional exit charges (\u20B9)")).concat(field("slippage", "Additional slippage (\u20B9)"), '</div>\n       <p class="fine">Enter zero for a known zero cost. Leave an unknown allocation blank to use the gross open calculation. Include only slippage still to be incurred.</p>\n       ').concat(paths.length ? '<h3>Earlier expiry assumptions</h3><p class="fine">Supply a separate settlement spot at each earlier expiry to model the later date.</p><div class="form-grid">' + paths.map((d) => {
+        var _a;
+        return input("be-path-" + d, date(d) + " assumed HAL settlement (\u20B9)", (_a = draft.paths[d]) != null ? _a : "");
+      }).join("") + "</div>" : "", "\n       ").concat(btn("be-calculate", "Calculate break-even", 'class="primary"'))
+    );
+    const report = currentResult();
+    return form2 + (report ? '<div id="be-results" data-calculation-output>' + details(report) + "</div>" : "");
+  }
+  function remember(id) {
+    var _a;
+    if (!id.startsWith("be-")) return;
+    if (id === "be-chart-point") {
+      const point = (_a = result == null ? void 0 : result.curves) == null ? void 0 : _a[Number(value(id))];
+      if (point) {
+        selectedPoint = Number(value(id));
+        const el = document.getElementById("be-point-output");
+        if (el) el.textContent = pointText(point);
+      }
+      return;
+    }
+    initialize();
+    const key = id.slice(3);
+    if (key.startsWith("path-")) draft.paths[key.slice(5)] = value(id);
+    else if (Object.prototype.hasOwnProperty.call(draft, key)) draft[key] = value(id);
+    invalidate();
+  }
+  function change(id) {
+    if (id === "be-date" || id === "be-basis") {
+      remember(id);
+      render();
+    }
+  }
+  function calculate() {
+    initialize();
+    const { book, market } = get();
+    const exit = numOrNull(draft.exit), slippage = numOrNull(draft.slippage);
+    if ([exit, slippage].some((x) => x !== null && x < 0)) throw Error("Exit charges and slippage must be non-negative.");
+    const paths = {};
+    for (const d of earlierDates(book)) if (draft.paths[d] !== void 0 && draft.paths[d] !== "") paths[d] = numOrNull(draft.paths[d]);
+    const params = {
+      minSpot: numOrNull(draft.low),
+      maxSpot: numOrNull(draft.high),
+      horizon: draft.date,
+      basis: draft.basis,
+      ivShift: numOrNull(draft.shift),
+      rate: numOrNull(draft.rate),
+      dividend: numOrNull(draft.dividend),
+      newCosts: exit !== null && slippage !== null ? exit + slippage : null,
+      openRecordedCharges: numOrNull(draft.enter),
+      fallbackIV: numOrNull(draft.iv),
+      baseSpot: numOrNull(draft.baseSpot),
+      expirySpots: paths
+    };
+    if (![params.rate, params.dividend, params.ivShift].every(E.finite)) throw Error("Enter interest, dividend yield and IV shift. Zero is valid.");
+    result = R.evaluate(book, market, params, Date.now());
+    selectedPoint = 0;
+    render();
+  }
+  return { form, cards, invalidate, remember, change, actions: { "be-calculate": calculate, "go-breakeven": () => navigate("position", "break-even") } };
+};
+;
+"use strict";
+window.createHalReview = function createHalReview(api) {
+  const { get, render, select, table, row, card, btn, empty, esc, money, num, when, native } = api;
+  let selected = "since-review";
+  function view() {
+    const { book, evidence, sessionBaseline } = get(), points = book.checkpoints.slice();
+    if (sessionBaseline) points.push(sessionBaseline);
+    const { reviewPeriods, reviewSummary } = window.HAL4Workflow;
+    const now = Date.now(), choices = reviewPeriods(now).map((r2) => [r2.id, r2.label]), r = reviewSummary(typeof evidence === "function" ? evidence() : evidence, points, selected, now);
+    const period = select("review-period", "Review window \xB7 IST", choices, selected);
+    const range = r.start ? row("Period begins", when(r.start)) + row(r.toDate ? "Through" : "Period ends before", when(r.end)) : "";
+    const rangePanel = card("Review window", period + range + '<div class="toolbar">'.concat(btn("checkpoint", "Save checkpoint")).concat(btn("print-review", "Print / save PDF"), "</div>"));
+    const diagnostic = r.warnings.map((w) => '<p class="fine">' + esc(w) + "</p>").join("");
+    let financial;
+    if (r.ready) {
+      const values = r.changes;
+      const moves = [
+        ["HAL spot", money(values.spot)],
+        ["Open P&L \xB7 comparable holdings", money(values.open)],
+        ["Gross realised P&L", money(values.realized)],
+        ["Recorded charges", money(values.charges)],
+        ["Realised after charges", money(values.bookedNet)],
+        ["Strategy net \xB7 includes open P&L", money(values.net)],
+        ["Futures units", num(values.futureUnits, 0)],
+        ["Protective put units", num(values.putUnits, 0)],
+        ["Quantity coverage", Number.isFinite(values.coverage) ? num(values.coverage) + " percentage points" : "Unavailable"],
+        ["RSI 14", num(values.rsi)],
+        ["ATR 14", money(values.atr)],
+        ["Reported margin", money(values.margin)],
+        ["Reported free funds", money(values.free)]
+      ];
+      financial = card(
+        "Changes between observations",
+        row("First checkpoint", when(r.from)) + row("Last observation", when(r.to)) + r.summary.map((t) => "<p>" + esc(t) + "</p>").join("") + table(["Measure", "Change"], moves) + "<details><summary>Evidence dates and coverage</summary>".concat(row("First spot quote", when(r.fromQuote))).concat(row("Last spot quote", when(r.toQuote))).concat(row("Last technical observation", when(r.technicalAt))).concat(row("Last funding snapshot", when(r.fundingAt))).concat(diagnostic, "</details>")
+      );
+    } else financial = card("Changes between observations", empty("Comparison unavailable", r.reason));
+    const stories = r.news.map((n) => '<article class="news-item"><h3>'.concat(esc(n.title), "</h3>").concat(row("Published", when(n.publishedAt))).concat(row("Source", n.source || "Unspecified")).concat(n.eventDate ? row("Event date", n.eventDate) : "").concat(n.official ? "<p>Official filing</p>" : "").concat(btn("link", "Read source", 'data-url="'.concat(esc(n.url), '" class="text-button"')), "</article>")).join("");
+    const news = card("News published in this period", stories || empty("No dated headlines in the available observations", "Coverage depends on the loaded news feed and saved checkpoints."));
+    return rangePanel + financial + news;
+  }
+  function change(id) {
+    if (id === "review-period") {
+      selected = document.getElementById(id).value;
+      render();
+    }
+  }
+  return { view, change, actions: { "print-review": () => native("printReview") } };
+};
+;
 (function() {
   "use strict";
   var _a, _b;
@@ -8397,7 +9394,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     return ((_a2 = $(id)) == null ? void 0 : _a2.value) || "";
   };
   let book = E.emptyBook(), revision = 0, s = D.empty(), configured = false, started = false, storageError = "", chart = null, saveModal = null, returnFocus = null, toastTimer;
-  const ui = { screen: "today", position: "book", plan: "stress", research: "markets", frame: "D", expiry: "", side: "PE", filter: "all", search: "", statement: "consolidated", scenario: { spot: "", horizon: "", iv: "", shift: 0, rate: 6, dividend: 0, basis: "constant", base: "" }, result: null, resultAt: null, reduction: null, compare: { leg: "", lots: 1, costs: 0 }, advanced: false, hedges: null, hedgesAt: null, hedgeDraft: null, pattern: null, patternWindow: 20, patternForward: 10, aiMode: "copilot", question: "Explain the position, expiry gaps, quote reliability and evidence that needs review.", share: true, ai: null, pendingAI: null, aiError: "", aiConfigured: false, model: "", finbert: { state: "not_installed" }, sentiments: {} };
+  const ui = { screen: "position", position: "overview", plan: "stress", research: "company", technicals: "markets", aiPage: "assistant", reviewOpen: false, frame: "D", expiry: "", side: "PE", filter: "all", search: "", statement: "consolidated", scenario: { spot: "", horizon: "", iv: "", shift: 0, rate: 6, dividend: 0, basis: "constant", base: "" }, result: null, resultAt: null, reduction: null, compare: { leg: "", lots: 1, costs: 0 }, advanced: false, hedges: null, hedgesAt: null, hedgeDraft: null, pattern: null, patternWindow: 20, patternForward: 10, aiMode: "copilot", question: "Explain the position, expiry gaps, quote reliability and evidence that needs review.", share: true, ai: null, pendingAI: null, aiError: "", aiConfigured: false, model: "", finbert: { state: "not_installed" }, sentiments: {} };
   function native(name, ...args) {
     if (typeof (N == null ? void 0 : N[name]) === "function") return N[name](...args);
     if (!["ready", "finbertStatus"].includes(name)) toast("Available in the installed Android app.");
@@ -8416,6 +9413,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     document.querySelectorAll("[data-calculation-output]").forEach((el) => el.remove());
   }
   function invalidateCalculations() {
+    recoveryView.invalidate();
     clearCalculationOutput();
     ui.reduction = null;
     ui.result = null;
@@ -8430,8 +9428,10 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     if (storageError) throw Error("Recover the saved book before editing.");
     const next = E.validateBook(b);
     if (I.materialFingerprint(next) !== I.materialFingerprint(book)) {
-      next.riskProfile.confirmedAt = null;
-      next.riskProfile.confirmedBook = null;
+      if (I.confirmationFingerprint(next) !== I.confirmationFingerprint(book)) {
+        next.riskProfile.confirmedAt = null;
+        next.riskProfile.confirmedBook = null;
+      }
       ui.ai = null;
       invalidateCalculations();
       if (ui.pendingAI) native("aiCancel", ui.pendingAI.id);
@@ -8472,7 +9472,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     reviewSaveFailed = false;
   }
   function captureReview() {
-    if (reviewCaptured || reviewSaveFailed || storageError || ui.screen !== "today" || document.visibilityState === "hidden" || s.cached) return;
+    if (reviewCaptured || reviewSaveFailed || storageError || (ui.screen !== "position" || ui.position !== "overview") || document.visibilityState === "hidden" || s.cached) return;
     const input2 = evidence();
     if (!W.canCaptureReview(input2)) return;
     const current = I.checkpoint(input2), payload = JSON.stringify({ version: 1, current });
@@ -8530,19 +9530,35 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     for (const d of [...new Set(book.legs.filter((l) => l.type === "PE" && E.expiryTime(l.expiry) > Date.now()).map((l) => l.expiry))]) request("hedges", d, force);
   }
   function navigate(screen, sub) {
+    if (screen === "today") {
+      screen = "position";
+      sub = "overview";
+    }
+    if (screen === "plan") {
+      screen = "position";
+      sub = sub || "stress";
+    }
+    if (screen === "research" && ["markets", "indicators", "insights"].includes(sub)) {
+      screen = "technicals";
+    }
+    if (screen === "research" && sub === "ai") {
+      screen = "ai";
+      sub = "assistant";
+    }
+    ui.reviewOpen = false;
     ui.screen = screen;
-    if (sub) ui[screen] = sub;
-    if (screen === "today") captureReview();
-    render();
-    window.scrollTo(0, 0);
+    if (sub) ui[screen === "ai" ? "aiPage" : screen] = sub;
+    if (screen === "position" && ui.position === "overview") captureReview();
+    if (screen === "technicals") request("candles", ui.frame);
     if (screen === "research") {
-      if (ui.research === "markets") request("candles", ui.frame);
       if (ui.research === "company") request("fundamentals");
       if (ui.research === "news") {
         request("news");
         request("filings");
       }
     }
+    render();
+    window.scrollTo(0, 0);
   }
   const subnav = (group, items) => '<div class="subnav">'.concat(items.map(([k, t]) => '<button data-sub="'.concat(k, '" class="').concat(ui[group] === k ? "active" : "", '" aria-pressed="').concat(ui[group] === k, '">').concat(esc(t), "</button>")).join(""), "</div>"), intro = (t, n) => '<div class="page-intro"><div class="eyebrow">Hindustan Aeronautics \xB7 NSE</div><h1>'.concat(esc(t), "</h1><p>").concat(esc(n), "</p></div>"), reviews = (items) => items.map((w) => '<article class="review-item"><strong>'.concat(esc(w.title), "</strong><p>").concat(esc(w.detail), "</p></article>")).join("");
   function clocks(q) {
@@ -8568,7 +9584,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     var _a2, _b2;
     const q = E.quoteQuality(m.spot), daily = E.finite(m.spot.price) && E.finite(m.spot.previousClose) ? m.spot.price - m.spot.previousClose : null;
     const next = W.priority(evidence(), configured), c = changes(), recent = (c.ready ? c.newNews : news()).slice(0, 1);
-    return intro("Your daily HAL review", "What changed. What it means for your position. What to review next.") + '<div class="price-ribbon"><div><span class="eyebrow">HAL \xB7 NSE</span><strong>'.concat(money(m.spot.price), '</strong></div><div class="price-change ').concat(color(daily), '">').concat(money(daily), " today").concat(badge(q.status, q.status), "</div></div>") + (!book.legs.length ? card("Start with your actual position", '<p>Connect prices, record your futures and puts, then review them together.</p><ol class="setup-steps"><li>'.concat(configured ? "Prices connected" : btn("connection", "Connect Upstox"), "</li><li>").concat(btn("add", "Add first position", 'class="primary"'), '</li><li>Confirm the entries against your broker.</li></ol><p class="fine">You can record positions offline. No example holdings are added.</p>')) : "") + '<div class="daily-grid"><section class="card hero daily-position"><span class="eyebrow">Your combined position</span><div class="hero-value '.concat(color(l.open), '">').concat(book.legs.length ? money(l.open) : "No open book", '</div><p class="fine">Indicative open P&L \xB7 ').concat(l.manual ? "manual marks included" : l.stale ? "older prices" : l.complete ? "all marks available" : "missing contract prices", '</p><p class="fine">Strategy net <strong>').concat(money(l.net), "</strong> \xB7 includes recorded realised P&amp;L and charges</p>").concat(btn("go-book", "View my position \u2192", 'class="text-button"'), "</section>") + '<section class="card next-review"><span class="eyebrow">Next review</span><h2>'.concat(esc(next.title), "</h2><p>").concat(esc(next.detail), "</p>").concat(btn(next.action, next.label, 'class="primary"')).concat(book.legs.length ? btn("explain-position", "Explain my protection", 'class="text-button"') : "", "</section></div>") + card("Since your last visit", changeView()) + card("Explore your next decision", '<div class="question-grid">'.concat(btn("quick-fall", "If HAL falls 5% \u2192")).concat(btn("quick-expiry", "When my first put expires \u2192")).concat(btn("go-compare", "Reduce exposure or change protection \u2192"), "</div>")) + card(c.ready ? "New evidence to review" : "Latest HAL evidence", c.ready && !recent.length ? empty("No new items in the loaded feed", "Open Business review for existing evidence and upcoming events.") : articleCards(recent, 1), btn("go-company", "Business review \u2192", 'class="text-button"')) + '<details class="card disclosure"><summary>Protection, market context & source times</summary>'.concat(strategySummary(m, true)).concat(row("Futures exposure", num(r.futureUnits, 0) + " units")).concat(row("Net delta", num(r.delta))).concat(row("NIFTY 50", money((_a2 = m.nifty) == null ? void 0 : _a2.price))).concat(row("India VIX", num((_b2 = m.vix) == null ? void 0 : _b2.price))).concat(clocks(m.spot)).concat(btn("health", "Check all feeds", 'class="text-button"'), "</details>");
+    return "" + '<div class="price-ribbon"><div><span class="eyebrow">HAL \xB7 NSE</span><strong>'.concat(money(m.spot.price), '</strong></div><div class="price-change ').concat(color(daily), '">').concat(money(daily), " today").concat(badge(q.status, q.status), "</div></div>") + (!book.legs.length ? card("Start with your actual position", '<p>Connect prices, record your futures and puts, then review them together.</p><ol class="setup-steps"><li>'.concat(configured ? "Prices connected" : btn("connection", "Connect Upstox"), "</li><li>").concat(btn("add", "Add first position", 'class="primary"'), '</li><li>Confirm the entries against your broker.</li></ol><p class="fine">You can record positions offline. No example holdings are added.</p>')) : "") + '<div class="daily-grid"><section class="card hero daily-position"><span class="eyebrow">Your combined position</span><div class="hero-value '.concat(color(l.open), '">').concat(book.legs.length ? money(l.open) : "No open book", '</div><p class="fine">Indicative open P&L \xB7 ').concat(l.manual ? "manual marks included" : l.stale ? "older prices" : l.complete ? "all marks available" : "missing contract prices", '</p><p class="fine">Strategy net <strong>').concat(money(l.net), "</strong> \xB7 includes recorded realised P&amp;L and charges</p>").concat(btn("go-book", "View my position \u2192", 'class="text-button"'), "</section>") + '<section class="card next-review"><span class="eyebrow">Next review</span><h2>'.concat(esc(next.title), "</h2><p>").concat(esc(next.detail), "</p>").concat(btn(next.action, next.label, 'class="primary"')).concat(book.legs.length ? btn("explain-position", "Explain my protection", 'class="text-button"') : "", "</section></div>") + card("Since your last visit", changeView()) + card("Exposure and protection", row("Futures", num(r.futureUnits, 0) + " units \xB7 " + num(r.futureLots, 0) + " lots") + row("Put quantity coverage", pct(r.coverage)) + row("Nearest expiry", date(r.nextExpiry)) + row("Recorded realised after charges", money(l.realized - l.charges))) + recoveryView.cards(false) + card(c.ready ? "New evidence to review" : "Latest HAL evidence", c.ready && !recent.length ? empty("No new items in the loaded feed", "Open Business review for existing evidence and upcoming events.") : articleCards(recent, 1), btn("go-company", "Business review \u2192", 'class="text-button"')) + '<details class="card disclosure"><summary>Protection, market context & source times</summary>'.concat(strategySummary(m, true)).concat(row("Futures exposure", num(r.futureUnits, 0) + " units")).concat(row("Net delta", num(r.delta))).concat(row("NIFTY 50", money((_a2 = m.nifty) == null ? void 0 : _a2.price))).concat(row("India VIX", num((_b2 = m.vix) == null ? void 0 : _b2.price))).concat(clocks(m.spot)).concat(btn("health", "Check all feeds", 'class="text-button"'), "</details>");
   }
   function contractHelp(leg, m) {
     const candidates = m.contracts.filter((c) => c.type === leg.type && (leg.type !== "PE" || c.strike === leg.strike));
@@ -8590,7 +9606,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     }
     if (ui.position === "journal") body = card("Funding snapshot", row("Recorded margin", money(book.funding.margin)) + row("Recorded available funds", money(book.funding.free)) + row("Time", when(book.funding.at)) + '<p class="fine">Manual snapshot; broker margin can change. No account-fund access.</p>', btn("funding", "Update", 'class="text-button"')) + '<div class="toolbar">'.concat(btn("cash", "Record fee / cash", 'class="primary"')).concat(btn("csv", "Journal CSV")).concat(btn("export", "JSON backup")).concat(btn("import", "Import")).concat(btn("recovery", "Previous book"), "</div>") + card("Completed history", book.journal.slice().reverse().map((j) => '<article class="news-item"><strong>'.concat(esc(j.kind === "close" ? "Completed " + j.leg.type + " close" : j.kind), "</strong><small> \xB7 ").concat(date(j.date), "</small>").concat(j.kind === "close" ? row(j.leg.lots + " \xD7 " + j.leg.lotSize + " \xB7 " + date(j.leg.expiry), money((j.exit - j.leg.entry) * E.units(j.leg))) + row("Exit / charges", money(j.exit) + " / " + money(j.fees)) : row("Amount", money(j.amount)), '<p class="fine">').concat(esc(j.note), "</p>").concat(btn("journal-edit", "Correct record", 'data-id="'.concat(esc(j.id), '" class="text-button"')), "</article>")).join("") || empty("No recorded closes")) + (book.legacy ? card("Preserved legacy history", row("Realised", money(book.legacy.realized)) + row("Costs", money(book.legacy.costs)) + table(["Date", "Kind", "Amount", "Note"], book.legacy.journal.map((j) => [j.date, j.kind, money(j.amount), j.note]))) : "");
     if (ui.position === "book" && book.legs.length) body = card("Your strategy together", strategySummary(m) + '<div class="toolbar">'.concat(btn("go-compare", "Compare an adjustment", 'class="primary"')).concat(btn("explain-position", "Explain protection", 'class="text-button"'), "</div>")) + body;
-    return intro("My Position", "Your exact contracts and complete local record.") + subnav("position", [["book", "Book"], ["performance", "Performance"], ["risk", "Risk"], ["journal", "Journal & Funding"]]) + body;
+    return body;
   }
   function scenarioView(r) {
     if (Array.isArray(r)) return card("Sampled scenarios", table(["Shock", "Spot", "P&L", "Quality"], r.map((x) => [pct(x.shock * 100), money(x.spot), money(x.total), x.complete ? x.kind : x.errors.join("; ")])));
@@ -8621,7 +9637,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
       const c = ui.hedges.rankings[k];
       return card(title, c ? "<h3>\u20B9".concat(num(c.contract.strike, 0), " PE \xB7 ").concat(date(c.contract.expiry), "</h3>").concat(row("Gross purchase", money(c.grossCost))).concat(row("Sampled worst loss", money(c.worstLoss))).concat(row("Net cash required", money(c.netCashRequired))).concat(c.expiryGap ? '<p class="warning fine">Protection ends before the last futures expiry.</p>' : "").concat(btn("hedge-detail", "Inspect comparison", 'data-id="'.concat(esc(c.contract.instrumentKey), '" class="text-button"'))) : empty("No qualifying candidate"));
     }).join(""), "</div>").concat(card("Eligibility & ranking", reviews(ui.hedges.errors.map((e) => ({ title: "No forced recommendation", detail: e }))) + "<details><summary>Excluded contracts (".concat(ui.hedges.excluded.length, ")</summary>").concat(table(["Strike", "Expiry", "Reason"], ui.hedges.excluded.map((c) => [c.contract.strike, date(c.contract.expiry), c.reasons.join("; ")])), "</details><details><summary>Ranking method</summary>").concat(ui.hedges.assumptions.map((x) => '<p class="fine">' + esc(x) + "</p>").join(""), "</details>"))) : empty("No comparison requested", "Sampled worst loss is not a guaranteed maximum loss."));
-    return intro("Explore your options", "Start with a question. Compare outcomes before making a decision.") + subnav("plan", [["stress", "What if?"], ["compare", "Compare"], ["hedge", "Find a Hedge"]]) + body;
+    return body;
   }
   function businessBoard() {
     const b = W.businessReview(book.notes, news());
@@ -8635,30 +9651,36 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     else if (v != null) out.push([path, String(v)]);
     return out;
   }
-  function research(m) {
+  function research(m, section) {
     var _a2, _b2, _c;
     let body = "";
     const t = technical(ui.frame), p = D.packet(s, "fundamentals", "D", ui.statement), fund = (p == null ? void 0 : p.data) || {}, base = s.snapshot || {};
-    if (ui.research === "markets") {
+    if (section === "markets") {
       const chain = ((_a2 = D.packet(s, "hedges", ui.expiry)) == null ? void 0 : _a2.data) || ((_b2 = D.packet(s, "chain", ui.expiry)) == null ? void 0 : _b2.data) || (base.option_expiry === ui.expiry ? base : {});
-      body = card("HAL price & volume", '<div class="hero-header"><strong style="font-size:28px">'.concat(money(m.spot.price), "</strong>").concat(badge(E.quoteQuality(m.spot).status), '</div><div class="toolbar">').concat([["D", "Daily"], ["1h", "Hourly"], ["15m", "15 minute"]].map(([k, v]) => btn("frame", v, 'data-id="'.concat(k, '" ').concat(k === ui.frame ? 'class="primary"' : ""))).join("")).concat(btn("candles", "Refresh"), '</div><div id="market-chart" class="chart"></div>').concat(t.rows.length ? "" : empty("Chart unavailable", "Load completed provider candles."), '<p class="fine">').concat(esc(t.bias || "Insufficient history"), " \xB7 ").concat(t.rows.length, " completed bars \xB7 ").concat(when(t.asOf ? new Date(t.asOf).toISOString() : null), '. SMA20/50, volume, saved futures entries and put strikes. <a href="https://www.tradingview.com/">Lightweight Charts\u2122 by TradingView</a>.</p>')) + card("Listed futures", table(["Expiry", "Lot", "LTP", "Volume", "OI", "Previous OI", "Bid / ask"], (base.futures || []).map((f) => {
+      body = card("HAL price & volume", '<div class="hero-header"><strong style="font-size:28px">'.concat(money(m.spot.price), "</strong>").concat(badge(E.quoteQuality(m.spot).status), '</div><div class="toolbar">').concat([["D", "Daily"], ["1h", "Hourly"], ["15m", "15 minute"]].map(([k, v]) => btn("frame", v, 'data-id="'.concat(k, '" ').concat(k === ui.frame ? 'class="primary"' : ""))).join("")).concat(btn("candles", "Refresh"), '</div><div id="market-chart" class="chart"></div>').concat(t.rows.length ? "" : empty("Chart unavailable", "Load completed provider candles."), '<p class="fine">').concat(esc(t.bias || "Insufficient history"), " \xB7 ").concat(t.rows.length, " completed bars \xB7 ").concat(when(t.asOf ? new Date(t.asOf).toISOString() : null), '. SMA20/50/200, volume, saved futures entries and put strikes. <a href="https://www.tradingview.com/">Lightweight Charts\u2122 by TradingView</a>.</p>')) + card("Listed futures", table(["Expiry", "Lot", "LTP", "Volume", "OI", "Previous OI", "Bid / ask"], (base.futures || []).map((f) => {
         var _a3, _b3, _c2, _d, _e, _f;
         return [date(f.expiry), f.lot_size, money((_a3 = f.quote) == null ? void 0 : _a3.last_price), num((_b3 = f.quote) == null ? void 0 : _b3.volume, 0), num((_c2 = f.quote) == null ? void 0 : _c2.open_interest, 0), num((_d = f.quote) == null ? void 0 : _d.previous_oi, 0), money((_e = f.quote) == null ? void 0 : _e.bid) + " / " + money((_f = f.quote) == null ? void 0 : _f.ask)];
       }))) + card("Option chain", '<div class="form-grid">'.concat(select("chain-expiry", "Expiry", (base.available_expiries || []).map((x) => [x, date(x)]), ui.expiry)).concat(select("chain-side", "Side", [["PE", "Puts"], ["CE", "Calls"]], ui.side), "</div>").concat(btn("chain", "Refresh chain"), '<p class="warning">').concat(esc(D.message(chain.chain_error || ((_c = s.health[D.key("hedges", ui.expiry)]) == null ? void 0 : _c.error) || "").replace(/^Data unavailable$/, "")), "</p>").concat((chain.option_rows || []).length ? "" : empty("No option rows for this expiry", "Check Data health or select another listed expiry and refresh."), '<p class="fine">Provider IV is percent. Chain retrieval does not certify recent trades or individual Greek timestamps.</p>').concat(table(["Strike", "LTP", "Bid", "Ask", "Volume", "OI", "IV", "Delta", "Theta"], ((chain == null ? void 0 : chain.option_rows) || []).map((r) => {
         var _a3, _b3, _c2, _d, _e, _f, _g, _h, _i, _j, _k;
         const q = ui.side === "PE" ? r.put : r.call;
-        return [r.strike, money((_b3 = (_a3 = q == null ? void 0 : q.quote) == null ? void 0 : _a3.last_price) != null ? _b3 : q == null ? void 0 : q.ltp), money((_d = (_c2 = q == null ? void 0 : q.quote) == null ? void 0 : _c2.bid) != null ? _d : q == null ? void 0 : q.bid), money((_f = (_e = q == null ? void 0 : q.quote) == null ? void 0 : _e.ask) != null ? _f : q == null ? void 0 : q.ask), num((_h = (_g = q == null ? void 0 : q.quote) == null ? void 0 : _g.volume) != null ? _h : q == null ? void 0 : q.volume, 0), num((_k = (_j = (_i = q == null ? void 0 : q.quote) == null ? void 0 : _i.open_interest) != null ? _j : q == null ? void 0 : q.oi) != null ? _k : q == null ? void 0 : q.open_interest, 0), pct(q == null ? void 0 : q.iv), num(q == null ? void 0 : q.delta, 3), num(q == null ? void 0 : q.theta, 3)];
+        return [ui.side === "PE" && book.legs.some((l) => l.type === "PE" && l.expiry === ui.expiry && l.strike === r.strike) ? String(r.strike) + " \xB7 held" : r.strike, money((_b3 = (_a3 = q == null ? void 0 : q.quote) == null ? void 0 : _a3.last_price) != null ? _b3 : q == null ? void 0 : q.ltp), money((_d = (_c2 = q == null ? void 0 : q.quote) == null ? void 0 : _c2.bid) != null ? _d : q == null ? void 0 : q.bid), money((_f = (_e = q == null ? void 0 : q.quote) == null ? void 0 : _e.ask) != null ? _f : q == null ? void 0 : q.ask), num((_h = (_g = q == null ? void 0 : q.quote) == null ? void 0 : _g.volume) != null ? _h : q == null ? void 0 : q.volume, 0), num((_k = (_j = (_i = q == null ? void 0 : q.quote) == null ? void 0 : _i.open_interest) != null ? _j : q == null ? void 0 : q.oi) != null ? _k : q == null ? void 0 : q.open_interest, 0), pct(q == null ? void 0 : q.iv), num(q == null ? void 0 : q.delta, 3), num(q == null ? void 0 : q.theta, 3)];
       })))) + card("Foreground stream preview", '<p class="fine">Observation only. Streams stop when Android pauses the app and never overwrite REST marks.</p><div class="toolbar">'.concat(btn("stream-start", "Start preview")).concat(btn("stream-stop", "Stop"), '</div><div id="stream-view">').concat(streamView(), "</div>")) + card("Data quality", clocks(m.spot), btn("health", "All feeds", 'class="text-button"'));
     }
-    if (ui.research === "company") {
-      const a = technical();
-      body = card("Daily technical evidence", "".concat(badge(a.bias || "Insufficient history", a.stale ? "stale" : ""), '<p class="fine">').concat(a.rows.length, " completed bars \xB7 ").concat(when(a.asOf ? new Date(a.asOf).toISOString() : null), "</p>").concat(table(["Indicator", "Value"], [["SMA20 / 50 / 200", money(a.sma20) + " / " + money(a.sma50) + " / " + money(a.sma200)], ["EMA12 / 26", money(a.ema12) + " / " + money(a.ema26)], ["RSI14", num(a.rsi)], ["MACD / signal / histogram", num(a.macd) + " / " + num(a.signal) + " / " + num(a.hist)], ["ATR14", money(a.atr)], ["MFI14", num(a.mfi)], ["Bollinger lower / upper", money(a.bbLow) + " / " + money(a.bbHigh)], ["Support / resistance", money(a.support) + " / " + money(a.resistance)], ["Pivot / S1 / R1", money(a.pivot) + " / " + money(a.s1) + " / " + money(a.r1)], ["Historical volatility", pct(a.vol)], ["Volume trend", a.volumeTrend]]), '<p class="fine">Locally derived indicators. Recent extremes and pivots are observations, not instructions. Incomplete or stale history withholds directional conclusions.</p>'), btn("technical", "Refresh", 'class="text-button"')) + card("Company fundamentals", "".concat(select("statement", "Reporting basis", [["consolidated", "Consolidated"], ["standalone", "Standalone"]], ui.statement)).concat(btn("fundamentals", "Refresh fundamentals"), '<p class="fine">Provider-reported facts \xB7 retrieved ').concat(when(p == null ? void 0 : p.fetched_at_iso), ". Reporting-period and unit fields remain as returned; missing information is not estimated.</p>").concat(Object.entries({ profile: "Profile", income: "Quarterly income", annual: "Annual income", ratios: "Valuation ratios", balance: "Balance sheet", cash: "Cash flow", shareholding: "Shareholding", actions: "Corporate actions", peers: "Competitors" }).map(([k, v]) => {
+    if (section === "indicators") {
+      const a = technical(ui.frame);
+      body = card("Trend by timeframe", table(["Timeframe", "Completed bars", "Evidence"], [["D", "Daily"], ["1h", "Hourly"], ["15m", "15 minute"]].map(([f, n]) => {
+        const t2 = technical(f);
+        return [n, t2.completedCount, t2.bias || "Insufficient history"];
+      }))) + card("Technical evidence \xB7 " + ui.frame, "".concat(badge(a.bias || "Insufficient history", a.stale ? "stale" : ""), '<p class="fine">').concat(a.rows.length, " completed bars \xB7 ").concat(when(a.asOf ? new Date(a.asOf).toISOString() : null), "</p>").concat(table(["Indicator", "Value"], [["SMA20 / 50 / 200", money(a.sma20) + " / " + money(a.sma50) + " / " + money(a.sma200)], ["EMA12 / 26", money(a.ema12) + " / " + money(a.ema26)], ["RSI14", num(a.rsi)], ["MACD / signal / histogram", num(a.macd) + " / " + num(a.signal) + " / " + num(a.hist)], ["ATR14", money(a.atr)], ["MFI14", num(a.mfi)], ["Bollinger lower / upper", money(a.bbLow) + " / " + money(a.bbHigh)], ["Support / resistance", money(a.support) + " / " + money(a.resistance)], ["Pivot / S1 / R1", money(a.pivot) + " / " + money(a.s1) + " / " + money(a.r1)], ["Historical volatility", pct(a.vol)], ["Volume trend", a.volumeTrend]]), '<p class="fine">Locally derived indicators. Recent extremes and pivots are observations, not instructions. Incomplete or stale history withholds directional conclusions.</p>'), btn("candles", "Refresh selected timeframe", 'class="text-button"'));
+    }
+    if (section === "company") {
+      body = card("Company fundamentals", "".concat(select("statement", "Reporting basis", [["consolidated", "Consolidated"], ["standalone", "Standalone"]], ui.statement)).concat(btn("fundamentals", "Refresh fundamentals"), '<p class="fine">Provider-reported facts \xB7 retrieved ').concat(when(p == null ? void 0 : p.fetched_at_iso), ". Reporting-period and unit fields remain as returned; missing information is not estimated.</p>").concat(Object.entries({ profile: "Profile", income: "Quarterly income", annual: "Annual income", ratios: "Valuation ratios", balance: "Balance sheet", cash: "Cash flow", shareholding: "Shareholding", actions: "Corporate actions", peers: "Competitors" }).map(([k, v]) => {
         var _a3;
         return "<details><summary>".concat(v).concat(fund[k] ? "" : " \xB7 unavailable", "</summary>").concat(fund[k] ? table(["Provider field / period", "Reported value"], facts(fund[k])) : empty("Unavailable", D.message(((_a3 = p == null ? void 0 : p.errors) == null ? void 0 : _a3[k]) || "No verified data loaded")), "</details>");
       }).join(""), '<a href="https://upstox.com/developer/api-documentation/fundamentals/">Source documentation</a>')) + card("Business notes & events", book.notes.map((n) => '<article class="news-item">'.concat(badge("User-entered note"), "<h3>").concat(esc(n.title), "</h3><p>").concat(esc(n.text), '</p><p class="fine">').concat(esc(n.category), " \xB7 ").concat(date(n.date), " \xB7 Event ").concat(date(n.eventDate), "</p>").concat(n.url ? btn("link", "Source", 'data-url="'.concat(esc(n.url), '" class="text-button"')) : "").concat(btn("note-edit", "Edit", 'data-id="'.concat(esc(n.id), '" class="text-button"')), "</article>")).join("") || empty("No business notes", "Record verified order backlog, execution progress and guidance with source links."), btn("note", "Add note", 'class="text-button"'));
     }
-    if (ui.research === "company") body = businessBoard() + '<details class="card disclosure"><summary>Financial statements, indicators & all notes</summary>' + body + "</details>";
-    if (ui.research === "news") {
+    if (section === "company") body = businessBoard() + '<details class="card disclosure"><summary>Financial statements and business notes</summary>' + body + "</details>";
+    if (section === "news") {
       let list = ui.filter === "saved" ? book.bookmarks.map((n) => ({ ...n, publishedAt: n.published })) : news();
       if (ui.filter === "official") list = list.filter((n) => n.official);
       const re = { orders: /order|contract|defence|defense/i, results: /profit|revenue|earnings|results|dividend/i, delivery: /deliver|production|engine|tejas|helicopter/i }[ui.filter];
@@ -8666,9 +9688,9 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
       if (ui.search) list = list.filter((n) => n.title.toLowerCase().includes(ui.search.toLowerCase()));
       body = card("HAL newsroom", '<div class="form-grid">'.concat(select("news-filter", "Topic", [["all", "All news"], ["official", "Official filings"], ["orders", "Orders"], ["results", "Results"], ["delivery", "Delivery / execution"], ["saved", "Bookmarks"]], ui.filter)).concat(input("news-search", "Headline search", ui.search, "search"), "</div>").concat(btn("news", "Refresh news")).concat(articleCards(list, 60))) + card("Offline financial sentiment", '<p class="fine">Opt-in English FinBERT classification. Sentiment is text classification, not a HAL price prediction. Model/tokenizer are pinned and checksum verified; excluded from backups.</p>'.concat(row("Model status", ui.finbert.state)).concat(ui.finbert.progress != null ? row("Progress", pct(ui.finbert.progress)) : "", '<p class="fine">').concat(esc(ui.finbert.message), '</p><div class="toolbar">').concat(ui.finbert.state === "ready" ? btn("sentiment", "Classify headlines") + btn("model-remove", "Remove model") : btn("model-install", "Download ~111 MB")).concat(ui.finbert.state === "downloading" ? btn("model-cancel", "Cancel download") : "", "</div>"));
     }
-    if (ui.research === "insights") body = card("Change since review", changeView(), btn("checkpoint", "Save checkpoint", 'class="text-button"')) + card("Skills Coach", reviews(I.coach(evidence()))) + card("Historical pattern scanner", '<p class="fine">Normalized return-distance comparison of completed, non-overlapping windows. Sample outcomes are descriptive, not predictive probabilities or backtested trading signals.</p><div class="form-grid">'.concat(input("pattern-window", "Pattern window (sessions)", ui.patternWindow)).concat(input("pattern-forward", "Outcome horizon (sessions)", ui.patternForward), '</div><div class="toolbar">').concat(btn("patterns-load", "Load history")).concat(btn("patterns", "Compare", 'class="primary"'), "</div>").concat(ui.pattern ? '<p class="fine">' + esc(ui.pattern.reason || ui.pattern.metric) + "</p>" + table(["Pattern ended", "Distance \u2193", "Later return"], (ui.pattern.matches || []).map((x) => [when(x.to), num(x.distance, 4), pct(x.outcome)])) + (ui.pattern.summary ? table(["Samples", "Median", "Worst / best"], [[ui.pattern.sampleCount, pct(ui.pattern.summary.median), pct(ui.pattern.summary.min) + " / " + pct(ui.pattern.summary.max)]]) : "") : empty("No scan requested")));
-    if (ui.research === "ai") body = card("Evidence-grounded AI Desk", '<p class="fine">Optional Gemini directly from Android. Your own API key and Google quota apply. Local deterministic calculations remain authoritative.</p>'.concat(row("Connection", ui.aiConfigured ? "Configured \xB7 " + ui.model : "Disabled / no API key")).concat(btn("ai-settings", "Manage key")).concat(select("ai-mode", "Workspace", [["copilot", "Position Copilot"], ["deliberate", "Six-Perspective Research"], ["research", "Research Assistant"]], ui.aiMode), '<label><input id="ai-share" type="checkbox" ').concat(ui.share ? "checked" : "", " ").concat(ui.aiMode === "research" ? "disabled" : "", '>Include position evidence</label><label>Question<textarea id="ai-question" maxlength="2000">').concat(esc(ui.question), '</textarea></label><p class="fine">Research Assistant always excludes your portfolio. Credentials, private journal memos and business-note text are excluded.</p><div class="toolbar">').concat(btn("ai-review", "Review exact evidence", 'class="primary"' + (ui.pendingAI ? " disabled" : ""))).concat(ui.pendingAI ? btn("ai-cancel", "Cancel request") : "", '</div><p class="warning">').concat(esc(ui.aiError || (ui.pendingAI ? "Waiting for Gemini\u2026" : "")), "</p>")) + (ui.ai ? card(I.canUseAnswer(ui.ai, book) ? "AI interpretation" : "Previous conclusion invalidated", I.canUseAnswer(ui.ai, book) ? '<p class="fine">Evidence '.concat(when(ui.ai.evidenceAt), " \xB7 ").concat(ui.ai.portfolioIncluded ? "Position " + esc(ui.ai.bookRevision) : "Portfolio excluded", '</p><div class="ai-output">').concat(esc(ui.ai.reply || ui.ai.text || ui.ai.answer || ui.ai.content || "No text returned"), "</div>") : empty("The position changed", "Review updated evidence and request a new answer.")) : "");
-    return intro("Research", "HAL evidence, with source quality always in view.") + subnav("research", [["markets", "Markets"], ["company", "Business"], ["news", "News"], ["insights", "Insights"], ["ai", "AI Desk"]]) + body;
+    if (section === "insights") body = card("Historical pattern scanner", '<p class="fine">Normalized return-distance comparison of completed, non-overlapping windows. Sample outcomes are descriptive, not predictive probabilities or backtested trading signals.</p><div class="form-grid">'.concat(input("pattern-window", "Pattern window (sessions)", ui.patternWindow)).concat(input("pattern-forward", "Outcome horizon (sessions)", ui.patternForward), '</div><div class="toolbar">').concat(btn("patterns-load", "Load history")).concat(btn("patterns", "Compare", 'class="primary"'), "</div>").concat(ui.pattern ? '<p class="fine">' + esc(ui.pattern.reason || ui.pattern.metric) + "</p>" + table(["Pattern ended", "Distance \u2193", "Later return"], (ui.pattern.matches || []).map((x) => [when(x.to), num(x.distance, 4), pct(x.outcome)])) + (ui.pattern.summary ? table(["Samples", "Median", "Worst / best"], [[ui.pattern.sampleCount, pct(ui.pattern.summary.median), pct(ui.pattern.summary.min) + " / " + pct(ui.pattern.summary.max)]]) : "") : empty("No scan requested")));
+    if (section === "ai") body = card("Evidence-grounded AI Desk", '<p class="fine">Optional Gemini directly from Android. Your own API key and Google quota apply. Local deterministic calculations remain authoritative.</p>'.concat(row("Connection", ui.aiConfigured ? "Configured \xB7 " + ui.model : "Disabled / no API key")).concat(btn("ai-settings", "Manage key")).concat(select("ai-mode", "Workspace", [["copilot", "Position Copilot"], ["deliberate", "Six-Perspective Research"], ["research", "Research Assistant"]], ui.aiMode), '<label><input id="ai-share" type="checkbox" ').concat(ui.share ? "checked" : "", " ").concat(ui.aiMode === "research" ? "disabled" : "", '>Include position evidence</label><label>Question<textarea id="ai-question" maxlength="2000">').concat(esc(ui.question), '</textarea></label><p class="fine">Research Assistant always excludes your portfolio. Credentials, private journal memos and business-note text are excluded.</p><div class="toolbar">').concat(btn("ai-review", "Review exact evidence", 'class="primary"' + (ui.pendingAI ? " disabled" : ""))).concat(ui.pendingAI ? btn("ai-cancel", "Cancel request") : "", '</div><p class="warning">').concat(esc(ui.aiError || (ui.pendingAI ? "Waiting for Gemini\u2026" : "")), "</p>")) + (ui.ai ? card(I.canUseAnswer(ui.ai, book) ? "AI interpretation" : "Previous conclusion invalidated", I.canUseAnswer(ui.ai, book) ? '<p class="fine">Evidence '.concat(when(ui.ai.evidenceAt), " \xB7 ").concat(ui.ai.portfolioIncluded ? "Position " + esc(ui.ai.bookRevision) : "Portfolio excluded", '</p><div class="ai-output">').concat(esc(ui.ai.reply || ui.ai.text || ui.ai.answer || ui.ai.content || "No text returned"), "</div>") : empty("The position changed", "Review updated evidence and request a new answer.")) : "");
+    return body;
   }
   function streamView() {
     const x = s.stream;
@@ -8688,9 +9710,29 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     const vol = chart.addSeries(LightweightCharts.HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "volume" });
     vol.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
     vol.setData(t.rows.map((r) => ({ time: r.t / 1e3, value: r.v, color: r.c >= r.o ? "#38786b" : "#75424d" })));
-    for (const [k, color2] of [["sma20", "#bcb4fb"], ["sma50", "#e2be78"]]) if ((_a2 = t.series) == null ? void 0 : _a2[k]) chart.addSeries(LightweightCharts.LineSeries, { color: color2, lineWidth: 1, priceLineVisible: false, lastValueVisible: false }).setData(t.rows.map((r, i) => ({ time: r.t / 1e3, value: t.series[k][i] })).filter((x) => E.finite(x.value)));
+    for (const [k, color2] of [["sma20", "#bcb4fb"], ["sma50", "#e2be78"], ["sma200", "#70c8be"]]) if ((_a2 = t.series) == null ? void 0 : _a2[k]) chart.addSeries(LightweightCharts.LineSeries, { color: color2, lineWidth: 1, priceLineVisible: false, lastValueVisible: false }).setData(t.rows.map((r, i) => ({ time: r.t / 1e3, value: t.series[k][i] })).filter((x) => E.finite(x.value)));
     for (const l of book.legs) cs.createPriceLine({ price: l.type === "FUT" ? l.entry : l.strike, color: "#edc78a", lineWidth: 1, lineStyle: 2, title: l.type === "FUT" ? "Futures entry" : "Owned put strike" });
     chart.timeScale().fitContent();
+  }
+  function workspace(m, l, r) {
+    const labels = { position: "Current position", history: "Lifetime history", technicals: "Technicals", research: "Fundamentals & news", ai: "AI Desk" };
+    const heading = '<div class="desk-heading"><div><small>Hindustan Aeronautics \xB7 NSE</small><h1>'.concat(esc(labels[ui.screen]), "</h1></div>").concat(btn("period-review", ui.reviewOpen ? "Close review" : "Review periods", 'class="text-button"'), "</div>");
+    if (ui.reviewOpen) return heading + reviewView.view();
+    if (ui.screen === "history") return heading + historyView.view() + recoveryView.cards(true);
+    if (ui.screen === "position") {
+      const items = [["overview", "Overview"], ["book", "Book"], ["risk", "Risk"], ["stress", "What-if"], ["break-even", "Break-even"], ["hedge", "Find a hedge"], ["compare", "Compare"], ["performance", "Performance"], ["journal", "Journal & funding"]];
+      const nav = subnav("position", items);
+      if (ui.position === "overview") return heading + nav + today(m, l, r);
+      if (ui.position === "break-even") return heading + nav + recoveryView.form();
+      if (["stress", "compare", "hedge"].includes(ui.position)) {
+        ui.plan = ui.position;
+        return heading + nav + plan(m);
+      }
+      return heading + nav + position(m, l, r);
+    }
+    if (ui.screen === "technicals") return heading + subnav("technicals", [["markets", "Charts & derivatives"], ["indicators", "Indicators"], ["insights", "Pattern scanner"]]) + research(m, ui.technicals);
+    if (ui.screen === "ai") return heading + subnav("aiPage", [["assistant", "Assistant"], ["coach", "Skills coach"]]) + (ui.aiPage === "coach" ? card("Position review", reviews(I.coach(evidence()))) : research(m, "ai"));
+    return heading + subnav("research", [["company", "Business"], ["news", "News & filings"]]) + research(m, ui.research);
   }
   function render() {
     var _a2;
@@ -8705,8 +9747,8 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     $("notice").textContent = storageError ? "Saved book could not be loaded. Existing records preserved. Open Settings \u2192 Recovery." : s.failure ? D.message(s.failure) + " Previous observations remain visible." : s.cached ? "Showing cached observations. Check source and trade timestamps." : "";
     $("notice").hidden = !$("notice").textContent;
     document.querySelectorAll("[data-screen]").forEach((b) => b.setAttribute("aria-current", b.dataset.screen === ui.screen ? "page" : "false"));
-    $("main").innerHTML = storageError && ui.screen !== "research" ? intro("Saved book needs recovery", "Existing records are preserved.") + card("Financial values withheld", empty("The saved book could not be validated", "Recover the previous book before editing or valuing the portfolio."), btn("recovery", "Review recovery", 'class="text-button"')) : ui.screen === "today" ? today(m, l, r) : ui.screen === "position" ? position(m, l, r) : ui.screen === "plan" ? plan(m) : research(m);
-    if (ui.screen === "research" && ui.research === "markets") drawChart();
+    $("main").innerHTML = storageError && ["position", "history"].includes(ui.screen) ? intro("Saved book needs recovery", "Existing records are preserved.") + card("Financial values withheld", empty("The saved book could not be validated", "Recover the previous book before editing or valuing the portfolio."), btn("recovery", "Review recovery", 'class="text-button"')) : workspace(m, l, r);
+    if (ui.screen === "technicals" && ui.technicals === "markets" && !ui.reviewOpen) drawChart();
   }
   function modal(title, html, label, fn) {
     returnFocus = document.activeElement;
@@ -8758,7 +9800,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
       if (!$("confirm-check").checked) throw Error("Check the broker confirmation before saving.");
       const b = clone(book);
       b.riskProfile.confirmedAt = stamp();
-      b.riskProfile.confirmedBook = I.materialFingerprint(b);
+      b.riskProfile.confirmedBook = I.confirmationFingerprint(b);
       if (b.migration) b.migration.reviewRequired = false;
       commit(b);
     });
@@ -8852,7 +9894,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     });
   }
   function settings() {
-    modal("HAL Desk 4.1.0 \xB7 Settings", '<p class="fine">Personal read-only research. Android 8+. Credentials stay encrypted natively; market and AI calls use fixed HTTPS destinations.</p><div class="toolbar">'.concat(btn("connection", "Upstox connection")).concat(btn("ai-settings", "Gemini settings")).concat(btn("token-page", "Get Analytics Token"), "</div>").concat(select("theme", "Appearance", [["dark", "Graphite dark"], ["light", "Paper light"], ["system", "Follow device"]], book.preferences.theme)).concat(select("mark-mode", "Put valuation marks", [["ltp", "Last traded price"], ["bid", "Quoted bid"]], book.preferences.markMode), '<label><input id="auto-refresh" type="checkbox" ').concat(book.preferences.auto ? "checked" : "", '>Refresh roughly every 60 seconds while foreground</label><p class="fine">Android background monitoring is not guaranteed. No automatic paid AI requests occur.</p><div class="toolbar">').concat(btn("export", "Export JSON")).concat(btn("csv", "Journal CSV")).concat(btn("import", "Import backup")).concat(btn("recovery", "Recovery")).concat(btn("health", "Data health"), "</div>"), "Save preferences", () => commit({ ...book, preferences: { theme: text("theme"), markMode: text("mark-mode"), auto: $("auto-refresh").checked } }));
+    modal("HAL Desk 4.2.0 \xB7 Settings", '<p class="fine">Personal read-only research. Android 8+. Credentials stay encrypted natively; market and AI calls use fixed HTTPS destinations.</p><div class="toolbar">'.concat(btn("connection", "Upstox connection")).concat(btn("ai-settings", "Gemini settings")).concat(btn("token-page", "Get Analytics Token"), "</div>").concat(select("theme", "Appearance", [["dark", "Graphite dark"], ["light", "Paper light"], ["system", "Follow device"]], book.preferences.theme)).concat(select("mark-mode", "Put valuation marks", [["ltp", "Last traded price"], ["bid", "Quoted bid"]], book.preferences.markMode), '<label><input id="auto-refresh" type="checkbox" ').concat(book.preferences.auto ? "checked" : "", '>Refresh roughly every 60 seconds while foreground</label><p class="fine">Android background monitoring is not guaranteed. No automatic paid AI requests occur.</p><div class="toolbar">').concat(btn("export", "Export JSON")).concat(btn("csv", "Journal CSV")).concat(btn("import", "Import backup")).concat(btn("recovery", "Recovery")).concat(btn("health", "Data health"), "</div>"), "Save preferences", () => commit({ ...book, preferences: { theme: text("theme"), markMode: text("mark-mode"), auto: $("auto-refresh").checked } }));
   }
   function health() {
     modal("Data readiness & connection health", Object.entries(s.health).map(([k, h]) => '<div class="health-row"><div><strong>'.concat(esc(k), "</strong><small>Success ").concat(when(h.lastSuccess), "<br>Failure ").concat(when(h.lastFailure), "</small><small>").concat(esc(h.error ? D.message(h.error) : ""), "</small></div>").concat(badge(h.pending ? "Loading" : h.error ? "Needs review" : h.lastSuccess ? "Retrieved" : "Unavailable", h.error ? "stale" : ""), "</div>")).join("") || empty("No feeds requested"), null, null);
@@ -8895,8 +9937,8 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
       ui.ai = null;
       ui.pendingAI = { id, evidence: packet };
       native("ai", JSON.stringify({ id, mode: ui.aiMode, message: question, evidence: packet, consent: true }));
-      ui.screen = "research";
-      ui.research = "ai";
+      ui.screen = "ai";
+      ui.aiPage = "assistant";
       render();
     });
   }
@@ -8912,7 +9954,8 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
       if (!puts.length) throw Error("No active put expiry to explore. Add your actual protection first.");
       ui.scenario.horizon = puts[0].expiry;
     }
-    ui.screen = "plan";
+    ui.screen = "position";
+    ui.position = "stress";
     ui.plan = "stress";
     ui.result = E.scenario(book, m, scenarioParams());
     ui.resultAt = stamp();
@@ -9015,6 +10058,13 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
       if (n) aiReview({ mode: "research", news: [{ ...n, publishedAt: n.publishedAt || n.published }], question: "Explain this HAL headline and its possible relevance to orders, deliveries, margins or cash flow: " + n.title + ". Use only the supplied headline/summary and sources; identify missing detail and do not claim to have read the full filing." });
     }
   });
+  const viewAPI = { get: () => ({ book, market: market(), evidence: evidence(), sessionBaseline: reviewBaseline }), getBook: () => book, commit, render, modal, esc, money, num, pct, date, when, row, table, card, btn, tile, badge, input, select, empty, native, navigate, backup: () => actions.export() };
+  const historyView = window.HALHistoryViews(viewAPI), recoveryView = window.createHalRecovery(viewAPI), reviewView = window.createHalReview(viewAPI);
+  Object.assign(actions, historyView.actions, recoveryView.actions, reviewView.actions, { "period-review": () => {
+    ui.reviewOpen = !ui.reviewOpen;
+    render();
+    window.scrollTo(0, 0);
+  } });
   document.addEventListener("click", (ev) => {
     var _a2;
     const a = ev.target.closest("a[href]");
@@ -9027,16 +10077,14 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     const screen = ev.target.closest("[data-screen]"), sub = ev.target.closest("[data-sub]"), b = ev.target.closest("[data-action]");
     try {
       if (screen) navigate(screen.dataset.screen);
-      if (sub) {
-        ui[ui.screen] = sub.dataset.sub;
-        navigate(ui.screen);
-      }
+      if (sub) navigate(ui.screen, sub.dataset.sub);
       if (b) (_a2 = actions[b.dataset.action]) == null ? void 0 : _a2.call(actions, b);
     } catch (e) {
       toast(e.message);
     }
   });
   function rememberInput(id) {
+    recoveryView.remember(id);
     if (id.startsWith("sc-") || id.startsWith("compare-")) clearCalculationOutput();
     if (id.startsWith("sc-")) {
       readScenario();
@@ -9067,6 +10115,9 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   document.addEventListener("change", (ev) => {
     const id = ev.target.id;
     rememberInput(id);
+    historyView.change(id);
+    reviewView.change(id);
+    recoveryView.change(id);
     if (id === "chain-expiry") {
       ui.expiry = ev.target.value;
       request("hedges", ui.expiry);
@@ -9123,6 +10174,14 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   });
   function receive(event, data) {
     var _a2, _b2, _c, _d, _e, _f, _g, _h, _i;
+    if (event === "history_preview") {
+      try {
+        historyView.preview(data);
+      } catch (e) {
+        toast(e.message);
+      }
+      return;
+    }
     if (event === "lifecycle" && data.state === "resumed") {
       resumeReview(data.awayMs);
       s.loading = false;
@@ -9206,7 +10265,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   }
   window.HALApp = { receive, back: () => {
     if (!$("modal").hidden) closeModal();
-    else if (ui.screen !== "today") navigate("today");
+    else if (ui.screen !== "position" || ui.position !== "overview" || ui.reviewOpen) navigate("position", "overview");
     else native("minimize");
   } };
   try {
