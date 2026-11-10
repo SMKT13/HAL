@@ -113,5 +113,80 @@ await check('updated daily and planning layouts fit phone widths in both themes'
  A.deepEqual(x.errors,[]);await x.context.close();
 });
 
+await (async()=>{
+  await browser.close();
+  browser=await launch();
+  const leg={id:'qa-future',type:'FUT',expiry:'2026-12-29',lots:2,lotSize:10,entry:1000,manual:null,instrumentKey:'QA_FUTURE'};
+  const packet={format:'HALDeskHistory',payload:{sourceId:'qa-summary',sourceName:'Synthetic contract report',mode:'incremental',
+    records:[{sourceRow:'7',type:'FUT',contractMonth:'2025-03',units:10,entry:400,exit:303,gross:-970}]},
+    charges:{amount:30,asOf:'2026-10-31',source:'Synthetic charge statement'}};
+  const run=await pageFor({book:{...E.emptyBook(),legs:[leg]}});
+  const p=run.page;
+  const main=p.locator('main');
+  try{
+    await check('history import previews the reconciled net and preserves open contracts',async()=>{
+      await nav(p,'history');
+      await click(p,'history-import');
+      A.equal(await p.evaluate(()=>calls.filter(x=>x[0]==='importHistory').length),1);
+      await emit(p,'history_preview',packet);
+      await p.locator('#history-include-charges').check();
+      A.match(await p.locator('#history-effect').innerText(),/−₹1,000\.00/);
+      await p.locator('#modal-save').click();
+      A.match(await p.locator('#modal-error').innerText(),/confirm/i);
+      A.equal(await p.evaluate(()=>rev),0);
+      await p.locator('#history-reviewed').check();
+      await save(p);
+      const savedState=await p.evaluate(()=>saved);
+      A.deepEqual(savedState.legs.map(l=>[l.id,l.lots,l.lotSize,l.entry]),[['qa-future',2,10,1000]]);
+      A.equal(savedState.history.records.length,1);
+      A.equal(savedState.history.charges.amount,30);
+      A.match(await main.innerText(),/−₹1,000\.00/);
+    });
+    await check('re-import through the history preview keeps one contract and one fee statement',async()=>{
+      await emit(p,'history_preview',packet);
+      A.match(await p.locator('#modal-body').innerText(),/Already imported\s+1/);
+      await p.locator('#history-include-charges').check();
+      await p.locator('#history-reviewed').check();
+      await save(p);
+      A.equal(await p.evaluate(()=>saved.history.records.length),1);
+      A.match(await main.innerText(),/−₹1,000\.00/);
+    });
+    await check('open and lifetime break-even use separate charge scopes and invalidate after a fee correction',async()=>{
+      await nav(p,'position','break-even');
+      await p.locator('#be-rate').fill('0');
+      await p.locator('#be-enter').fill('20');
+      await p.locator('#be-exit').fill('10');
+      await p.locator('#be-slippage').fill('0');
+      await click(p,'be-calculate');
+      const results=p.locator('#be-results');
+      const row=label=>results.locator('tbody tr').filter({has:p.getByRole('cell',{name:label,exact:true})}).first();
+      A.match(await row('Open gross').innerText(),/₹1,000\.00/);
+      A.match(await row('Open after costs').innerText(),/₹1,001\.50/);
+      A.match(await row('Lifetime recovery').innerText(),/₹1,050\.50/);
+      A.match(await row('Lifetime recovery').innerText(),/Current spot unavailable/);
+      A.equal(await results.locator('svg').count(),1);
+      await nav(p,'history');
+      const card=main.locator('section').filter({has:p.getByRole('heading',{name:'Lifetime recovery break-even',exact:true})});
+      A.match(await card.innerText(),/₹1,050\.50/);
+      await click(p,'history-charges');
+      await p.locator('#history-fee').fill('50');
+      await p.locator('#history-covers').check();
+      await save(p);
+      A.doesNotMatch(await card.innerText(),/₹1,050\.50/);
+      await nav(p,'position','break-even');await click(p,'be-calculate');
+      A.match(await row('Lifetime recovery').innerText(),/₹1,051\.50/);
+    });
+    await check('calendar reviews show observation gaps and invoke Android printing only on demand',async()=>{
+      await click(p,'period-review');
+      await p.locator('#review-period').selectOption('week');
+      A.match(await main.innerText(),/Comparison unavailable/);
+      A.match(await main.innerText(),/two distinct saved observations/i);
+      A.equal(await p.evaluate(()=>calls.filter(x=>x[0]==='printReview').length),0);
+      await click(p,'print-review');
+      A.equal(await p.evaluate(()=>calls.filter(x=>x[0]==='printReview').length),1);
+      A.deepEqual(run.errors,[]);
+    });
+  }finally{await run.context.close();}
+})();
 console.log(`${checks} UI integration checks passed (synthetic bridge, not Android device tests).`)
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});
