@@ -18,16 +18,23 @@ function canonical(value){
 }
 function fingerprint(value){let h=2166136261;const s=canonical(value);for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return 'rev-'+(h>>>0).toString(16).padStart(8,'0');}
 function contract(leg){return select(leg,['id','type','expiry','strike','lots','lotSize','entry','manual','manualAt','instrumentKey']);}
-function materialFingerprint(book){
+function confirmationFingerprint(book){
  return fingerprint({legs:array(book?.legs).map(contract),journal:array(book?.journal).map(j=>({id:j.id,kind:j.kind,date:j.date,leg:j.leg?contract(j.leg):null,exit:number(j.exit),fees:number(j.fees),amount:number(j.amount)})),legacy:select(book?.legacy,['realized','costs']),funding:select(book?.funding,['margin','free','at']),markMode:book?.preferences?.markMode||'ltp',riskProfile:select(book?.riskProfile,['capital','maxLoss','hedgeBudget','reserve','minCoverage','maxMarginUsage','reviewBelow','reviewAbove','expiryWarningDays'])});
 }
-function isBookConfirmed(book,now=Date.now()){const at=Date.parse(book?.riskProfile?.confirmedAt);return Number.isFinite(at)&&at<=now+60000&&book?.riskProfile?.confirmedBook===materialFingerprint(book);}
+function materialFingerprint(book){
+ const approved=confirmationFingerprint(book), history=book?.history;
+ if(!history || !(array(history.records).length || history.charges || array(history.excludedJournalIds).length || history.excludeLegacyRealized)) return approved;
+ const rows=array(history.records).map(r=>select(r,['id','type','contractMonth','expiry','strike','units','entry','exit','gross','date']));
+ const charges=select(history.charges,['amount','asOf','coversExisting']);
+ return fingerprint({approved,rows,charges,omitted:array(history.excludedJournalIds).slice().sort(),excludeLegacy:history.excludeLegacyRealized===true});
+}
+function isBookConfirmed(book,now=Date.now()){const at=Date.parse(book?.riskProfile?.confirmedAt);return Number.isFinite(at)&&at<=now+60000&&book?.riskProfile?.confirmedBook===confirmationFingerprint(book);}
 function marketEvidence(market={}){
  const quote=q=>{if(!q||typeof q!=='object')return null;return select(q,['instrumentKey','symbol','price','last_price','change','changePct','prevClose','previousClose','quoteAt','tradeAt','retrievedAt','source','status','cached','lastSuccess','lastFailure','error']);};
  return {spot:quote(market.spot),nifty:quote(market.nifty),vix:quote(market.vix),status:select(market.status,['state','status','market','exchange','source','asOf','retrievedAt']),lastSuccess:stamp(market.lastSuccess),lastFailure:stamp(market.lastFailure),failureReason:text(market.error||market.failureReason)};
 }
 function normalizeNews(raw){
- return array(raw).map(n=>({id:text(n.id,120),title:text(n.title||n.headline,260),url:safeURL(n.url||n.link),source:text(n.source,100),publishedAt:stamp(n.publishedAt||n.published_at||n.date),retrievedAt:stamp(n.retrievedAt||n.retrieved_at),official:n.official===true,topic:text(n.topic,60),summary:text(n.summary,500)})).filter(n=>n.title);
+ return array(raw).map(n=>({id:text(n.id,120),title:text(n.title||n.headline,260),url:safeURL(n.url||n.link),source:text(n.source,100),publishedAt:stamp(n.publishedAt||n.published_at||n.date),retrievedAt:stamp(n.retrievedAt||n.retrieved_at),eventDate:typeof n.eventDate==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(n.eventDate)&&stamp(n.eventDate)?.slice(0,10)===n.eventDate?n.eventDate:null,official:n.official===true,topic:text(n.topic,60),summary:text(n.summary,500)})).filter(n=>n.title);
 }
 function newsGroups(raw){
  const groups=new Map();
@@ -106,7 +113,21 @@ function coach(input={},now=Date.now()){
 }
 function checkpoint(input={},now=Date.now()){
  const v=input.valuation||input.ledger||{},r=input.risk||{},spot=input.market?.spot||{};
- return {version:4,savedAt:iso(now),bookRevision:materialFingerprint(input.book),quoteAsOf:stamp(spot.quoteAt),spot:number(spot.price??spot.last_price),open:number(v.open),complete:v.complete===true,coverage:number(r.coverage),delta:number(r.delta),theta:number(r.theta),rsi:number(input.technical?.rsi??input.technical?.rsi14),newsURLs:normalizeNews(input.news).map(n=>n.url).filter(Boolean).slice(0,100),legs:array(input.book?.legs).map(contract)};
+ const funding=input.funding||input.book?.funding||{},t=input.technical||{},news=normalizeNews(input.news);
+ const technicalAt=finite(t.asOf)&&Math.abs(t.asOf)<=8640000000000000?iso(t.asOf):stamp(t.asOf);
+ const legs=array(input.book?.legs).map(contract);
+ return {
+  version:4,savedAt:iso(now),bookRevision:materialFingerprint(input.book),legs,markMode:input.book?.preferences?.markMode||'ltp',
+  quoteAsOf:stamp(spot.quoteAt),spot:number(spot.price??spot.last_price),open:number(v.open),complete:v.complete===true,
+  realized:number(v.realized),charges:number(v.charges),net:number(v.net),bookedNet:finite(v.realized)&&finite(v.charges)?v.realized-v.charges:null,
+  marksManual:v.manual===true,marksStale:v.stale===true,spotSource:text(spot.source,40),tradeAt:stamp(spot.tradeAt),
+  coverage:number(r.coverage),delta:number(r.delta),theta:number(r.theta),futureUnits:number(r.futureUnits),putUnits:number(r.putUnits),
+  free:number(funding.free),margin:number(funding.margin),fundingAt:stamp(funding.at),
+  technicalAt,technicalStale:t.stale===true,rsi:number(t.rsi??t.rsi14),atr:number(t.atr??t.atr14),bias:text(t.bias,120),
+  newsURLs:news.map(n=>n.url).filter(Boolean).slice(0,100),
+  news:news.filter(n=>n.url&&n.publishedAt).slice(0,12).map(n=>({url:n.url,title:n.title,source:n.source,publishedAt:n.publishedAt,eventDate:n.eventDate,official:n.official}))
+ };
+
 }
 function changes(previous,current,news=[]){
  const base={ready:false,reason:null,sameBook:false,from:previous?.savedAt||null,to:current?.savedAt||null};
@@ -117,6 +138,6 @@ function changes(previous,current,news=[]){
  return {...base,ready:true,sameBook,fromQuote:previous.quoteAsOf,toQuote:current.quoteAsOf,spot:diff(previous.spot,current.spot),open:sameBook&&previous.complete&&current.complete?diff(previous.open,current.open):null,coverage:sameBook?diff(previous.coverage,current.coverage):null,delta:sameBook?diff(previous.delta,current.delta):null,theta:sameBook?diff(previous.theta,current.theta):null,rsi:diff(previous.rsi,current.rsi),newNews:normalizeNews(news).filter(n=>n.url&&!seen.has(n.url)).slice(0,12),reason:sameBook?'Changes compare saved observations; price movements are not attributed to news.':'The book changed. Open P&L and exposure changes are withheld as like-for-like comparisons.'};
 }
 function canUseAnswer(answer,book){return Boolean(answer&&answer.portfolioIncluded===false||answer&&answer.bookRevision&&answer.bookRevision===materialFingerprint(book));}
-const api={safeURL,canonical,materialFingerprint,isBookConfirmed,contract,normalizeNews,newsGroups,fundamentalEvidence,providerFundamentals,evidencePacket,coach,checkpoint,changes,canUseAnswer};
+const api={safeURL,canonical,materialFingerprint,confirmationFingerprint,isBookConfirmed,contract,normalizeNews,newsGroups,fundamentalEvidence,providerFundamentals,evidencePacket,coach,checkpoint,changes,canUseAnswer};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.HAL4Insights=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

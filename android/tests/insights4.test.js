@@ -49,3 +49,14 @@ test('funding, legacy accounting and valuation basis invalidate previous conclus
 test('book confirmation requires exact revision and nonfuture valid timestamp',()=>{const b=book();b.riskProfile={confirmedAt:new Date(NOW).toISOString()};b.riskProfile.confirmedBook=I.materialFingerprint(b);assert.equal(I.isBookConfirmed(b,NOW),true);b.riskProfile.confirmedAt=new Date(NOW+120000).toISOString();assert.equal(I.isBookConfirmed(b,NOW),false);b.riskProfile.confirmedAt='invalid';assert.equal(I.isBookConfirmed(b,NOW),false);b.riskProfile.confirmedAt=new Date(NOW).toISOString();b.legs[0].lots++;assert.equal(I.isBookConfirmed(b,NOW),false);});
 test('AI evidence never calls stale confirmation current',()=>{const x=input();x.book.riskProfile={confirmedAt:new Date(NOW).toISOString(),confirmedBook:'rev-wrong'};const p=I.evidencePacket(x,{mode:'copilot',includePortfolio:true,now:NOW});assert.equal(p.portfolio.confirmedAt,null);assert.ok(p.coach.some(x=>x.code==='CONFIRM_BOOK'));x.book.riskProfile.confirmedBook=I.materialFingerprint(x.book);assert.equal(I.evidencePacket(x,{mode:'copilot',includePortfolio:true,now:NOW}).portfolio.confirmedAt,new Date(NOW).toISOString());});
 test('market evidence retains exchange status and actual previous close',()=>{const x=input();x.market.spot.previousClose=4800;x.market.status={status:'CLOSED',exchange:'NSE',retrievedAt:new Date(NOW).toISOString()};const p=I.evidencePacket(x,{mode:'research',now:NOW});assert.equal(p.market.spot.previousClose,4800);assert.equal(p.market.status.status,'CLOSED');assert.equal(p.market.status.retrievedAt,new Date(NOW).toISOString());});
+
+test('lifetime corrections invalidate AI evidence while preserving verified broker holdings',()=>{
+ const b=book(),approval=I.confirmationFingerprint(b);
+ b.riskProfile={confirmedAt:new Date(NOW).toISOString(),confirmedBook:approval};
+ b.history={records:[{id:'sample',type:'FUT',contractMonth:'2024-04',units:20,gross:75}],charges:{amount:4,asOf:'2025-02-01',coversExisting:true}};
+ const revision=I.materialFingerprint(b);
+ assert.ok(I.isBookConfirmed(b,NOW));assert.notEqual(revision,approval);
+ b.history.records[0].note='PRIVATE';assert.equal(revision,I.materialFingerprint(b));
+ b.history.charges.amount=8;assert.equal(I.canUseAnswer({bookRevision:revision,portfolioIncluded:true},b),false);assert.ok(I.isBookConfirmed(b,NOW));
+ b.legs[0].entry++;assert.equal(I.isBookConfirmed(b,NOW),false);
+});
