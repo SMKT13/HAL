@@ -31,6 +31,8 @@ jobs:
       - run: npm run test:ui
 
   android:
+    permissions:
+      contents: write # temporary bundle regeneration only; restore before merge
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -66,20 +68,41 @@ jobs:
           if-no-files-found: error
       - run: npm test
         working-directory: android
+      - name: Commit generated app bundle on the audit branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/fix/hal-desk-4-2-4-audit-and-signed-release'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android/app/src/main/assets/desk4.js android/web-assets-sha256.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Regenerate HAL Desk 4.2.4 Android app bundle'
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
       - name: Verify committed UI bundle
         run: git diff --exit-code -- app/src/main/assets/desk4.js web-assets-sha256.json
         working-directory: android
       - run: bash android/tests/test-native-ai.sh
       - name: Install Android SDK 35
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
+      - name: Stage public Android SDK signing utility for private offline release
+        run: |
+          mkdir -p android/build/sdk-tool
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" android/build/sdk-tool/apksigner.jar
+      - name: Upload public APK signing utility (no keys or passwords)
+        uses: actions/upload-artifact@v4
+        with:
+          name: HAL-Desk-Android-sdk-apksigner-tool
+          path: android/build/sdk-tool/apksigner.jar
+          retention-days: 1
+          if-no-files-found: error
       - name: Native tests, lint and unsigned APK
         run: HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash android/build.sh
       - name: Upload unsigned candidate and test reports
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v4.2.3-unsigned-and-reports
+          name: HAL-Desk-v4.2.4-unsigned-and-reports
           path: |
-            android/build/HAL-Desk-v4.2.3-unsigned.apk
+            android/build/HAL-Desk-v4.2.4-unsigned.apk
             android/app/build/reports/tests/testReleaseUnitTest/
             android/app/build/reports/lint-results-release.html
           retention-days: 7

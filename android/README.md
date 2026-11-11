@@ -1,6 +1,6 @@
-# HAL Desk 4.2.3
+# HAL Desk 4.2.4
 
-Personal HAL research and derivatives desk for Android 8 and later. Package `in.smkt.haldesk`, versionCode 25.
+Personal HAL research and derivatives desk for Android 8 and later. Package `in.smkt.haldesk`, versionCode 26.
 
 - **Position** shows the open book, protection, risk, scenarios, hedge comparisons and dated break-even calculations.
 - **History** imports HAL contract summaries and reconciles them with completed trades and cumulative fees. A preview shows the resulting totals before saving.

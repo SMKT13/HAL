@@ -1,14 +1,14 @@
-# HAL Desk 4.2.3 installation
+# HAL Desk 4.2.4 installation
 
-This release has application ID `in.smkt.haldesk`, versionCode 25 and minimum Android API 26. Export a JSON backup from the installed app before updating. Keep the installed app and its storage if Android reports a certificate conflict.
+This release has application ID `in.smkt.haldesk`, versionCode 26 and minimum Android API 26. Export a JSON backup from the installed app before updating. Keep the installed app and its storage if Android reports a certificate conflict.
 
 ## Sign the unsigned candidate
 
 Sign the aligned APK locally with the original HAL keystore. The Android SDK Build Tools prompt for its password when this command runs in a terminal. The private keystore and password belong outside the source tree.
 
 ```sh
-apksigner sign --ks /private/path/personal.jks --ks-key-alias hal-personal --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true --out HAL-Desk-v4.2.3-signed.apk HAL-Desk-v4.2.3-unsigned.apk
-apksigner verify --verbose --print-certs HAL-Desk-v4.2.3-signed.apk
+apksigner sign --ks /private/path/personal.jks --ks-key-alias hal-personal --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true --out HAL-Desk-v4.2.4-signed.apk HAL-Desk-v4.2.4-unsigned.apk
+apksigner verify --verbose --print-certs HAL-Desk-v4.2.4-signed.apk
 apksigner verify --verbose --print-certs HAL-Desk-v4.1.0-signed.apk
 ```
 
@@ -16,7 +16,7 @@ Compare the SHA-256 certificate fingerprints on both APKs. The expected fingerpr
 
 ## Update and check the book
 
-1. Open the verified signed 4.2 APK on the phone with the previous HAL Desk installation and select **Update**.
+1. Open the verified signed 4.2.4 APK on the phone with the previous HAL Desk installation and select **Update**.
 2. In **Position → Book**, check each open contract, expiry, lot size, entry and manual mark against your records. Check completed closes in **Journal & funding**.
 3. In **History → Import statement**, select the private HAL history JSON or a supported HAL XLSX or CSV. Review duplicate rows, overlaps, accepted results and charge coverage. Confirm and save. The app also offers an explicit, broker-reviewed open-book import for an empty book.
 4. In **Position → Break-even**, choose a scenario date, price range, basis and costs. For a date beyond an open put's expiry, supply the assumed earlier settlement spot or record the actual close. The gross open result remains available with an unknown allocation of historical costs.
