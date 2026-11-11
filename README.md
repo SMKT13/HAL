@@ -1,8 +1,12 @@
 # HAL Desk 4.1.0
 
-Personal Android research and position-management desk for Hindustan Aeronautics Limited (NSE: HAL). Package `in.smkt.haldesk`, versionCode **21**, Android **8.0+**. Direct read-only Upstox data, optional Gemini and opt-in local FinBERT. No broker orders, fund transfers or required application server.
+Personal Android research and position-management desk for Hindustan Aeronautics Limited (NSE: HAL). Package `in.smkt.haldesk`, versionCode **23**, Android **8.0+**. Direct read-only Upstox data, optional Gemini and opt-in local FinBERT. No broker orders, fund transfers or required application server.
 
-The Android application has four workspaces: **Today**, **My Position**, **Plan** and **Research**. It supports multiple long futures and protective puts, partial closes, preserved realised history, exact-contract marks, expiry-gap checks, deterministic scenarios, hedge comparisons and offline books.
+The Android application has five primary tabs: **Position**, **History**, **Technicals**, **Research** and **AI Desk**. It supports multiple long futures and protective puts, partial closes, preserved realised history, exact-contract marks, expiry-gap checks, deterministic scenarios, hedge comparisons and offline books.
+
+## 4.2.1 reliability fixes
+
+The Android desk now isolates chain-only market errors from independent quotes, supports explicit user-assumed IV for strictly labelled model-only hedge comparisons when provider Greek timestamps are absent, and reconciles corrected named broker reports while preserving file hashes. Recognized statement total rows are safely ignored. **Distinct reports must use distinct file names**; never accept a reconciliation as separate trading activity without checking the source.
 
 ## Daily review update
 
@@ -25,7 +29,7 @@ completed history retain schema 4.
 - [Acceptance criteria](android/docs/ACCEPTANCE.md)
 - [Repository synchronization notes](docs/REPOSITORY-SYNC-4.0.2.md)
 
-The previous 4.0.2 APK was built and signed privately with the original HAL certificate. The 4.1.0 source is an unsigned candidate until privately signed and verified. GitHub contains the source, tests and verification records; CI produces **unsigned** candidates for private local signing. Keystores, passwords, API credentials and personal portfolio backups must never be committed. Update the existing installation without uninstalling it or clearing its data, and export a book backup first.
+The previous 4.0.2 APK was built and signed privately with the original HAL certificate. The 4.2.1 source is an unsigned candidate until privately signed and verified. GitHub contains the source, tests and verification records; CI produces **unsigned** candidates for private local signing. Keystores, passwords, API credentials and personal portfolio backups must never be committed. Update the existing installation without uninstalling it or clearing its data, and export a book backup first.
 
 ```sh
 cd android
