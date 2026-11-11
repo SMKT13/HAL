@@ -143,3 +143,13 @@ test('priority cannot elevate a stale cached spot into a directional trade alert
  A.equal(data.risk.warnings.some(x=>x.code==='lower_review'),false);
  A.notEqual(W.priority(data,true,NOW).title,'Lower review threshold crossed');
 });
+
+test('expired unreconciled positions outrank missing prices and connection warnings',()=>{
+ const expired=book();expired.legs=[{...put,expiry:'2026-10-27'}];
+ const m=market(),risk=E.risk(expired,m,NOW),valuation=E.ledger(expired,m,{now:NOW});
+ A.equal(valuation.complete,false);
+ const disconnected=W.priority({book:expired,risk,valuation,market:m},false,NOW);
+ A.equal(disconnected.action,'go-book');A.match(disconnected.title,/expired/i);
+ const connected=W.priority({book:expired,risk,valuation,market:m},true,NOW);
+ A.equal(connected.action,'go-book');A.match(connected.title,/expired/i);
+});

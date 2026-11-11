@@ -32,6 +32,10 @@ function strategy(book,market,now=Date.now()){
 function priority(input,configured,now=Date.now()){
  const {book,valuation={},risk={},market={}}=input;
  if(!book?.legs?.length)return {title:'Set up your position',detail:'Record your actual HAL futures and puts to see their combined exposure.',action:'add',label:'Add first position'};
+ // Expired unreconciled derivatives take precedence over missing prices or a
+ // disconnected provider. Refreshing cannot restore a contract after expiry.
+ const expired=(risk.warnings||[]).find(w=>w.code==='expired');
+ if(expired)return {...expired,action:'go-book',label:'Reconcile expired contract'};
  if(!configured)return {title:'Connect market prices',detail:'Your saved positions are available offline. Connect Upstox to value exact contracts.',action:'connection',label:'Connect Upstox'};
  if(market.failure||market.lastFailure&&(!market.lastSuccess||Date.parse(market.lastFailure)>Date.parse(market.lastSuccess)))return {title:'Refresh your prices',detail:'The last refresh failed. Retained observations have not become live prices.',action:'retry-prices',label:'Retry prices'};
  if(!valuation.complete)return {title:'Complete your position prices',detail:'A saved contract is missing a usable mark. Review its expiry, strike and lot size.',action:'review-contracts',label:'Review missing prices'};
