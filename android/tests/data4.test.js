@@ -44,3 +44,11 @@ test('option-chain partial errors cannot poison independently fresh spot/futures
  const failed=D.ingest(x,'error',{code:'network_unavailable'},new Date(now+1000).toISOString());
  A.equal(E.quoteQuality(D.market(failed).spot,{now:now+1000,requireFresh:true,requireTrade:true}).valid,false);
 });
+
+test('option quote failure is limited to options and does not taint fresh futures or spot',()=>{
+ const s=D.ingest(D.empty(),'snapshot',{...putSnapshot(),futures:snap().futures,errors:{option_quotes:'network_unavailable'}},ts);
+ const m=D.market(s);
+ A.equal(E.quoteQuality(m.spot,{now,requireFresh:true,requireTrade:true}).valid,true);
+ A.equal(E.quoteQuality(m.quotes.SYNTH_F,{now,requireFresh:true,requireTrade:true}).valid,true);
+ A.equal(E.quoteQuality(m.quotes.SYNTH_P4500,{now,requireFresh:true,requireTrade:true}).valid,false);
+});
