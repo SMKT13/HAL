@@ -5,7 +5,7 @@ const NOW=Date.parse('2026-11-02T06:30:00Z'),STAMP=new Date(NOW-1000).toISOStrin
 const future={id:'f',type:'FUT',expiry:'2026-12-29',lots:2,lotSize:150,entry:4900,manual:null,instrumentKey:'F'};
 const put={id:'p',type:'PE',expiry:'2026-11-23',strike:4500,lots:1,lotSize:150,entry:40,manual:null,instrumentKey:'P'};
 const book=()=>({...E.emptyBook(),legs:[{...future},{...put}]});
-const quote=price=>({price,quoteAt:STAMP,tradeAt:STAMP,retrievedAt:STAMP,greeksAt:STAMP,iv:30,delta:-.3,theta:-.2,thetaPerDayVerified:true});
+const quote=price=>({price,source:'REST',quoteAt:STAMP,tradeAt:STAMP,retrievedAt:STAMP,greeksAt:STAMP,iv:30,delta:-.3,theta:-.2,thetaPerDayVerified:true});
 const market=()=>({spot:quote(4950),contracts:[{...future},{...put}],quotes:{F:quote(5000),P:quote(50)}});
 const input=()=>{const b=book(),m=market();return {book:b,market:m,risk:E.risk(b,m,NOW),valuation:E.ledger(b,m,{now:NOW})};};
 const near=(a,b)=>A.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
