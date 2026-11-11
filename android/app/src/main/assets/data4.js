@@ -46,7 +46,7 @@ function news(s){const result=[];const flatten=x=>{
  if(!x||typeof x!=='object')return [];
  // Upstox /v2/news returns an array of instrument-keyed article arrays.
  // Stop recursion at an article instead of recursing into its scalar fields.
- if(typeof (x.heading??x.title??x.headline)==='string'&&typeof (x.article_link??x.url??x.link??x.news_url)==='string')return [x];
+ if(typeof (x.heading??x.title??x.headline)==='string'||typeof (x.article_link??x.url??x.link??x.news_url)==='string')return [x];
  return Object.values(x).flatMap(flatten);
 };for(const section of ['news','filings']){const p=packet(s,section),d=p?.data||{};let list=section==='filings'?d.items:d.articles;list=flatten(list);for(const n of list){if(!n||typeof n!=='object')continue;const t=n.published_time??n.publishedAt??n.published_at??n.published??n.published_date??n.date;result.push({title:n.heading||n.title||n.headline,url:n.article_link||n.url||n.link||n.news_url,publishedAt:typeof t==='number'?(Number.isFinite(t)&&Math.abs(t)<=8640000000000000?new Date(t).toISOString():null):t,source:typeof n.source==='string'?n.source:n.source?.name||(section==='filings'?'NSE disclosure':'Upstox news'),summary:n.summary||n.description,official:section==='filings'||n.official===true,retrievedAt:p?.fetched_at_iso,topic:n.topic||'Business'});}}return result;}
 function safeBackup(book){return {app:'HAL Desk',schema:4,exportedAt:stamp(),book:E.validateBook(book)};}
