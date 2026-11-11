@@ -131,8 +131,14 @@ final class MarketClient {
         if(!(object instanceof JSONArray)) throw new Failure("bad_response");
         return (JSONArray)object;
     }
+    // Cache completed discovery even when options are absent. Retry missing
+    // option metadata after five minutes instead of refetching every request.
+    static boolean metadataFresh(long refreshedAt,long now,int optionCount) {
+        return refreshedAt>0 && now>=refreshedAt &&
+                now-refreshedAt<(optionCount>0?3600000L:300000L);
+    }
     private synchronized void discover(String token) throws Exception {
-        if(!underlying.isEmpty() && System.currentTimeMillis()-metadataTime<3600000) return;
+        if(!underlying.isEmpty() && metadataFresh(metadataTime,System.currentTimeMillis(),options.length())) return;
         JSONArray equities=array(api("/instruments/search","query=HAL&exchanges=NSE&segments=EQ&records=30&page_number=1",token));
         String found="";
         for(int i=0;i<equities.length();i++) {
@@ -159,7 +165,7 @@ final class MarketClient {
         try{optionContracts=array(api("/option/contract","instrument_key="+enc(found),token));}
         catch(Failure e){if(fatal(e))throw e;}
 
-        underlying=found;contracts=next;options=optionContracts;metadataTime=optionContracts.length()>0?System.currentTimeMillis():0;
+        underlying=found;contracts=next;options=optionContracts;metadataTime=System.currentTimeMillis();
     }
     static JSONObject quote(JSONObject quotes,String key) throws Exception {return quote(quotes,key,System.currentTimeMillis());}
     static JSONObject quote(JSONObject quotes,String key,long retrieved) throws Exception {

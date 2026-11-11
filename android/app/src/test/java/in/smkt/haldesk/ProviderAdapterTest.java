@@ -72,6 +72,15 @@ public final class ProviderAdapterTest {
         try{new MarketClient().load("server","not-a-token","");fail("server rejected");}catch(MarketClient.Failure expected){assertEquals("direct_analytics_only",expected.code);}
     }
 
+    @Test public void emptyOptionDiscoveryBacksOffWithoutHidingFutureContractUpdates() throws Exception {
+        long now=System.currentTimeMillis();
+        assertTrue(MarketClient.metadataFresh(now-60000L,now,0));
+        assertFalse(MarketClient.metadataFresh(now-300001L,now,0));
+        assertTrue(MarketClient.metadataFresh(now-1800000L,now,1));
+        assertFalse(MarketClient.metadataFresh(now-3600001L,now,1));
+        assertFalse(MarketClient.metadataFresh(0,now,1));
+        assertFalse(MarketClient.metadataFresh(now+1000,now,1));
+    }
     @Test public void incompleteBarsAreNotSchemaFailures()throws Exception{JSONObject r=ResearchClient.completedCandles(new JSONObject().put("candles",new JSONArray().put(candle(NOW-600000,101))),"15m",NOW);assertEquals(1,r.getInt("incomplete_rows"));assertEquals(0,r.getInt("invalid_rows"));}
     @Test public void malformedAndConflictingBarsAreSchemaFailures()throws Exception{JSONObject r=ResearchClient.completedCandles(new JSONObject().put("candles",new JSONArray().put("broken").put(candle(NOW-1800000,101)).put(candle(NOW-1800000,102))),"15m",NOW);assertEquals(2,r.getInt("invalid_rows"));assertEquals(0,r.getJSONArray("candles").length());}
     @Test public void contextNormalizationRetainsExactQuoteClocks()throws Exception{java.util.Map<String,String> keys=new java.util.HashMap<>();keys.put("Nifty 50","NSE_INDEX|Nifty 50");JSONObject value=raw().put("instrument_token","NSE_INDEX|Nifty 50");JSONObject r=MarketClient.normalizedContext(new JSONObject().put("DISPLAY",value),keys,NOW).getJSONObject("NSE_INDEX|Nifty 50");assertEquals("Nifty 50",r.getString("symbol"));assertEquals(Instant.ofEpochMilli(NOW).toString(),r.getString("retrievedAt"));assertEquals(Instant.ofEpochMilli(NOW-1000).toString(),r.getString("quote_as_of"));}
