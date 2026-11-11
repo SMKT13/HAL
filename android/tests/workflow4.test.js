@@ -134,3 +134,12 @@ test('unchanged zero, future input clocks and stale source clocks remain disting
  A.equal(run({...b,quoteAsOf:'2037-02-01T10:00:00Z'}).changes.spot,null);
  A.equal(run({...b,technicalStale:true}).changes.rsi,null);
 });
+
+test('priority cannot elevate a stale cached spot into a directional trade alert',()=>{
+ const b=book(),m=market();
+ b.riskProfile.reviewBelow=5000;
+ m.spot={...quote(4300),source:'CACHE',quoteAt:new Date(NOW-86400000).toISOString()};
+ const data={book:b,market:m,risk:E.risk(b,m,NOW),valuation:E.ledger(b,m,{now:NOW})};
+ A.equal(data.risk.warnings.some(x=>x.code==='lower_review'),false);
+ A.notEqual(W.priority(data,true,NOW).title,'Lower review threshold crossed');
+});

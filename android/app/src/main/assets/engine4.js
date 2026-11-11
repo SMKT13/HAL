@@ -14,7 +14,14 @@ const time = x => finite(x) ? x : (typeof x === 'string' && x.trim() ? (/^\d{13}
 const iso = x => Number.isFinite(time(x)) && Math.abs(time(x))<=8640000000000000 ? new Date(time(x)).toISOString() : null;
 const validDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && Number.isFinite(Date.parse(s+'T00:00:00Z')) && new Date(s+'T00:00:00Z').toISOString().slice(0,10) === s;
 const istDate = t => new Date((t == null ? Date.now() : time(t))+IST).toISOString().slice(0,10);
-const expiryTime = d => validDate(d) ? Date.parse(d+'T15:30:00+05:30') : NaN;
+// HAL is a single-stock NSE F&O contract. Cash-market closing/settlement clocks
+// are separate. NSE/FAOP/74467: 15:40 from 2026-08-03;
+// NSE/FAOP/77356: 15:45 for stock derivatives from 2026-12-07.
+const expiryTime = d => {
+ if (!validDate(d)) return NaN;
+ const close = d >= '2026-12-07' ? '15:45:00' : d >= '2026-08-03' ? '15:40:00' : '15:30:00';
+ return Date.parse(d+'T'+close+'+05:30');
+};
 const units = l => l.lots*l.lotSize;
 const safeText = (v,n=1000) => typeof v === 'string' ? v.slice(0,n) : '';
 function safeURL(s) { try { const u = new URL(s); return u.protocol === 'https:' && !u.username && !u.password && u.hostname.includes('.') && !/^(localhost|127\.|0\.|192\.168\.|10\.|169\.254\.)/.test(u.hostname) ? u.href : null; } catch (_) { return null; } }
@@ -110,7 +117,7 @@ function quoteQuality(q, opts={}) {
  const now=opts.now==null?Date.now():time(opts.now),maxAge=opts.maxAge??120000,maxTradeAge=opts.maxTradeAge??120000,futureTolerance=opts.futureTolerance??5000;
  const reasons=[],warnings=[];const quoteAt=time(q?.quoteAt),tradeAt=time(q?.tradeAt),retrievedAt=time(q?.retrievedAt);
  if(!q)reasons.push('Quote unavailable');
- if(!finite(q?.price)||q.price<0)reasons.push('Price unavailable or invalid');
+ if(!finite(q?.price)||q.price<=0)reasons.push('Provider price unavailable or non-positive');
  if(q?.source==='STREAM')reasons.push('Streaming preview cannot be used as a valuation mark');
  if(!Number.isFinite(quoteAt))reasons.push('Provider quote timestamp unavailable');
  for(const [label,t] of [['Provider quote',quoteAt],['Last trade',tradeAt],['Retrieval',retrievedAt]])if(Number.isFinite(t)&&t>now+futureTolerance)reasons.push(label+' timestamp is in the future');
@@ -191,8 +198,11 @@ function risk(legsOrBook, input={}, now=Date.now()) {
  if(!greeksComplete||!thetaComplete)add('greeks_missing','Aggregate Greeks unavailable','Every active contract must match and every put needs valid, recent contract Greeks with their own timestamps. Theta also needs a verified per-day unit convention.');
  if(active.some(l=>expiryTime(l.expiry)-now<=7*DAY))add('near_expiry','Contract expiry within seven days','Review margin, exercise, delivery obligations and broker deadlines. No automatic rollover is assumed.');
  if(futureUnits)add('margin','Futures margin and physical settlement','Mark-to-market cash calls can occur before expiry. Stock derivatives may require physical delivery; confirm broker obligations and deadlines.');
- const rp=book.riskProfile||{},spot=market.spot.price;if(finite(spot)&&finite(rp.reviewBelow)&&spot<=rp.reviewBelow)add('lower_review','Lower review threshold crossed','Observed spot is at or below your saved review level. This is a review prompt, not an order.');if(finite(spot)&&finite(rp.reviewAbove)&&spot>=rp.reviewAbove)add('upper_review','Upper review threshold crossed','Observed spot is at or above your saved review level.');
- const valuation=ledger(book,market,{now});if(finite(rp.maxLoss)&&rp.maxLoss>0&&finite(valuation.net)&&valuation.net<=-rp.maxLoss)add('loss_limit','Recorded strategy loss review threshold crossed','Indicative strategy net P&L has reached your review threshold. This is not a guaranteed loss limit.');if(finite(rp.reserve)&&finite(book.funding.free)&&book.funding.free<rp.reserve)add('reserve','Recorded cash reserve below threshold','Review the age of your manual funding snapshot and current broker cash requirements.');if(legs.length&&!rp.confirmedAt)add('unconfirmed','Book not confirmed against broker','Confirm exact lots, entries, expiries and completed closes against your broker records.');
+ const rp=book.riskProfile||{},spot=market.spot.price;
+ const reliableSpot=quoteQuality(market.spot,{now,requireFresh:true,requireTrade:true}).valid;
+ if(reliableSpot&&finite(spot)&&finite(rp.reviewBelow)&&spot<=rp.reviewBelow)add('lower_review','Lower review threshold crossed','Fresh REST spot is at or below your saved review level. This is a review prompt, not an order.');
+ if(reliableSpot&&finite(spot)&&finite(rp.reviewAbove)&&spot>=rp.reviewAbove)add('upper_review','Upper review threshold crossed','Fresh REST spot is at or above your saved review level.');
+ const valuation=ledger(book,market,{now});if(finite(rp.maxLoss)&&rp.maxLoss>0&&valuation.complete&&!valuation.stale&&!valuation.manual&&valuation.rows.every(r=>quoteQuality(r.mark.quote,{now,requireFresh:true,requireTrade:true}).valid)&&finite(valuation.net)&&valuation.net<=-rp.maxLoss)add('loss_limit','Recorded strategy loss review threshold crossed','Indicative strategy net P&L has reached your review threshold. This is not a guaranteed loss limit.');if(finite(rp.reserve)&&finite(book.funding.free)&&book.funding.free<rp.reserve)add('reserve','Recorded cash reserve below threshold','Review the age of your manual funding snapshot and current broker cash requirements.');if(legs.length&&!rp.confirmedAt)add('unconfirmed','Book not confirmed against broker','Confirm exact lots, entries, expiries and completed closes against your broker records.');
  const distribution=puts.map(l=>({legId:l.id,strike:l.strike,expiry:l.expiry,lots:l.lots,lotSize:l.lotSize,units:units(l)}));
  return {futureUnits,futureLots:sum(futures.map(l=>l.lots)),putUnits,putLots:sum(puts.map(l=>l.lots)),coveredUnits,uncoveredUnits:Math.max(0,futureUnits-putUnits),coverage:futureUnits?putUnits/futureUnits*100:null,delta:greeksComplete?delta:null,theta:greeksComplete&&thetaComplete?theta:null,greeksComplete:greeksComplete&&thetaComplete,deltaComplete:greeksComplete,thetaComplete:greeksComplete&&thetaComplete,nextExpiry:dates[0]||null,timeline,warnings,distribution,mismatches,openPutPremium:sum(puts.map(l=>l.entry*units(l))),coverageMeaning:'Quantity overlap at this time only; strike, basis and expiry still affect protection.'};
 }
