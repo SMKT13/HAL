@@ -113,9 +113,9 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     const sourceId = text(payload.sourceId, "source ID", 160), sourceName = text(payload.sourceName, "source name");
     check(payload.sourceHash == null || /^sha256:[a-f0-9]{64}$/.test(payload.sourceHash), "Invalid statement content hash.");
     const records = list(payload.records, "history report").map((r, i) => {
-      var _a2, _b, _c;
+      var _a2, _b, _c, _d;
       const row = String((_c = (_b = r.sourceRow) != null ? _b : (_a2 = r.source) == null ? void 0 : _a2.row) != null ? _c : i + 1);
-      const source = { id: sourceId, name: sourceName, row };
+      const source = { id: sourceId, name: text((_d = r.sourceName) != null ? _d : sourceName, "source name"), row };
       return validateRecord({ ...r, id: encodeURIComponent(sourceId) + "/" + encodeURIComponent(row), source });
     });
     check(records.length && new Set(records.map((r) => r.id)).size === records.length, "A report must have unique source rows.");
@@ -255,7 +255,11 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   const iso = (x) => Number.isFinite(time(x)) && Math.abs(time(x)) <= 864e13 ? new Date(time(x)).toISOString() : null;
   const validDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && Number.isFinite(Date.parse(s + "T00:00:00Z")) && (/* @__PURE__ */ new Date(s + "T00:00:00Z")).toISOString().slice(0, 10) === s;
   const istDate = (t) => new Date((t == null ? Date.now() : time(t)) + IST).toISOString().slice(0, 10);
-  const expiryTime = (d) => validDate(d) ? Date.parse(d + "T15:30:00+05:30") : NaN;
+  const expiryTime = (d) => {
+    if (!validDate(d)) return NaN;
+    const close = d >= "2026-12-07" ? "15:45:00" : d >= "2026-08-03" ? "15:40:00" : "15:30:00";
+    return Date.parse(d + "T" + close + "+05:30");
+  };
   const units = (l) => l.lots * l.lotSize;
   const safeText = (v, n = 1e3) => typeof v === "string" ? v.slice(0, n) : "";
   function safeURL(s) {
@@ -405,7 +409,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     const reasons = [], warnings = [];
     const quoteAt = time(q == null ? void 0 : q.quoteAt), tradeAt = time(q == null ? void 0 : q.tradeAt), retrievedAt = time(q == null ? void 0 : q.retrievedAt);
     if (!q) reasons.push("Quote unavailable");
-    if (!finite(q == null ? void 0 : q.price) || q.price < 0) reasons.push("Price unavailable or invalid");
+    if (!finite(q == null ? void 0 : q.price) || q.price <= 0) reasons.push("Provider price unavailable or non-positive");
     if ((q == null ? void 0 : q.source) === "STREAM") reasons.push("Streaming preview cannot be used as a valuation mark");
     if (!Number.isFinite(quoteAt)) reasons.push("Provider quote timestamp unavailable");
     for (const [label, t] of [["Provider quote", quoteAt], ["Last trade", tradeAt], ["Retrieval", retrievedAt]]) if (Number.isFinite(t) && t > now + futureTolerance) reasons.push(label + " timestamp is in the future");
@@ -528,10 +532,11 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     if (active.some((l) => expiryTime(l.expiry) - now <= 7 * DAY)) add("near_expiry", "Contract expiry within seven days", "Review margin, exercise, delivery obligations and broker deadlines. No automatic rollover is assumed.");
     if (futureUnits) add("margin", "Futures margin and physical settlement", "Mark-to-market cash calls can occur before expiry. Stock derivatives may require physical delivery; confirm broker obligations and deadlines.");
     const rp = book.riskProfile || {}, spot = market.spot.price;
-    if (finite(spot) && finite(rp.reviewBelow) && spot <= rp.reviewBelow) add("lower_review", "Lower review threshold crossed", "Observed spot is at or below your saved review level. This is a review prompt, not an order.");
-    if (finite(spot) && finite(rp.reviewAbove) && spot >= rp.reviewAbove) add("upper_review", "Upper review threshold crossed", "Observed spot is at or above your saved review level.");
+    const reliableSpot = quoteQuality(market.spot, { now, requireFresh: true, requireTrade: true }).valid;
+    if (reliableSpot && finite(spot) && finite(rp.reviewBelow) && spot <= rp.reviewBelow) add("lower_review", "Lower review threshold crossed", "Fresh REST spot is at or below your saved review level. This is a review prompt, not an order.");
+    if (reliableSpot && finite(spot) && finite(rp.reviewAbove) && spot >= rp.reviewAbove) add("upper_review", "Upper review threshold crossed", "Fresh REST spot is at or above your saved review level.");
     const valuation = ledger(book, market, { now });
-    if (finite(rp.maxLoss) && rp.maxLoss > 0 && finite(valuation.net) && valuation.net <= -rp.maxLoss) add("loss_limit", "Recorded strategy loss review threshold crossed", "Indicative strategy net P&L has reached your review threshold. This is not a guaranteed loss limit.");
+    if (finite(rp.maxLoss) && rp.maxLoss > 0 && valuation.complete && !valuation.stale && !valuation.manual && valuation.rows.every((r) => quoteQuality(r.mark.quote, { now, requireFresh: true, requireTrade: true }).valid) && finite(valuation.net) && valuation.net <= -rp.maxLoss) add("loss_limit", "Recorded strategy loss review threshold crossed", "Indicative strategy net P&L has reached your review threshold. This is not a guaranteed loss limit.");
     if (finite(rp.reserve) && finite(book.funding.free) && book.funding.free < rp.reserve) add("reserve", "Recorded cash reserve below threshold", "Review the age of your manual funding snapshot and current broker cash requirements.");
     if (legs.length && !rp.confirmedAt) add("unconfirmed", "Book not confirmed against broker", "Confirm exact lots, entries, expiries and completed closes against your broker records.");
     const distribution = puts.map((l) => ({ legId: l.id, strike: l.strike, expiry: l.expiry, lots: l.lots, lotSize: l.lotSize, units: units(l) }));
@@ -1519,7 +1524,13 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   function news(s) {
     var _a, _b, _c, _d, _e, _f;
     const result = [];
-    const flatten = (x) => Array.isArray(x) ? x : x && typeof x === "object" ? Object.values(x).flatMap(flatten) : [];
+    const flatten = (x) => {
+      var _a2, _b2, _c2, _d2, _e2;
+      if (Array.isArray(x)) return x.flatMap(flatten);
+      if (!x || typeof x !== "object") return [];
+      if (typeof ((_b2 = (_a2 = x.heading) != null ? _a2 : x.title) != null ? _b2 : x.headline) === "string" || typeof ((_e2 = (_d2 = (_c2 = x.article_link) != null ? _c2 : x.url) != null ? _d2 : x.link) != null ? _e2 : x.news_url) === "string") return [x];
+      return Object.values(x).flatMap(flatten);
+    };
     for (const section of ["news", "filings"]) {
       const p = packet(s, section), d = (p == null ? void 0 : p.data) || {};
       let list = section === "filings" ? d.items : d.articles;
@@ -9069,25 +9080,70 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
   }
   function statementRows(rows) {
     const result = [];
-    let columns = null;
-    const months = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split(" ");
+    let columns = null, format = null;
+    const wholeFileTotals = [], months = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split(" ");
+    const norm = (x) => String(x != null ? x : "").trim().toLowerCase().replace(/realised/g, "realized");
+    const optional = (x) => String(x != null ? x : "").trim() === "" ? null : numeric(x);
     rows.forEach((r, i) => {
       const fields = r.map((x) => String(x != null ? x : "").trim());
-      if (!fields.some((x) => x) || fields.slice(1).every((x) => !x) && /^(Futures|Options)$/i.test(fields[0])) return;
-      if (/^(?:(?:grand|sub)\s+)?totals?(?:\s+(?:futures|options|realized|realised|p&l|profit|loss))?\s*:?$/i.test(fields[0]) || /^net\s+(?:realized|realised)\s+(?:p&l|profit|loss)\s*:?$/i.test(fields[0])) return;
-      if (/^scrip name$/i.test(fields[0])) {
-        columns = ["scrip name", "quantity", "avg buy price", "avg sell price", "realized p&l"].map((c) => fields.findIndex((v) => v.toLowerCase().replace("realised", "realized") === c));
-        if (columns.includes(-1)) throw Error("Expected Scrip Name, Quantity, Avg Buy Price, Avg Sell Price and Realized P&L.");
+      if (!fields.some((x) => x)) return;
+      if (fields.slice(1).every((x) => !x) && /^(Futures|Options)$/i.test(fields[0])) return;
+      if (norm(fields[0]) === "source") {
+        const expected = ["source", "source row", "type", "contract month", "contract expiry", "close date", "units", "strike", "average buy", "average sell", "reported gross p&l"];
+        if (expected.some((x, j) => norm(fields[j]) !== x)) throw Error("Unrecognized HAL Desk exported history CSV header.");
+        columns = null;
+        format = "export";
         return;
       }
-      if (!columns) throw Error("HAL summary column headers are missing.");
+      if (norm(fields[0]) === "scrip name") {
+        columns = ["scrip name", "quantity", "avg buy price", "avg sell price", "realized p&l"].map((c) => fields.findIndex((v) => norm(v) === c));
+        if (columns.includes(-1)) throw Error("Expected Scrip Name, Quantity, Avg Buy Price, Avg Sell Price and Realized P&L.");
+        format = "broker";
+        return;
+      }
+      if (format === "export") {
+        if (fields.length < 11) throw Error("Incomplete exported history in row " + (i + 1) + ".");
+        const [name2, sourceRow, type2, contractMonth, expiry2, date, units2, strike, entry, exit, gross2] = fields;
+        if (!name2 || !sourceRow || !["FUT", "PE", "CE"].includes(type2)) throw Error("Invalid exported HAL contract in row " + (i + 1) + ".");
+        result.push({
+          sourceRow,
+          sourceName: name2.replace(/^'(?=[=+\-@])/, ""),
+          type: type2,
+          contractMonth,
+          expiry: expiry2 || null,
+          date: date || null,
+          units: numeric(units2),
+          strike: optional(strike),
+          entry: optional(entry),
+          exit: optional(exit),
+          gross: numeric(gross2)
+        });
+        return;
+      }
+      const label = norm(fields[0]), grand = /^(?:grand\s+total|net\s+realized\s+(?:p&l|profit|loss))\s*:?$/.test(label);
+      const generic = /^(?:(?:sub\s+)?total)(?:\s+(?:futures|options|realized|p&l|profit|loss))?\s*:?$/.test(label);
+      if (grand || generic) {
+        const final = rows.slice(i + 1).every((x) => !x.some((v) => String(v != null ? v : "").trim()));
+        const raw = columns ? fields[columns[4]] : fields.slice(1).filter((x) => x !== "").at(-1);
+        if (grand || generic && final && raw !== "" && raw != null) {
+          if (raw == null || raw === "") throw Error("Statement grand total has no amount at row " + (i + 1) + ".");
+          wholeFileTotals.push({ row: i + 1, amount: numeric(raw) });
+        }
+        return;
+      }
+      if (format !== "broker" || !columns) throw Error("HAL summary column headers are missing.");
       const [name, units, buy, sell, gross] = columns.map((c) => fields[c]);
       const m = /^HAL\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{2}|\d{4})\s+(?:(\d+(?:\.\d+)?)\s+)?(Fut|Future|Futures|Put|Call|PE|CE)$/i.exec(name);
       if (!m) throw Error("Unrecognised HAL contract in row " + (i + 1) + ".");
       const type = /^FUT/i.test(m[5]) ? "FUT" : /^(PE|Put)$/i.test(m[5]) ? "PE" : "CE";
-      const expiry = (m[3].length === 2 ? "20" : "") + m[3] + "-" + String(months.indexOf(m[2].toUpperCase()) + 1).padStart(2, "0") + "-" + m[1].padStart(2, "0");
+      const month = months.indexOf(m[2].toUpperCase()) + 1;
+      if (month < 1) throw Error("Invalid contract month in row " + (i + 1) + ".");
+      const expiry = (m[3].length === 2 ? "20" : "") + m[3] + "-" + String(month).padStart(2, "0") + "-" + m[1].padStart(2, "0");
       result.push({ sourceRow: String(i + 1), type, contractMonth: expiry.slice(0, 7), expiry, strike: m[4] ? numeric(m[4]) : null, units: numeric(units), entry: numeric(buy), exit: numeric(sell), gross: numeric(gross) });
     });
+    const reportedPaise = result.reduce((n, r) => n + Math.round(r.gross * 100), 0);
+    for (const t of wholeFileTotals) if (Math.round(t.amount * 100) !== reportedPaise)
+      throw Error("Statement grand total mismatch in row " + t.row + ": contract rows do not equal the reported P&L. Review the statement before importing.");
     return result;
   }
   function makeView(api) {

@@ -98,3 +98,39 @@ test('hedge model permits explicit IV when provider Greek timestamps are unavail
  stale.quotes.D1.tradeAt=new Date(NOW-600000).toISOString();
  A.equal(E.findHedges(B(),stale,{...HP,fallbackIV:28},NOW).candidates.some(c=>c.contract.instrumentKey==='D1'),false);
 });
+
+test('NSE single-stock derivative expiry session is date-effective, not cash close',()=>{
+ const at=d=>E.expiryTime(d);
+ A.equal(at('2026-07-28'),Date.parse('2026-07-28T15:30:00+05:30'));
+ A.equal(at('2026-11-23'),Date.parse('2026-11-23T15:40:00+05:30'));
+ A.equal(at('2026-12-29'),Date.parse('2026-12-29T15:45:00+05:30'));
+ for(const [date,minute] of [['2026-11-23','15:35'],['2026-12-29','15:42']]){
+  const start=Date.parse(date+'T'+minute+':00+05:30'),b=B([F({expiry:date})]);
+  A.equal(E.risk(b,{},start).futureUnits,300);
+  A.equal(E.scenario(b,{}, {spot:4900,horizon:start,basis:'carry'},start).complete,true);
+  A.equal(E.risk(b,{},at(date)+1000).futureUnits,0);
+ }
+});
+test('provider zero futures and put prices fail closed, while manual zero put remains valid',()=>{
+ const m=M();m.quotes.F=Q(0);m.quotes.P=Q(0);
+ A.equal(E.quoteQuality(m.quotes.F,{now:NOW,requireFresh:true,requireTrade:true}).valid,false);
+ A.equal(E.quoteQuality(m.quotes.P,{now:NOW,requireFresh:true,requireTrade:true}).valid,false);
+ A.equal(E.ledger(B(),m,opts).complete,false);
+ A.equal(E.ledger(B([P({manual:0,manualAt:STAMP})]),m,opts).open,-38.9*150);
+});
+test('cached or stale HAL spot does not trigger directional price review warnings',()=>{
+ const b=B();b.riskProfile.reviewBelow=4500;b.riskProfile.reviewAbove=5400;
+ const m=M();m.spot=Q(4300,{source:'CACHE',quoteAt:new Date(NOW-86400000).toISOString()});
+ A.equal(E.risk(b,m,NOW).warnings.some(w=>w.code==='lower_review'),false);
+ m.spot=Q(4300,{source:'REST'});
+ A.equal(E.risk(b,m,NOW).warnings.some(w=>w.code==='lower_review'),true);
+ m.spot=Q(5500,{quoteAt:new Date(NOW-86400000).toISOString()});
+ A.equal(E.risk(b,m,NOW).warnings.some(w=>w.code==='upper_review'),false);
+});
+test('stale marked loss never fires a live maximum-loss warning',()=>{
+ const b=B();b.riskProfile.maxLoss=100;
+ const m=M();m.quotes.F=Q(4500,{source:'CACHE',quoteAt:new Date(NOW-86400000).toISOString()});
+ A.equal(E.risk(b,m,NOW).warnings.some(w=>w.code==='loss_limit'),false);
+ m.quotes.F=Q(4500);
+ A.equal(E.risk(b,m,NOW).warnings.some(w=>w.code==='loss_limit'),true);
+});

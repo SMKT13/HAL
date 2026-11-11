@@ -52,3 +52,17 @@ test('option quote failure is limited to options and does not taint fresh future
  A.equal(E.quoteQuality(m.quotes.SYNTH_F,{now,requireFresh:true,requireTrade:true}).valid,true);
  A.equal(E.quoteQuality(m.quotes.SYNTH_P4500,{now,requireFresh:true,requireTrade:true}).valid,false);
 });
+
+test('documented Upstox array of instrument-keyed news retains each genuine article',()=>{
+ const article={heading:'HAL delivery update',article_link:'https://example.com/hal-delivery',published_time:now,summary:'Actual report'};
+ const arr=[{'NSE_EQ|SYNTH_1':[article]},{'NSE_EQ|SYNTH_2':[{...article,heading:'HAL second source'}]}];
+ const s=D.ingest(D.empty(),'research',{section:'news',frame:'D',fetched_at_iso:ts,data:{articles:arr}},ts);
+ const news=D.news(s);
+ A.equal(news.length,2);
+ A.deepEqual(news.map(n=>n.title),['HAL delivery update','HAL second source']);
+ A.ok(news.every(n=>n.publishedAt===ts&&n.url==='https://example.com/hal-delivery'));
+});
+test('news responses with empty nested instrument arrays do not manufacture blank articles',()=>{
+ const s=D.ingest(D.empty(),'research',{section:'news',frame:'D',fetched_at_iso:ts,data:{articles:[{'NSE_EQ|SYNTH_1':[]},{metadata:{page:1}}]}},ts);
+ A.deepEqual(D.news(s),[]);
+});

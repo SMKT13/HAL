@@ -131,3 +131,22 @@ test('recognized broker total footers do not block HAL summaries',()=>{
  assert.equal(H.totals(accept(E.emptyBook(),payload(rows))).realized,-14);
  assert.throws(()=>U.statementRows(U.csvRows(csv.replace('Grand Total','Unidentified contract'))),/Unrecognised/);
 });
+
+test('broker grand total is reconciled in paise and a mismatch fails closed',()=>{
+ const csv='Scrip Name,Quantity,Avg Buy Price,Avg Sell Price,Realized P&L\nHAL 13 FEB 25 90 Put,7,2,0,-14\nGrand Total,,,,-9999';
+ assert.throws(()=>U.statementRows(U.csvRows(csv)),/grand total mismatch/i);
+ assert.equal(U.statementRows(U.csvRows(csv.replace('-9999','-14'))).length,1);
+ assert.throws(()=>U.statementRows(U.csvRows(csv.replace('-9999',''))),/no amount/i);
+});
+test('exported HAL lifetime CSV can be imported without duplicating previously recorded rows',()=>{
+ const original=accept(E.emptyBook(),payload([summary,{...summary,type:'PE',strike:100,sourceRow:'S1:10',gross:-7.5,entry:null,exit:null}]));
+ const parsed=U.statementRows(U.csvRows(H.csv(original)));
+ assert.equal(parsed.length,2);
+ assert.equal(parsed[0].sourceName,'Synthetic statement');
+ const incoming={sourceId:'exported-copy',sourceName:'HAL-history-export.csv',mode:'incremental',records:parsed};
+ const preview=H.previewImport(original,incoming);
+ assert.equal(preview.duplicates.length,2);
+ assert.equal(preview.additions.length,0);
+ const empty=accept(E.emptyBook(),incoming);
+ assert.equal(H.totals(empty).realized,H.totals(original).realized);
+});

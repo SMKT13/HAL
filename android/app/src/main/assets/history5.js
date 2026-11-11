@@ -76,7 +76,7 @@
     check(payload.sourceHash==null||/^sha256:[a-f0-9]{64}$/.test(payload.sourceHash),'Invalid statement content hash.');
     const records=list(payload.records,'history report').map((r,i)=>{
       const row=String(r.sourceRow??r.source?.row??i+1);
-      const source={id:sourceId,name:sourceName,row};
+      const source={id:sourceId,name:text(r.sourceName??sourceName,'source name'),row};
       return validateRecord({...r,id:encodeURIComponent(sourceId)+'/'+encodeURIComponent(row),source});
     });
     check(records.length&&new Set(records.map(r=>r.id)).size===records.length,'A report must have unique source rows.');

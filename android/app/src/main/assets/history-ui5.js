@@ -21,25 +21,58 @@ function numeric(x){
  return Number(s);
 }
 function statementRows(rows){
- const result=[];let columns=null;const months='JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC'.split(' ');
+ const result=[];let columns=null,format=null;const wholeFileTotals=[],months='JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC'.split(' ');
+ const norm=x=>String(x??'').trim().toLowerCase().replace(/realised/g,'realized');
+ const optional=x=>String(x??'').trim()===''?null:numeric(x);
  rows.forEach((r,i)=>{
-   const fields=r.map(x=>String(x??'').trim());
-   if(!fields.some(x=>x)||fields.slice(1).every(x=>!x)&&/^(Futures|Options)$/i.test(fields[0]))return;
-   // Skip only recognizable broker summary footers, not unknown contract rows.
-   if(/^(?:(?:grand|sub)\s+)?totals?(?:\s+(?:futures|options|realized|realised|p&l|profit|loss))?\s*:?$/i.test(fields[0])||/^net\s+(?:realized|realised)\s+(?:p&l|profit|loss)\s*:?$/i.test(fields[0]))return;
-   if(/^scrip name$/i.test(fields[0])){
-     columns=['scrip name','quantity','avg buy price','avg sell price','realized p&l'].map(c=>fields.findIndex(v=>v.toLowerCase().replace('realised','realized')===c));
-     if(columns.includes(-1))throw Error('Expected Scrip Name, Quantity, Avg Buy Price, Avg Sell Price and Realized P&L.');
-     return;
+  const fields=r.map(x=>String(x??'').trim());
+  if(!fields.some(x=>x))return;
+  if(fields.slice(1).every(x=>!x)&&/^(Futures|Options)$/i.test(fields[0]))return;
+  if(norm(fields[0])==='source'){
+   const expected=['source','source row','type','contract month','contract expiry','close date','units','strike','average buy','average sell','reported gross p&l'];
+   if(expected.some((x,j)=>norm(fields[j])!==x))throw Error('Unrecognized HAL Desk exported history CSV header.');
+   columns=null;format='export';return;
+  }
+  if(norm(fields[0])==='scrip name'){
+   columns=['scrip name','quantity','avg buy price','avg sell price','realized p&l'].map(c=>fields.findIndex(v=>norm(v)===c));
+   if(columns.includes(-1))throw Error('Expected Scrip Name, Quantity, Avg Buy Price, Avg Sell Price and Realized P&L.');
+   format='broker';return;
+  }
+  if(format==='export'){
+   if(fields.length<11)throw Error('Incomplete exported history in row '+(i+1)+'.');
+   const [name,sourceRow,type,contractMonth,expiry,date,units,strike,entry,exit,gross]=fields;
+   if(!name||!sourceRow||!['FUT','PE','CE'].includes(type))throw Error('Invalid exported HAL contract in row '+(i+1)+'.');
+   result.push({sourceRow,sourceName:name.replace(/^'(?=[=+\-@])/,''),
+    type,contractMonth,expiry:expiry||null,date:date||null,units:numeric(units),
+    strike:optional(strike),entry:optional(entry),exit:optional(exit),gross:numeric(gross)});
+   return;
+  }
+  const label=norm(fields[0]),grand=/^(?:grand\s+total|net\s+realized\s+(?:p&l|profit|loss))\s*:?$/.test(label);
+  const generic=/^(?:(?:sub\s+)?total)(?:\s+(?:futures|options|realized|p&l|profit|loss))?\s*:?$/.test(label);
+  if(grand||generic){
+   // A named whole-report P&L footer is evidence, not decorative text.
+   // Plain Total is only global if no later nonblank rows remain in this report.
+   const final=rows.slice(i+1).every(x=>!x.some(v=>String(v??'').trim()));
+   const raw=columns?fields[columns[4]]:fields.slice(1).filter(x=>x!=='').at(-1);
+   if(grand||(generic&&final&&raw!==''&&raw!=null)){
+    if(raw==null||raw==='')throw Error('Statement grand total has no amount at row '+(i+1)+'.');
+    wholeFileTotals.push({row:i+1,amount:numeric(raw)});
    }
-   if(!columns)throw Error('HAL summary column headers are missing.');
-   const [name,units,buy,sell,gross]=columns.map(c=>fields[c]);
-   const m=/^HAL\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{2}|\d{4})\s+(?:(\d+(?:\.\d+)?)\s+)?(Fut|Future|Futures|Put|Call|PE|CE)$/i.exec(name);
-   if(!m)throw Error('Unrecognised HAL contract in row '+(i+1)+'.');
-   const type=/^FUT/i.test(m[5])?'FUT':/^(PE|Put)$/i.test(m[5])?'PE':'CE';
-   const expiry=(m[3].length===2?'20':'')+m[3]+'-'+String(months.indexOf(m[2].toUpperCase())+1).padStart(2,'0')+'-'+m[1].padStart(2,'0');
-   result.push({sourceRow:String(i+1),type,contractMonth:expiry.slice(0,7),expiry,strike:m[4]?numeric(m[4]):null,units:numeric(units),entry:numeric(buy),exit:numeric(sell),gross:numeric(gross)});
+   return;
+  }
+  if(format!=='broker'||!columns)throw Error('HAL summary column headers are missing.');
+  const [name,units,buy,sell,gross]=columns.map(c=>fields[c]);
+  const m=/^HAL\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{2}|\d{4})\s+(?:(\d+(?:\.\d+)?)\s+)?(Fut|Future|Futures|Put|Call|PE|CE)$/i.exec(name);
+  if(!m)throw Error('Unrecognised HAL contract in row '+(i+1)+'.');
+  const type=/^FUT/i.test(m[5])?'FUT':/^(PE|Put)$/i.test(m[5])?'PE':'CE';
+  const month=months.indexOf(m[2].toUpperCase())+1;
+  if(month<1)throw Error('Invalid contract month in row '+(i+1)+'.');
+  const expiry=(m[3].length===2?'20':'')+m[3]+'-'+String(month).padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  result.push({sourceRow:String(i+1),type,contractMonth:expiry.slice(0,7),expiry,strike:m[4]?numeric(m[4]):null,units:numeric(units),entry:numeric(buy),exit:numeric(sell),gross:numeric(gross)});
  });
+ const reportedPaise=result.reduce((n,r)=>n+Math.round(r.gross*100),0);
+ for(const t of wholeFileTotals)if(Math.round(t.amount*100)!==reportedPaise)
+  throw Error('Statement grand total mismatch in row '+t.row+': contract rows do not equal the reported P&L. Review the statement before importing.');
  return result;
 }
 function makeView(api){
