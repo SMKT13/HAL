@@ -1,14 +1,14 @@
-# HAL Desk 4.2.2 installation
+# HAL Desk 4.2.3 installation
 
-This release has application ID `in.smkt.haldesk`, versionCode 24 and minimum Android API 26. Export a JSON backup from the installed app before updating. Keep the installed app and its storage if Android reports a certificate conflict.
+This release has application ID `in.smkt.haldesk`, versionCode 25 and minimum Android API 26. Export a JSON backup from the installed app before updating. Keep the installed app and its storage if Android reports a certificate conflict.
 
 ## Sign the unsigned candidate
 
 Sign the aligned APK locally with the original HAL keystore. The Android SDK Build Tools prompt for its password when this command runs in a terminal. The private keystore and password belong outside the source tree.
 
 ```sh
-apksigner sign --ks /private/path/personal.jks --ks-key-alias hal-personal --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true --out HAL-Desk-v4.2.2-signed.apk HAL-Desk-v4.2.2-unsigned.apk
-apksigner verify --verbose --print-certs HAL-Desk-v4.2.2-signed.apk
+apksigner sign --ks /private/path/personal.jks --ks-key-alias hal-personal --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true --out HAL-Desk-v4.2.3-signed.apk HAL-Desk-v4.2.3-unsigned.apk
+apksigner verify --verbose --print-certs HAL-Desk-v4.2.3-signed.apk
 apksigner verify --verbose --print-certs HAL-Desk-v4.1.0-signed.apk
 ```
 

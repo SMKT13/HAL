@@ -1,6 +1,6 @@
 {
   "name": "hal-desk-android",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "private": true,
   "scripts": {
     "test": "node --test tests/data4.test.js tests/engine4.test.js tests/insights4.test.js tests/workflow4.test.js tests/history5.test.js tests/recovery5.test.js",
