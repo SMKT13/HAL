@@ -31,6 +31,8 @@ jobs:
       - run: npm run test:ui
 
   android:
+    permissions:
+      contents: write # temporary generation; removed before merging
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -66,6 +68,16 @@ jobs:
           if-no-files-found: error
       - run: npm test
         working-directory: android
+      - name: Commit generated assets on HAL audit branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/fix/hal-desk-4-2-2-second-audit-20261111'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android/app/src/main/assets/desk4.js android/web-assets-sha256.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Generate HAL Desk 4.2.2 Android bundle'
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
       - name: Verify committed UI bundle
         run: git diff --exit-code -- app/src/main/assets/desk4.js web-assets-sha256.json
         working-directory: android
@@ -77,9 +89,9 @@ jobs:
       - name: Upload unsigned candidate and test reports
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v4.2.1-unsigned-and-reports
+          name: HAL-Desk-v4.2.2-unsigned-and-reports
           path: |
-            android/build/HAL-Desk-v4.2.1-unsigned.apk
+            android/build/HAL-Desk-v4.2.2-unsigned.apk
             android/app/build/reports/tests/testReleaseUnitTest/
             android/app/build/reports/lint-results-release.html
           retention-days: 7
