@@ -74,7 +74,16 @@ public class HistoryImportTest {
         JSONArray rows=selected.getJSONArray("rows");assertEquals(3,rows.length());assertEquals(0,rows.getJSONArray(0).length());
         JSONArray row=rows.getJSONArray(2);assertEquals("Scrip Name",row.getString(0));assertEquals("",row.getString(1));
         assertEquals("HAL",row.getString(2));assertEquals("0",row.getString(3));
-        assertEquals(selected.getString("sourceId"),HistoryDocument.read(new ByteArrayInputStream(workbook),"renamed.xlsx").getString("sourceId"));
+        assertNotEquals(selected.getString("sourceId"),HistoryDocument.read(new ByteArrayInputStream(workbook),"renamed.xlsx").getString("sourceId"));
+        assertEquals(selected.getString("sourceHash"),HistoryDocument.read(new ByteArrayInputStream(workbook),"renamed.xlsx").getString("sourceHash"));
+    }
+    @Test public void correctedAndRenamedFileIdentitiesAreSeparated() throws Exception {
+        byte[] original=worksheet("<row r='1'><c r='A1' t='inlineStr'><is><t>HAL</t></is></c></row>","");
+        byte[] corrected=worksheet("<row r='1'><c r='A1' t='inlineStr'><is><t>HAL revised</t></is></c></row>","");
+        JSONObject first=HistoryDocument.read(new ByteArrayInputStream(original),"HAL.xlsx");
+        JSONObject changed=HistoryDocument.read(new ByteArrayInputStream(corrected),"HAL (2).xlsx");
+        assertEquals(first.getString("sourceId"),changed.getString("sourceId"));
+        assertNotEquals(first.getString("sourceHash"),changed.getString("sourceHash"));
     }
     @Test public void rejectsFormulaAndExternalWorksheetBeforePreview() throws Exception {
         byte[][] rejected={worksheet("<row><c><f>1+2</f><v>3</v></c></row>",""),worksheet("","TargetMode='External'")};

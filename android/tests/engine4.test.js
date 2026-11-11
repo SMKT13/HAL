@@ -85,3 +85,16 @@ test('old intraday bars cannot give fresh directional conclusions after retrieva
 test('malformed candle entries do not crash technicals or historical scanning',()=>{const input=[null,undefined,false,2,'bad',...bars()];A.equal(E.candles(input).length,240);A.equal(E.technicals(input,'D',NOW,STAMP).completedCount,240);A.ok(E.patterns(input,{now:NOW}).sampleCount>0);});
 
 test('daily completion never accepts a later source timestamp on the same date',()=>{const afterClose=Date.parse('2026-10-28T11:00:00Z'),input=E.candles([['2026-10-28T03:45:00Z',100,110,90,100,10],['2026-10-28T12:00:00Z',100,110,90,101,10]]);A.equal(E.completed(input,'D',afterClose).length,1);});
+
+test('hedge model permits explicit IV when provider Greek timestamps are unavailable',()=>{
+ const m=HM();for(const key of ['P','P2','D1','D2'])m.quotes[key].greeksAt=null;
+ const denied=E.findHedges(B(),m,HP,NOW);A.equal(denied.candidates.length,0);
+ A.ok(denied.excluded.some(c=>c.reasons.some(r=>r.includes('explicit IV assumption'))));
+ const allowed=E.findHedges(B(),m,{...HP,fallbackIV:28},NOW);
+ A.equal(allowed.errors.length,0);A.equal(allowed.candidates.length,2);
+ A.ok(allowed.candidates.every(c=>c.ivSource==='user-assumed'&&c.ivAssumption===28));
+ A.ok(allowed.assumptions.some(x=>x.includes('user-assumed')));
+ const stale=HM();for(const key of ['P','P2','D1','D2'])stale.quotes[key].greeksAt=null;
+ stale.quotes.D1.tradeAt=new Date(NOW-600000).toISOString();
+ A.equal(E.findHedges(B(),stale,{...HP,fallbackIV:28},NOW).candidates.some(c=>c.contract.instrumentKey==='D1'),false);
+});

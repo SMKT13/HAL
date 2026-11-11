@@ -24,7 +24,7 @@ function ingest(state,event,data,now=stamp()){
 function packet(s,section,frame='D',type='consolidated'){return s.research[key(section,frame,type)]||s.research[section+':'+frame]||null;}
 function market(s){
  const result={contracts:[],quotes:{},spot:E.normQuote({}),lastSuccess:s.lastSuccess,lastFailure:s.lastFailure,failure:s.failure};const contracts=new Map();
- const tag=(q,p,h)=>({...q,source:p._cache?'CACHE':q.source,lastSuccess:h?.lastSuccess||p._received_at||p.fetched_at_iso,lastFailure:h?.lastFailure||null,failure:h?.error||null});
+ const tag=(q,p,h)=>({...q,source:p._cache?'CACHE':q.source,lastSuccess:h?.lastSuccess||p._received_at||p.fetched_at_iso,lastFailure:h?.lastFailure||null,failure:q.failure||null});
  const choose=(a,b)=>{if(!a)return b;const av=Date.parse(a.quoteAt),bv=Date.parse(b.quoteAt),at=Date.parse(a.tradeAt),bt=Date.parse(b.tradeAt);if(Number.isFinite(at)&&Number.isFinite(bt)&&bt<at)return a;if(Number.isFinite(av)&&(!Number.isFinite(bv)||bv<av))return a;if(bv===av&&Date.parse(b.retrievedAt)<Date.parse(a.retrievedAt))return a;return b;};
  const add=(raw,p,h)=>{const m=E.normalizeMarket(raw);for(const c of m.contracts)contracts.set(c.instrumentKey,c);for(const [k,q]of Object.entries(m.quotes))result.quotes[k]=choose(result.quotes[k],tag(q,p,h));return m;};
  if(s.snapshot){const m=add(s.snapshot,s.snapshot,s.health.market);result.spot=tag(m.spot,s.snapshot,s.health.market);}

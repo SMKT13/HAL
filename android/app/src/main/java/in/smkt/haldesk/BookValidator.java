@@ -114,6 +114,7 @@ final class BookValidator {
   for(int i=0;i<imports.length();i++){
    JSONObject a=imports.getJSONObject(i);
    isoDate(a,"date");label(a,"sourceId",160);label(a,"sourceName",240);
+   if(!a.isNull("sourceHash")) require(label(a,"sourceHash",71).matches("sha256:[a-f0-9]{64}"),"invalid_history_source_hash");
    require(Arrays.asList("incremental","cumulative").contains(a.opt("mode")),"invalid_history_import_mode");
    integer(a,"added",0,HISTORY_LIMIT);integer(a,"replaced",0,HISTORY_LIMIT);
   }

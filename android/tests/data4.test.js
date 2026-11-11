@@ -36,3 +36,11 @@ test('old null-key verification failure cannot hide either valid listed put',()=
 test('cached mismatch recovers with new quotes while a real wrong saved key stays blocked',()=>{let s=D.ingest(D.empty(),'research',failedHeld(),old);s=D.restoreCache(D.cache(s));s=D.ingest(s,'snapshot',putSnapshot(),ts);const m=D.market(s);A.equal(E.resolveMark(putLeg(4500),m,{now}).price,50);A.equal(E.resolveMark(putLeg(4500,'SYNTH_WRONG'),m,{now}).price,null);});
 test('a different listed expiry never supplies a saved put price',()=>{const s=D.ingest(D.empty(),'snapshot',putSnapshot(),ts);A.equal(E.resolveMark({...putLeg(4500),expiry:'2026-11-24'},D.market(s),{now}).price,null);});
 test('actual not-listed verification is still withheld',()=>{let s=D.ingest(D.empty(),'snapshot',putSnapshot(),ts);s=D.ingest(s,'research',failedHeld('contract_not_listed'),ts);A.equal(E.resolveMark(putLeg(4500),D.market(s),{now}).price,null);});
+
+test('option-chain partial errors cannot poison independently fresh spot/futures prices',()=>{
+ const x=D.ingest(D.empty(),'snapshot',{...snap(),chain_error:'expiry_not_listed',errors:{chain:'expiry_not_listed'}},ts);
+ const m=D.market(x);A.match(x.health.market.error,/chain/);
+ for(const quote of [m.spot,m.quotes.SYNTH_F])A.equal(E.quoteQuality(quote,{now,requireFresh:true,requireTrade:true}).valid,true);
+ const failed=D.ingest(x,'error',{code:'network_unavailable'},new Date(now+1000).toISOString());
+ A.equal(E.quoteQuality(D.market(failed).spot,{now:now+1000,requireFresh:true,requireTrade:true}).valid,false);
+});

@@ -31,6 +31,8 @@ jobs:
       - run: npm run test:ui
 
   android:
+    permissions:
+      contents: write # temporary asset generation; removed before merging
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +80,16 @@ jobs:
           path: qa/*.png
           retention-days: 7
           if-no-files-found: warn
+      - name: Commit generated Android bundle to the audit-fix branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/fix/hal-desk-4-2-audit-20261111'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add android/app/src/main/assets/desk4.js android/web-assets-sha256.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Generate Android 8 HAL Desk audited bundle'
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
       - name: Verify committed UI bundle
         run: git diff --exit-code -- app/src/main/assets/desk4.js web-assets-sha256.json
         working-directory: android
