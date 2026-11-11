@@ -31,8 +31,6 @@ jobs:
       - run: npm run test:ui
 
   android:
-    permissions:
-      contents: write # temporary bundle regeneration on this fix branch only
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -68,16 +66,6 @@ jobs:
           if-no-files-found: error
       - run: npm test
         working-directory: android
-      - name: Commit reproducible assets on HAL 4.2.3 audit branch
-        if: github.event_name == 'push' && github.ref == 'refs/heads/fix/hal-desk-4-2-3-expiry-and-manual-marks'
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add android/app/src/main/assets/desk4.js android/web-assets-sha256.json
-          if ! git diff --cached --quiet; then
-            git commit -m 'Generate HAL Desk 4.2.3 Android bundle'
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          fi
       - name: Verify committed UI bundle
         run: git diff --exit-code -- app/src/main/assets/desk4.js web-assets-sha256.json
         working-directory: android
