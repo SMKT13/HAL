@@ -123,7 +123,18 @@ function quoteQuality(q, opts={}) {
  if(q?.source==='STREAM')reasons.push('Streaming preview cannot be used as a valuation mark');
  if(!Number.isFinite(quoteAt))reasons.push('Provider quote timestamp unavailable');
  for(const [label,t] of [['Provider quote',quoteAt],['Last trade',tradeAt],['Retrieval',retrievedAt]])if(Number.isFinite(t)&&t>now+futureTolerance)reasons.push(label+' timestamp is in the future');
- if(!Number.isFinite(retrievedAt))warnings.push('HTTP retrieval timestamp unavailable');
+ if(!Number.isFinite(retrievedAt)){
+   warnings.push('HTTP retrieval timestamp unavailable');
+   if(opts.requireFresh)reasons.push('A verified REST retrieval timestamp is required');
+ }else{
+   if(opts.requireFresh&&now-retrievedAt>maxAge)reasons.push('Stale HTTP retrieval');
+   if(opts.requireFresh&&Number.isFinite(quoteAt)&&retrievedAt+futureTolerance<quoteAt)reasons.push('Provider quote postdates HTTP retrieval');
+ }
+ // Market-derived decisions must use identifiable REST observations only.
+ // Stale/offline marks can still be shown as labelled indicative values.
+ const providerSource=q?.source||'';
+ if(providerSource&&!['REST','upstox_rest_v3','CACHE','STREAM'].includes(providerSource))reasons.push('Unrecognized quote source');
+ if(opts.requireFresh&&!['REST','upstox_rest_v3'].includes(providerSource))reasons.push('A verified Upstox REST source is required');
  if(!Number.isFinite(tradeAt)) (opts.requireTrade?reasons:warnings).push('Last exchange trade timestamp unavailable');
  const quoteStale=Number.isFinite(quoteAt)&&now-quoteAt>maxAge,tradeStale=Number.isFinite(tradeAt)&&now-tradeAt>maxTradeAge;
  if(quoteStale)warnings.push('Provider quote is older than '+maxAge/1000+' seconds');

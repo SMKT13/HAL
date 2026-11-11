@@ -159,3 +159,26 @@ test('legacy manual zero futures marks stay recoverable but cannot manufacture h
  const corrected=B([F({manual:5000,manualAt:STAMP})]);near(E.ledger(corrected,M(),opts).open,(5000-4927.35)*300);
  const cleared=B([F({manual:null})]);near(E.ledger(cleared,M(),opts).open,(5000-4927.35)*300);
 });
+
+test('strict risk and hedge screening reject quotes without an HTTP retrieval clock',()=>{
+ const source=Q(4900,{retrievedAt:null});
+ A.equal(E.quoteQuality(source,{now:NOW}).valid,true);
+ const strict=E.quoteQuality(source,{now:NOW,requireFresh:true,requireTrade:true});
+ A.equal(strict.valid,false);A.match(strict.reasons.join('; '),/retrieval timestamp/);
+ const m=HM();m.spot={...m.spot,retrievedAt:null};
+ A.equal(E.findHedges(B(),m,{...HP,fallbackIV:25},NOW).candidates.length,0);
+});
+test('strict risk and hedge checks reject a fabricated source or an old retrieval',()=>{
+ for(const patch of [{source:'unverified-feed'},{retrievedAt:new Date(NOW-600000).toISOString()}]){
+  const q=Q(4900,patch),r=E.quoteQuality(q,{now:NOW,requireFresh:true,requireTrade:true});
+  A.equal(r.valid,false,r.reasons.join('; '));
+ }
+ const q=Q(4900,{retrievedAt:new Date(NOW-500).toISOString()});
+ A.equal(E.quoteQuality(q,{now:NOW,requireFresh:true,requireTrade:true}).valid,true);
+ const m=M();m.spot={...m.spot,source:'unverified-feed'};const b=B();
+ b.riskProfile.reviewBelow=5000;
+ A.equal(E.risk(b,m,NOW).warnings.some(w=>w.code==='lower_review'),false);
+});
+test('strict quote source accepts explicit provider REST v3 provenance',()=>{
+ A.equal(E.quoteQuality(Q(4900,{source:'upstox_rest_v3'}),{now:NOW,requireFresh:true,requireTrade:true}).valid,true);
+});

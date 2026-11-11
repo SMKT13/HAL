@@ -1,25 +1,31 @@
 # HAL Desk 4.1.0
 
-Personal Android research and position-management desk for Hindustan Aeronautics Limited (NSE: HAL). Package `in.smkt.haldesk`, versionCode **25**, Android **8.0+**. Direct read-only Upstox data, optional Gemini and opt-in local FinBERT. No broker orders, fund transfers or required application server.
+Personal Android research and position-management desk for Hindustan Aeronautics Limited (NSE: HAL). Package `in.smkt.haldesk`, versionCode **26**, Android **8.0+**. Direct read-only Upstox data, optional Gemini and opt-in local FinBERT. No broker orders, fund transfers or required application server.
 
 The Android application has five primary tabs: **Position**, **History**, **Technicals**, **Research** and **AI Desk**. It supports multiple long futures and protective puts, partial closes, preserved realised history, exact-contract marks, expiry-gap checks, deterministic scenarios, hedge comparisons and offline books.
 
-## 4.2.3 expired-position and manual-mark corrections
+## 4.2.4 third-audit fixes and private signed release
+
+- The quote-quality gate requires a known Upstox REST source and a sensible, recent HTTP retrieval clock before quotes qualify for hedge screens or risk alerts. Labeled stale observations remain viewable; unrecognized sources are not treated as genuine REST marks.
+- Expired, unreconciled positions receive the highest review priority, ahead of missing quote or disconnected connection notices, so the user is directed to record actual broker-confirmed settlement/close.
+- The release preserves versionCode 26, package `in.smkt.haldesk`, the original signing identity and all saved local books/journal records. Signing only uses the private archived original key outside the repository.
+
+## 4.2.4 expired-position and manual-mark corrections
 
 - Expired, unreconciled open derivatives cannot use old exchange prices or manual marks to fabricate open profit or strategy net P&L. Record the actual broker-confirmed close or settlement to recognise the outcome; existing positions and transaction records remain preserved.
 - Manual futures marks must be strictly positive in the position editor. Older saved zero futures marks remain recoverable but are excluded from valuation; zero manual put marks remain supported.
-- Release 4.2.3 / versionCode 25 retains package `in.smkt.haldesk` and requires the original signing certificate for in-place Android upgrades.
+- Release 4.2.4 / versionCode 26 retains package `in.smkt.haldesk` and requires the original signing certificate for in-place Android upgrades.
 
-## 4.2.3 second-audit corrections
+## 4.2.4 second-audit corrections
 
 - Zero-valued provider market prices cannot become false portfolio losses; explicit user-entered zero put marks remain supported.
 - HAL NSE stock derivative expiry clocks follow date-effective 15:30 / 15:40 / 15:45 IST sessions; settlement must still be reconciled separately.
 - Price-review and net-loss alerts require valid fresh quotes rather than silently using stale observations.
 - Import of exported lifetime-history CSV is supported; whole-statement grand totals are checked against HAL gross rows before saving.
 - Upstox instrument-keyed news arrays and partial article metadata are supported, and absent option-contract discovery uses a bounded retry interval.
-- Version 4.2.3 / versionCode 25 preserves the app ID and requires the original signing certificate for upgrades.
+- Version 4.2.4 / versionCode 26 preserves the app ID and requires the original signing certificate for upgrades.
 
-## 4.2.3 reliability fixes
+## 4.2.4 reliability fixes
 
 The Android desk now isolates chain-only market errors from independent quotes, supports explicit user-assumed IV for strictly labelled model-only hedge comparisons when provider Greek timestamps are absent, and reconciles corrected named broker reports while preserving file hashes. Recognized statement total rows are safely ignored. **Distinct reports must use distinct file names**; never accept a reconciliation as separate trading activity without checking the source.
 
@@ -44,7 +50,7 @@ completed history retain schema 4.
 - [Acceptance criteria](android/docs/ACCEPTANCE.md)
 - [Repository synchronization notes](docs/REPOSITORY-SYNC-4.0.2.md)
 
-The previous 4.0.2 APK was built and signed privately with the original HAL certificate. The 4.2.3 source is an unsigned candidate until privately signed and verified. GitHub contains the source, tests and verification records; CI produces **unsigned** candidates for private local signing. Keystores, passwords, API credentials and personal portfolio backups must never be committed. Update the existing installation without uninstalling it or clearing its data, and export a book backup first.
+The previous 4.0.2 APK was built and signed privately with the original HAL certificate. The 4.2.4 source is an unsigned candidate until privately signed and verified. GitHub contains the source, tests and verification records; CI produces **unsigned** candidates for private local signing. Keystores, passwords, API credentials and personal portfolio backups must never be committed. Update the existing installation without uninstalling it or clearing its data, and export a book backup first.
 
 ```sh
 cd android

@@ -413,7 +413,16 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     if ((q == null ? void 0 : q.source) === "STREAM") reasons.push("Streaming preview cannot be used as a valuation mark");
     if (!Number.isFinite(quoteAt)) reasons.push("Provider quote timestamp unavailable");
     for (const [label, t] of [["Provider quote", quoteAt], ["Last trade", tradeAt], ["Retrieval", retrievedAt]]) if (Number.isFinite(t) && t > now + futureTolerance) reasons.push(label + " timestamp is in the future");
-    if (!Number.isFinite(retrievedAt)) warnings.push("HTTP retrieval timestamp unavailable");
+    if (!Number.isFinite(retrievedAt)) {
+      warnings.push("HTTP retrieval timestamp unavailable");
+      if (opts.requireFresh) reasons.push("A verified REST retrieval timestamp is required");
+    } else {
+      if (opts.requireFresh && now - retrievedAt > maxAge) reasons.push("Stale HTTP retrieval");
+      if (opts.requireFresh && Number.isFinite(quoteAt) && retrievedAt + futureTolerance < quoteAt) reasons.push("Provider quote postdates HTTP retrieval");
+    }
+    const providerSource = (q == null ? void 0 : q.source) || "";
+    if (providerSource && !["REST", "upstox_rest_v3", "CACHE", "STREAM"].includes(providerSource)) reasons.push("Unrecognized quote source");
+    if (opts.requireFresh && !["REST", "upstox_rest_v3"].includes(providerSource)) reasons.push("A verified Upstox REST source is required");
     if (!Number.isFinite(tradeAt)) (opts.requireTrade ? reasons : warnings).push("Last exchange trade timestamp unavailable");
     const quoteStale = Number.isFinite(quoteAt) && now - quoteAt > maxAge, tradeStale = Number.isFinite(tradeAt) && now - tradeAt > maxTradeAge;
     if (quoteStale) warnings.push("Provider quote is older than " + maxAge / 1e3 + " seconds");
@@ -1243,6 +1252,8 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     var _a;
     const { book, valuation = {}, risk = {}, market = {} } = input;
     if (!((_a = book == null ? void 0 : book.legs) == null ? void 0 : _a.length)) return { title: "Set up your position", detail: "Record your actual HAL futures and puts to see their combined exposure.", action: "add", label: "Add first position" };
+    const expired = (risk.warnings || []).find((w) => w.code === "expired");
+    if (expired) return { ...expired, action: "go-book", label: "Reconcile expired contract" };
     if (!configured) return { title: "Connect market prices", detail: "Your saved positions are available offline. Connect Upstox to value exact contracts.", action: "connection", label: "Connect Upstox" };
     if (market.failure || market.lastFailure && (!market.lastSuccess || Date.parse(market.lastFailure) > Date.parse(market.lastSuccess))) return { title: "Refresh your prices", detail: "The last refresh failed. Retained observations have not become live prices.", action: "retry-prices", label: "Retry prices" };
     if (!valuation.complete) return { title: "Complete your position prices", detail: "A saved contract is missing a usable mark. Review its expiry, strike and lot size.", action: "review-contracts", label: "Review missing prices" };
@@ -10021,7 +10032,7 @@ window.createHalReview = function createHalReview(api) {
     });
   }
   function settings() {
-    modal("HAL Desk 4.2.3 \xB7 Settings", '<p class="fine">Personal read-only research. Android 8+. Credentials stay encrypted natively; market and AI calls use fixed HTTPS destinations.</p><div class="toolbar">'.concat(btn("connection", "Upstox connection")).concat(btn("ai-settings", "Gemini settings")).concat(btn("token-page", "Get Analytics Token"), "</div>").concat(select("theme", "Appearance", [["dark", "Graphite dark"], ["light", "Paper light"], ["system", "Follow device"]], book.preferences.theme)).concat(select("mark-mode", "Put valuation marks", [["ltp", "Last traded price"], ["bid", "Quoted bid"]], book.preferences.markMode), '<label><input id="auto-refresh" type="checkbox" ').concat(book.preferences.auto ? "checked" : "", '>Refresh roughly every 60 seconds while foreground</label><p class="fine">Android background monitoring is not guaranteed. No automatic paid AI requests occur.</p><div class="toolbar">').concat(btn("export", "Export JSON")).concat(btn("csv", "Journal CSV")).concat(btn("import", "Import backup")).concat(btn("recovery", "Recovery")).concat(btn("health", "Data health"), "</div>"), "Save preferences", () => commit({ ...book, preferences: { theme: text("theme"), markMode: text("mark-mode"), auto: $("auto-refresh").checked } }));
+    modal("HAL Desk 4.2.4 \xB7 Settings", '<p class="fine">Personal read-only research. Android 8+. Credentials stay encrypted natively; market and AI calls use fixed HTTPS destinations.</p><div class="toolbar">'.concat(btn("connection", "Upstox connection")).concat(btn("ai-settings", "Gemini settings")).concat(btn("token-page", "Get Analytics Token"), "</div>").concat(select("theme", "Appearance", [["dark", "Graphite dark"], ["light", "Paper light"], ["system", "Follow device"]], book.preferences.theme)).concat(select("mark-mode", "Put valuation marks", [["ltp", "Last traded price"], ["bid", "Quoted bid"]], book.preferences.markMode), '<label><input id="auto-refresh" type="checkbox" ').concat(book.preferences.auto ? "checked" : "", '>Refresh roughly every 60 seconds while foreground</label><p class="fine">Android background monitoring is not guaranteed. No automatic paid AI requests occur.</p><div class="toolbar">').concat(btn("export", "Export JSON")).concat(btn("csv", "Journal CSV")).concat(btn("import", "Import backup")).concat(btn("recovery", "Recovery")).concat(btn("health", "Data health"), "</div>"), "Save preferences", () => commit({ ...book, preferences: { theme: text("theme"), markMode: text("mark-mode"), auto: $("auto-refresh").checked } }));
   }
   function health() {
     modal("Data readiness & connection health", Object.entries(s.health).map(([k, h]) => '<div class="health-row"><div><strong>'.concat(esc(k), "</strong><small>Success ").concat(when(h.lastSuccess), "<br>Failure ").concat(when(h.lastFailure), "</small><small>").concat(esc(h.error ? D.message(h.error) : ""), "</small></div>").concat(badge(h.pending ? "Loading" : h.error ? "Needs review" : h.lastSuccess ? "Retrieved" : "Unavailable", h.error ? "stale" : ""), "</div>")).join("") || empty("No feeds requested"), null, null);
