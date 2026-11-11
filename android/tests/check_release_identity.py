@@ -4,9 +4,9 @@ import re
 root=Path(__file__).resolve().parents[1]
 build=(root/'app/build.gradle').read_text();main=(root/'app/src/main/java/in/smkt/haldesk/MainActivity.java').read_text()
 assert re.search(r"applicationId ['\"]in.smkt.haldesk['\"]",build)
-assert re.search(r'versionCode\s+22\b',build)
+assert re.search(r'versionCode\s+23\b',build)
 assert re.search(r"versionName ['\"]4.2.1['\"]",build)
 assert 'https://appassets.androidplatform.net/' in main
 assert 'obj.put("version","4.2.1")' in main
 assert 'HAL_SIGNING_KEY_FILE' in (root/'build.sh').read_text()
-print('Source identity verified: in.smkt.haldesk 4.2.1 / 22; legacy origin retained')
+print('Source identity verified: in.smkt.haldesk 4.2.1 / 23; legacy origin retained')
