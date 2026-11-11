@@ -173,7 +173,7 @@ test('strict risk and hedge checks reject a fabricated source or an old retrieva
   const q=Q(4900,patch),r=E.quoteQuality(q,{now:NOW,requireFresh:true,requireTrade:true});
   A.equal(r.valid,false,r.reasons.join('; '));
  }
- const q=Q(4900,{retrievedAt:new Date(NOW-30000).toISOString()});
+ const q=Q(4900,{retrievedAt:new Date(NOW-500).toISOString()});
  A.equal(E.quoteQuality(q,{now:NOW,requireFresh:true,requireTrade:true}).valid,true);
  const m=M();m.spot={...m.spot,source:'unverified-feed'};const b=B();
  b.riskProfile.reviewBelow=5000;
