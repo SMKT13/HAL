@@ -66,18 +66,6 @@ jobs:
           if-no-files-found: error
       - run: npm test
         working-directory: android
-      - run: npx playwright install --with-deps chromium
-        working-directory: android
-      - run: npm run test:ui
-        working-directory: android
-      - name: Upload Android UI previews
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: HAL-Desk-ui-previews
-          path: qa/*.png
-          retention-days: 7
-          if-no-files-found: warn
       - name: Verify committed UI bundle
         run: git diff --exit-code -- app/src/main/assets/desk4.js web-assets-sha256.json
         working-directory: android
@@ -96,3 +84,15 @@ jobs:
             android/app/build/reports/lint-results-release.html
           retention-days: 7
           if-no-files-found: error
+      - run: npx playwright install --with-deps chromium
+        working-directory: android
+      - run: npm run test:ui
+        working-directory: android
+      - name: Upload Android UI previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HAL-Desk-ui-previews
+          path: qa/*.png
+          retention-days: 7
+          if-no-files-found: warn
