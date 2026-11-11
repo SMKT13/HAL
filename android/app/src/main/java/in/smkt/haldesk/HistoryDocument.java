@@ -37,7 +37,11 @@ final class HistoryDocument {
         displayName = displayName.replaceAll("[\\p{Cntrl}]", " ").trim();
         if (displayName.length() > 180) displayName = displayName.substring(0, 180);
         String digest = hex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        JSONObject result = new JSONObject().put("sourceId", "sha256:" + digest).put("sourceName", displayName);
+        // Use a stable identity for amended downloads; retain the exact content hash.
+        String stableName = displayName.toLowerCase(Locale.ROOT).replaceAll("\\s*\\(\\d+\\)(?=\\.[^.]+$)", "");
+        String stableId = hex(MessageDigest.getInstance("SHA-256").digest(stableName.getBytes(StandardCharsets.UTF_8)));
+        JSONObject result = new JSONObject().put("sourceId", "document-name-sha256:" + stableId)
+                .put("sourceHash", "sha256:" + digest).put("sourceName", displayName);
         if (bytes.length >= 4 && bytes[0] == 'P' && bytes[1] == 'K') {
             return result.put("rows", readWorkbook(bytes));
         }

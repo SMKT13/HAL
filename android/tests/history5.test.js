@@ -107,3 +107,27 @@ test('corrections preserve provenance and protect spreadsheet exports from formu
   assert.match(H.csv(next),/"'=synthetic"/);
   assert.throws(()=>H.validate({...next.history,records:[next.history.records[0],next.history.records[0]]},next),/Duplicate/);
 });
+
+test('revised broker report retains row identity and independent file-content hash',()=>{
+ const first={...payload([summary]),sourceId:'document-name-sha256:abc',sourceName:'HAL.xlsx',sourceHash:'sha256:'+'a'.repeat(64)};
+ let b=accept(E.emptyBook(),first),corrected={...first,sourceHash:'sha256:'+'b'.repeat(64),records:[{...summary,gross:-30}]};
+ const preview=H.previewImport(b,corrected);assert.equal(preview.additions.length,1);
+ assert.equal(preview.conflicts.filter(c=>c.kind==='source-row').length,1);
+ assert.throws(()=>H.applyImport(b,preview),/correct|skip/);
+ b=H.applyImport(b,preview,{byConflict:{[choiceKey(preview.conflicts.find(c=>c.kind==='source-row'))]:'replace'}});
+ assert.equal(b.history.records.length,1);assert.equal(H.totals(b).realized,-30);
+ assert.equal(b.history.imports.at(-1).sourceHash,corrected.sourceHash);
+ const unchanged={...corrected,sourceId:'document-name-sha256:renamed',sourceName:'HAL revised.xlsx'};
+ assert.equal(H.previewImport(b,unchanged).duplicates.length,1);
+});
+test('legacy content-addressed source IDs remain recognized after an upgrade',()=>{
+ const hash='sha256:'+'c'.repeat(64),first={...payload([summary]),sourceId:hash,sourceName:'Old.xlsx'};
+ const b=accept(E.emptyBook(),first),updated={...first,sourceId:'document-name-sha256:old',sourceHash:hash,sourceName:'Renamed.xlsx'};
+ assert.equal(H.previewImport(b,updated).duplicates.length,1);
+});
+test('recognized broker total footers do not block HAL summaries',()=>{
+ const csv='Scrip Name,Quantity,Avg Buy Price,Avg Sell Price,Realized P&L\nHAL 13 FEB 25 90 Put,7,2,0,-14\nGrand Total,,,,-14\nNet Realised P&L,,,,-14';
+ const rows=U.statementRows(U.csvRows(csv));assert.equal(rows.length,1);
+ assert.equal(H.totals(accept(E.emptyBook(),payload(rows))).realized,-14);
+ assert.throws(()=>U.statementRows(U.csvRows(csv.replace('Grand Total','Unidentified contract'))),/Unrecognised/);
+});

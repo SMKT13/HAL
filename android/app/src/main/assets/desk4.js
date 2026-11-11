@@ -78,7 +78,8 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     });
     const imports = list((_c = h.imports) != null ? _c : [], "history import log").map((a) => {
       check(day(a.date) && ["incremental", "cumulative"].includes(a.mode) && Number.isInteger(a.added) && a.added >= 0 && Number.isInteger(a.replaced) && a.replaced >= 0, "Invalid history import log.");
-      return { date: a.date, mode: a.mode, sourceName: text(a.sourceName, "source name"), sourceId: text(a.sourceId, "source ID", 160), added: a.added, replaced: a.replaced };
+      check(a.sourceHash == null || /^sha256:[a-f0-9]{64}$/.test(a.sourceHash), "Invalid source content hash.");
+      return { date: a.date, mode: a.mode, sourceName: text(a.sourceName, "source name"), sourceId: text(a.sourceId, "source ID", 160), added: a.added, replaced: a.replaced, ...a.sourceHash ? { sourceHash: a.sourceHash } : {} };
     });
     return { version: 1, records, revisions, imports, excludedJournalIds: excluded, excludeLegacyRealized: h.excludeLegacyRealized === true, charges: chargesRecord(h.charges) };
   }
@@ -107,16 +108,18 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     return { realized, charges, net: total([realized, -charges]), byType, count, legacyGross, chargesConfirmed: !!h.charges, hasHistory: !!(count || h.charges || book.legacy || charges) };
   }
   function normalized(payload) {
+    var _a;
     check(payload && ["incremental", "cumulative"].includes(payload.mode), "Choose incremental or cumulative source coverage.");
     const sourceId = text(payload.sourceId, "source ID", 160), sourceName = text(payload.sourceName, "source name");
+    check(payload.sourceHash == null || /^sha256:[a-f0-9]{64}$/.test(payload.sourceHash), "Invalid statement content hash.");
     const records = list(payload.records, "history report").map((r, i) => {
-      var _a, _b, _c;
-      const row = String((_c = (_b = r.sourceRow) != null ? _b : (_a = r.source) == null ? void 0 : _a.row) != null ? _c : i + 1);
+      var _a2, _b, _c;
+      const row = String((_c = (_b = r.sourceRow) != null ? _b : (_a2 = r.source) == null ? void 0 : _a2.row) != null ? _c : i + 1);
       const source = { id: sourceId, name: sourceName, row };
       return validateRecord({ ...r, id: encodeURIComponent(sourceId) + "/" + encodeURIComponent(row), source });
     });
     check(records.length && new Set(records.map((r) => r.id)).size === records.length, "A report must have unique source rows.");
-    return { sourceId, sourceName, mode: payload.mode, records };
+    return { sourceId, sourceName, sourceHash: (_a = payload.sourceHash) != null ? _a : null, mode: payload.mode, records };
   }
   function economic(r) {
     return JSON.stringify([r.type, r.contractMonth, r.expiry, r.strike, r.units, r.entry, r.exit, r.gross, r.date]);
@@ -139,17 +142,28 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     }
     h.records.forEach((r) => indexRow(r, "history"));
     const excluded = new Set(h.excludedJournalIds), prior = new Map(h.records.map((r) => [r.id, r]));
+    const sameNamedRow = /* @__PURE__ */ new Map();
+    for (const old of h.records) {
+      const k = old.source.name.trim().toLocaleLowerCase() + "\n" + old.source.row;
+      const group = sameNamedRow.get(k) || [];
+      group.push(old);
+      sameNamedRow.set(k, group);
+    }
+    const sourceAliases = new Set(h.imports.filter((i) => payload.sourceHash && i.sourceHash === payload.sourceHash).map((i) => i.sourceId));
+    if (payload.sourceHash) sourceAliases.add(payload.sourceHash);
     for (const j of book.journal || []) if (j.kind === "close" && !excluded.has(j.id)) indexRow({ ...j.leg, id: j.id, contractMonth: j.leg.expiry.slice(0, 7) }, "journal");
     for (const r of payload.records) {
-      const previous = prior.get(r.id);
+      const named = sameNamedRow.get(r.source.name.trim().toLocaleLowerCase() + "\n" + r.source.row) || [];
+      const aliases = h.records.filter((old) => sourceAliases.has(old.source.id) && old.source.row === r.source.row);
+      const previous = prior.get(r.id) || (aliases.length === 1 ? aliases[0] : null) || (named.length === 1 ? named[0] : null);
       if (previous && economic(previous) === economic(r)) {
         duplicates.push(r);
         continue;
       }
       additions.push(r);
-      if (previous) conflicts.push({ kind: "source-row", incomingId: r.id, id: r.id });
+      if (previous) conflicts.push({ kind: "source-row", incomingId: r.id, id: previous.id });
       for (const other of index.get(key(r)) || []) {
-        if (other.id === r.id || r.expiry && other.expiry && other.expiry !== r.expiry) continue;
+        if (other.id === r.id || previous && other.id === previous.id || r.expiry && other.expiry && other.expiry !== r.expiry) continue;
         conflicts.push({ kind: other.kind, incomingId: r.id, id: other.id });
         check(conflicts.length <= limit, "Report contains too many ambiguous overlaps. Split it into smaller reviewed batches.");
       }
@@ -178,7 +192,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     h.records = h.records.filter((r) => !replace.has(r.id)).concat(pending);
     h.excludedJournalIds = [...new Set(h.excludedJournalIds.concat([...excluded]))];
     if (((_b = choices.byConflict) == null ? void 0 : _b["legacy\n\nlegacy"]) === "replace") h.excludeLegacyRealized = true;
-    h.imports.push({ date: nowDate(), sourceId: p.payload.sourceId, sourceName: p.payload.sourceName, mode: p.payload.mode, added: pending.length, replaced: replace.size });
+    h.imports.push({ date: nowDate(), sourceId: p.payload.sourceId, sourceName: p.payload.sourceName, mode: p.payload.mode, added: pending.length, replaced: replace.size, ...p.payload.sourceHash ? { sourceHash: p.payload.sourceHash } : {} });
     next.history = validate(h, next);
     return next;
   }
@@ -604,8 +618,8 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     }));
   }
   function hedgePreferences(input = {}) {
-    const out = { budget: null, maxLoss: null, protectThrough: null, buyFees: 0, exitFees: 0, slippage: 0.5, maxSpread: 10, ivShift: 0, rate: 6, dividend: 0, minVolume: 1, minOI: 1, maxAge: 12e4, maxTradeAge: 12e4 };
-    const ranges = { budget: [0, 1e12], maxLoss: [0, 1e12], buyFees: [0, 1e9], exitFees: [0, 1e9], slippage: [0, 10], maxSpread: [0, 100], ivShift: [-500, 500], rate: [-10, 100], dividend: [0, 100], minVolume: [0, 1e12], minOI: [0, 1e12], maxAge: [1e3, 864e5], maxTradeAge: [1e3, 864e5] };
+    const out = { budget: null, maxLoss: null, protectThrough: null, buyFees: 0, exitFees: 0, slippage: 0.5, maxSpread: 10, ivShift: 0, fallbackIV: null, rate: 6, dividend: 0, minVolume: 1, minOI: 1, maxAge: 12e4, maxTradeAge: 12e4 };
+    const ranges = { budget: [0, 1e12], maxLoss: [0, 1e12], buyFees: [0, 1e9], exitFees: [0, 1e9], slippage: [0, 10], maxSpread: [0, 100], ivShift: [-500, 500], fallbackIV: [0, 500], rate: [-10, 100], dividend: [0, 100], minVolume: [0, 1e12], minOI: [0, 1e12], maxAge: [1e3, 864e5], maxTradeAge: [1e3, 864e5] };
     for (const [k, [lo, hi]] of Object.entries(ranges)) if (input[k] != null) {
       if (!finite(input[k]) || input[k] < lo || input[k] > hi) fail("Invalid hedge setting " + k + ".");
       out[k] = input[k];
@@ -658,13 +672,21 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
       const shocks = p.shocks || [0, -0.03, -0.05, -0.1], earliestFutures = Math.min(...futures.map((l) => expiryTime(l.expiry))), target = expiryTime(p.protectThrough), defaultHorizon = Math.min(target, earliestFutures), horizons = p.horizons || [now, defaultHorizon];
       const times = [...new Set(horizons.map((h) => validDate(h) ? expiryTime(h) : time(h)))].sort((a, b2) => a - b2);
       if (times.some((t) => !finite(t) || t < now || t > earliestFutures)) fail("Each scenario horizon must be current/future and no later than the earliest futures expiry.");
-      result.assumptions = ["Candidates replace all recorded existing puts; exact whole-lot coverage of all current futures units.", "New purchase uses ask plus " + p.slippage + "% slippage; old-put proceeds use bid less the same percentage. Displayed depth is a screen, not a fill guarantee.", "Budget applies to gross new premium plus buy charges before any sale proceeds.", "Sampled additional loss is measured from current futures marks and pays new premium plus buy/exit charges. Existing-put sale proceeds reduce cash needed, not model profit.", "Balanced score = 50% normalized gross purchase cost + 50% normalized sampled worst loss among eligible candidates.", "Sampled worst loss is not a guaranteed maximum loss; no future rollover is assumed."];
+      result.assumptions = [
+        "Candidates replace all recorded existing puts; exact whole-lot coverage of all current futures units.",
+        "New purchase uses ask plus " + p.slippage + "% slippage; old-put proceeds use bid less the same percentage. Displayed depth is a screen, not a fill guarantee.",
+        "Budget applies to gross new premium plus buy charges before any sale proceeds.",
+        "Sampled additional loss is measured from current futures marks and pays new premium plus buy/exit charges. Existing-put sale proceeds reduce cash needed, not model profit.",
+        "Balanced score = 50% normalized gross purchase cost + 50% normalized sampled worst loss among eligible candidates.",
+        "Sampled worst loss is not a guaranteed maximum loss; no future rollover is assumed.",
+        finite(p.fallbackIV) ? "All candidate and existing puts use an explicit user-assumed " + p.fallbackIV + "% IV. Provider Greeks and their timestamps are not treated as verified." : "Without an explicit IV assumption, provider put IV and Greeks require their own verified source timestamps."
+      ];
       const currentBasis = [...startingFutures, ...puts.map((l) => {
         const match = matchContract(l, market), q = market.quotes[match.contract.instrumentKey];
         return { ...l, entry: q.bid, manual: null };
       })];
       for (const t of times) for (const shock of shocks) {
-        const s = scenario(currentBasis, market, { spot: spot * (1 + shock), horizon: t, ivShift: p.ivShift, rate: p.rate, dividend: p.dividend }, now);
+        const s = scenario(currentBasis, market, { spot: spot * (1 + shock), horizon: t, ivShift: p.ivShift, fallbackIV: p.fallbackIV, rate: p.rate, dividend: p.dividend }, now);
         if (s.complete) result.current.push({ horizon: s.horizon, shock, spot: spot * (1 + shock), additionalPnl: s.total });
         else result.currentErrors.push({ horizon: iso(t), shock, reason: s.errors.join("; ") });
       }
@@ -680,7 +702,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
         if (!finite(q == null ? void 0 : q.askQty) || q.askQty < futureUnits || !finite(q == null ? void 0 : q.bidQty) || q.bidQty <= 0) reasons.push("Displayed depth is missing or insufficient");
         if (!finite(q == null ? void 0 : q.volume) || q.volume < p.minVolume) reasons.push("Volume unavailable or below minimum");
         if (!finite(q == null ? void 0 : q.oi) || q.oi < p.minOI) reasons.push("Open interest unavailable or below minimum");
-        if (!validGreeks(q, now)) reasons.push("Valid IV/put Greeks with their own source timestamp unavailable");
+        if (!validGreeks(q, now) && !finite(p.fallbackIV)) reasons.push("Verified put Greeks unavailable; enter an explicit IV assumption (%) to compare model scenarios");
         const lots = Number.isInteger(contract.lotSize) && contract.lotSize > 0 ? futureUnits / contract.lotSize : null, purchasePrice = finite(q == null ? void 0 : q.ask) ? q.ask * (1 + p.slippage / 100) : null, newPremium = finite(purchasePrice) ? purchasePrice * futureUnits : null, grossCost = finite(newPremium) ? newPremium + p.buyFees : null;
         if (finite(grossCost) && grossCost > p.budget) reasons.push("Gross new-hedge cost exceeds budget");
         if (times.some((t) => t > expiryTime(contract.expiry))) reasons.push("Scenario horizon exceeds candidate expiry");
@@ -690,7 +712,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
         }
         const candidateLeg = { id: "candidate-" + contract.instrumentKey, type: "PE", expiry: contract.expiry, strike: contract.strike, lots, lotSize: contract.lotSize, entry: purchasePrice, manual: null, instrumentKey: contract.instrumentKey }, scenarios = [];
         for (const t of times) for (const shock of shocks) {
-          const s = scenario([...startingFutures, candidateLeg], market, { spot: spot * (1 + shock), horizon: t, ivShift: p.ivShift, rate: p.rate, dividend: p.dividend }, now);
+          const s = scenario([...startingFutures, candidateLeg], market, { spot: spot * (1 + shock), horizon: t, ivShift: p.ivShift, fallbackIV: p.fallbackIV, rate: p.rate, dividend: p.dividend }, now);
           if (!s.complete) reasons.push(...s.errors);
           else scenarios.push({ horizon: s.horizon, shock, spot: spot * (1 + shock), additionalPnl: s.total - p.buyFees - p.exitFees - (oldBidValue - saleProceeds), rows: s.rows });
         }
@@ -700,7 +722,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
           result.excluded.push({ contract, reasons: [...new Set(reasons)] });
           continue;
         }
-        result.candidates.push({ contract, lots, units: futureUnits, newPremium, grossCost, saleProceeds, netCashRequired: grossCost + p.exitFees - saleProceeds, buyFees: p.buyFees, exitFees: p.exitFees, existingExitSlippage: oldBidValue - saleProceeds, slippage: p.slippage, spread, worstLoss, scenarios, quoteQuality: quality, expiryGap: contract.expiry < futures.map((l) => l.expiry).sort().at(-1), selectionChangesBook: false });
+        result.candidates.push({ contract, lots, units: futureUnits, ivSource: finite(p.fallbackIV) ? "user-assumed" : "verified-provider", ivAssumption: finite(p.fallbackIV) ? p.fallbackIV : null, newPremium, grossCost, saleProceeds, netCashRequired: grossCost + p.exitFees - saleProceeds, buyFees: p.buyFees, exitFees: p.exitFees, existingExitSlippage: oldBidValue - saleProceeds, slippage: p.slippage, spread, worstLoss, scenarios, quoteQuality: quality, expiryGap: contract.expiry < futures.map((l) => l.expiry).sort().at(-1), selectionChangesBook: false });
       }
       const cs = result.candidates;
       if (cs.length) {
@@ -1434,7 +1456,13 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     var _a, _b, _c, _d;
     const result = { contracts: [], quotes: {}, spot: E.normQuote({}), lastSuccess: s.lastSuccess, lastFailure: s.lastFailure, failure: s.failure };
     const contracts = /* @__PURE__ */ new Map();
-    const tag = (q, p, h) => ({ ...q, source: p._cache ? "CACHE" : q.source, lastSuccess: (h == null ? void 0 : h.lastSuccess) || p._received_at || p.fetched_at_iso, lastFailure: (h == null ? void 0 : h.lastFailure) || null, failure: (h == null ? void 0 : h.error) || null });
+    const tag = (q, p, h, option = false) => {
+      var _a2;
+      const errors2 = { ...object((_a2 = p == null ? void 0 : p.data) == null ? void 0 : _a2.errors) ? p.data.errors : {}, ...object(p == null ? void 0 : p.errors) ? p.errors : {} };
+      const failedRefresh = !!(h == null ? void 0 : h.lastFailure) && (!h.lastSuccess || Date.parse(h.lastFailure) >= Date.parse(h.lastSuccess));
+      const quoteError = errors2.quotes || (option ? errors2.option_quotes : null) || (failedRefresh ? h.error || "refresh_failed" : null);
+      return { ...q, source: p._cache ? "CACHE" : q.source, lastSuccess: (h == null ? void 0 : h.lastSuccess) || p._received_at || p.fetched_at_iso, lastFailure: (h == null ? void 0 : h.lastFailure) || null, failure: q.failure || quoteError || null };
+    };
     const choose = (a, b) => {
       if (!a) return b;
       const av = Date.parse(a.quoteAt), bv = Date.parse(b.quoteAt), at = Date.parse(a.tradeAt), bt = Date.parse(b.tradeAt);
@@ -1446,7 +1474,10 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     const add = (raw, p, h) => {
       const m = E.normalizeMarket(raw);
       for (const c of m.contracts) contracts.set(c.instrumentKey, c);
-      for (const [k, q] of Object.entries(m.quotes)) result.quotes[k] = choose(result.quotes[k], tag(q, p, h));
+      for (const [k, q] of Object.entries(m.quotes)) {
+        const contract = m.contracts.find((c) => c.instrumentKey === k);
+        result.quotes[k] = choose(result.quotes[k], tag(q, p, h, (contract == null ? void 0 : contract.type) === "PE" || (contract == null ? void 0 : contract.type) === "CE"));
+      }
       return m;
     };
     if (s.snapshot) {
@@ -9043,6 +9074,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     rows.forEach((r, i) => {
       const fields = r.map((x) => String(x != null ? x : "").trim());
       if (!fields.some((x) => x) || fields.slice(1).every((x) => !x) && /^(Futures|Options)$/i.test(fields[0])) return;
+      if (/^(?:(?:grand|sub)\s+)?totals?(?:\s+(?:futures|options|realized|realised|p&l|profit|loss))?\s*:?$/i.test(fields[0]) || /^net\s+(?:realized|realised)\s+(?:p&l|profit|loss)\s*:?$/i.test(fields[0])) return;
       if (/^scrip name$/i.test(fields[0])) {
         columns = ["scrip name", "quantity", "avg buy price", "avg sell price", "realized p&l"].map((c) => fields.findIndex((v) => v.toLowerCase().replace("realised", "realized") === c));
         if (columns.includes(-1)) throw Error("Expected Scrip Name, Quantity, Avg Buy Price, Avg Sell Price and Realized P&L.");
@@ -9136,7 +9168,7 @@ if (!Array.prototype.flatMap) Object.defineProperty(Array.prototype, "flatMap", 
     function preview(data) {
       const b = getBook();
       const packet = data.format === "HALDeskHistory";
-      const payload = packet ? data.payload : { sourceId: data.sourceId, sourceName: data.sourceName, mode: "incremental", records: statementRows(data.rows || csvRows(data.csv || "")) };
+      const payload = packet ? data.payload : { sourceId: data.sourceId, sourceName: data.sourceName, sourceHash: data.sourceHash, mode: "incremental", records: statementRows(data.rows || csvRows(data.csv || "")) };
       const p = H.previewImport(b, payload), charges2 = packet ? data.charges : null, legs = packet ? data.openCandidates || [] : [];
       if (!Array.isArray(legs) || legs.length > 100) throw Error("Invalid proposed open positions.");
       for (const l of legs) {
@@ -9670,9 +9702,9 @@ window.createHalReview = function createHalReview(api) {
     const p = ui.scenario, h = ui.hedgeDraft || book.hedge;
     if (ui.plan === "stress") body = stressPlanner(m);
     else if (ui.plan === "compare") body = comparisonPlanner(m);
-    else if (ui.plan === "hedge") body = card("Find a protective put", '<p class="fine">Compare actual listed HAL puts as replacements for existing puts. Whole lots must exactly cover current futures units. A comparison never changes your saved positions.</p><div class="form-grid">'.concat(input("hg-budget", "Gross purchase budget (\u20B9)", h.budget)).concat(input("hg-loss", "Sampled additional-loss limit (\u20B9)", h.maxLoss)).concat(input("hg-through", "Protection-through date", h.protectThrough, "date")).concat(input("hg-spread", "Maximum bid/ask spread (%)", h.maxSpread), '</div><details><summary>Costs, liquidity & model assumptions</summary><div class="form-grid">').concat(input("hg-buy", "Buy charges (\u20B9)", h.buyFees)).concat(input("hg-exit", "Exit charges (\u20B9)", h.exitFees)).concat(input("hg-slip", "Slippage each side (%)", h.slippage)).concat(input("hg-iv", "IV shift (percentage points)", h.ivShift)).concat(input("hg-rate", "Interest (% annual)", h.rate)).concat(input("hg-dividend", "Dividend (% annual)", h.dividend)).concat(input("hg-volume", "Minimum volume (units)", (_a2 = h.minVolume) != null ? _a2 : 1)).concat(input("hg-oi", "Minimum OI (units)", (_b2 = h.minOI) != null ? _b2 : 1), '</div></details><div class="toolbar">').concat(btn("hedge-fetch", "Save & fetch puts", 'class="primary"')).concat(btn("hedge-rank", "Compare available quotes"), '</div><p class="fine">Fresh quote/trade clocks, contract specifications, liquidity and valid Greeks are required. No qualifying contract is a valid result.</p>')) + (ui.hedges ? '<p class="fine">Compared '.concat(esc(when(ui.hedgesAt)), '. Refresh or edit assumptions to recalculate.</p><div class="columns">').concat([["lowerCost", "Lower Cost"], ["balanced", "Balanced"], ["strongerProtection", "Stronger Protection"]].map(([k, title]) => {
+    else if (ui.plan === "hedge") body = card("Find a protective put", '<p class="fine">Compare actual listed HAL puts as replacements for existing puts. Whole lots must exactly cover current futures units. A comparison never changes your saved positions.</p><div class="form-grid">'.concat(input("hg-budget", "Gross purchase budget (\u20B9)", h.budget)).concat(input("hg-loss", "Sampled additional-loss limit (\u20B9)", h.maxLoss)).concat(input("hg-through", "Protection-through date", h.protectThrough, "date")).concat(input("hg-spread", "Maximum bid/ask spread (%)", h.maxSpread), '</div><details><summary>Costs, liquidity & model assumptions</summary><div class="form-grid">').concat(input("hg-buy", "Buy charges (\u20B9)", h.buyFees)).concat(input("hg-exit", "Exit charges (\u20B9)", h.exitFees)).concat(input("hg-slip", "Slippage each side (%)", h.slippage)).concat(input("hg-iv", "IV shift (percentage points)", h.ivShift)).concat(input("hg-iv-assumption", "Explicit IV assumption (%) \xB7 optional", h.fallbackIV)).concat(input("hg-rate", "Interest (% annual)", h.rate)).concat(input("hg-dividend", "Dividend (% annual)", h.dividend)).concat(input("hg-volume", "Minimum volume (units)", (_a2 = h.minVolume) != null ? _a2 : 1)).concat(input("hg-oi", "Minimum OI (units)", (_b2 = h.minOI) != null ? _b2 : 1), '</div></details><div class="toolbar">').concat(btn("hedge-fetch", "Save & fetch puts", 'class="primary"')).concat(btn("hedge-rank", "Compare available quotes"), '</div><p class="fine">Fresh quote/trade clocks, contract specifications and liquidity are always required. Missing provider Greek timestamps require an explicitly entered IV assumption for model-only comparisons; no Greeks are invented. No qualifying contract is a valid result.</p>')) + (ui.hedges ? '<p class="fine">Compared '.concat(esc(when(ui.hedgesAt)), '. Refresh or edit assumptions to recalculate.</p><div class="columns">').concat([["lowerCost", "Lower Cost"], ["balanced", "Balanced"], ["strongerProtection", "Stronger Protection"]].map(([k, title]) => {
       const c = ui.hedges.rankings[k];
-      return card(title, c ? "<h3>\u20B9".concat(num(c.contract.strike, 0), " PE \xB7 ").concat(date(c.contract.expiry), "</h3>").concat(row("Gross purchase", money(c.grossCost))).concat(row("Sampled worst loss", money(c.worstLoss))).concat(row("Net cash required", money(c.netCashRequired))).concat(c.expiryGap ? '<p class="warning fine">Protection ends before the last futures expiry.</p>' : "").concat(btn("hedge-detail", "Inspect comparison", 'data-id="'.concat(esc(c.contract.instrumentKey), '" class="text-button"'))) : empty("No qualifying candidate"));
+      return card(title, c ? "<h3>\u20B9".concat(num(c.contract.strike, 0), " PE \xB7 ").concat(date(c.contract.expiry), "</h3>").concat(row("Gross purchase", money(c.grossCost))).concat(row("Sampled worst loss", money(c.worstLoss))).concat(row("Net cash required", money(c.netCashRequired))).concat(row("Model IV source", c.ivSource === "user-assumed" ? "User-assumed " + num(c.ivAssumption) + "% \xB7 not verified Greeks" : "Timestamp-verified provider IV")).concat(c.expiryGap ? '<p class="warning fine">Protection ends before the last futures expiry.</p>' : "").concat(btn("hedge-detail", "Inspect comparison", 'data-id="'.concat(esc(c.contract.instrumentKey), '" class="text-button"'))) : empty("No qualifying candidate"));
     }).join(""), "</div>").concat(card("Eligibility & ranking", reviews(ui.hedges.errors.map((e) => ({ title: "No forced recommendation", detail: e }))) + "<details><summary>Excluded contracts (".concat(ui.hedges.excluded.length, ")</summary>").concat(table(["Strike", "Expiry", "Reason"], ui.hedges.excluded.map((c) => [c.contract.strike, date(c.contract.expiry), c.reasons.join("; ")])), "</details><details><summary>Ranking method</summary>").concat(ui.hedges.assumptions.map((x) => '<p class="fine">' + esc(x) + "</p>").join(""), "</details>"))) : empty("No comparison requested", "Sampled worst loss is not a guaranteed maximum loss."));
     return body;
   }
@@ -9945,13 +9977,13 @@ window.createHalReview = function createHalReview(api) {
     for (const [k, id] of Object.entries({ spot: "spot", horizon: "horizon", iv: "iv", shift: "shift", rate: "rate", dividend: "dividend", basis: "basis", base: "base" })) if ($("sc-" + id)) ui.scenario[k] = text("sc-" + id);
   }
   function hedgeSettings() {
-    return E.hedgePreferences({ budget: value("hg-budget"), maxLoss: value("hg-loss"), protectThrough: text("hg-through") || null, maxSpread: value("hg-spread"), buyFees: value("hg-buy"), exitFees: value("hg-exit"), slippage: value("hg-slip"), ivShift: value("hg-iv"), rate: value("hg-rate"), dividend: value("hg-dividend"), minVolume: value("hg-volume"), minOI: value("hg-oi") });
+    return E.hedgePreferences({ budget: value("hg-budget"), maxLoss: value("hg-loss"), protectThrough: text("hg-through") || null, maxSpread: value("hg-spread"), buyFees: value("hg-buy"), exitFees: value("hg-exit"), slippage: value("hg-slip"), ivShift: value("hg-iv"), fallbackIV: value("hg-iv-assumption"), rate: value("hg-rate"), dividend: value("hg-dividend"), minVolume: value("hg-volume"), minOI: value("hg-oi") });
   }
   function compareHedge(id) {
     const c = ui.hedges.candidates.find((c2) => c2.contract.instrumentKey === id);
     if (!c) return;
     const cur = new Map(ui.hedges.current.map((x) => [x.horizon + "|" + x.shock, x.additionalPnl]));
-    modal("Current protection vs replacement", "<h3>".concat(c.contract.strike, " PE \xB7 ").concat(date(c.contract.expiry), " \xB7 ").concat(c.lots, " lots</h3>").concat(row("New premium", money(c.newPremium))).concat(row("Buy / exit charges", money(c.buyFees) + " / " + money(c.exitFees))).concat(row("Existing-put sale proceeds", money(c.saleProceeds))).concat(row("Net cash required", money(c.netCashRequired))).concat(row("Spread / slippage", pct(c.spread) + " / " + pct(c.slippage))).concat(table(["Horizon", "Shock", "Current hedge \u0394P&L", "Replacement \u0394P&L"], c.scenarios.map((x) => [when(x.horizon), pct(x.shock * 100), money(cur.get(x.horizon + "|" + x.shock)), money(x.additionalPnl)])), '<p class="fine">Sale proceeds reduce cash required; they are not new investment profit. Sampled worst loss is not guaranteed. Current-hedge comparisons after earlier put expiry are withheld.</p><details><summary>Missing current comparisons</summary>').concat(table(["Horizon", "Reason"], ui.hedges.currentErrors.map((x) => [when(x.horizon), x.reason])), "</details>"), null, null);
+    modal("Current protection vs replacement", "<h3>".concat(c.contract.strike, " PE \xB7 ").concat(date(c.contract.expiry), " \xB7 ").concat(c.lots, " lots</h3>").concat(row("New premium", money(c.newPremium))).concat(row("Buy / exit charges", money(c.buyFees) + " / " + money(c.exitFees))).concat(row("Existing-put sale proceeds", money(c.saleProceeds))).concat(row("Net cash required", money(c.netCashRequired))).concat(row("Spread / slippage", pct(c.spread) + " / " + pct(c.slippage))).concat(row("Model IV source", c.ivSource === "user-assumed" ? "User-assumed " + num(c.ivAssumption) + "% \xB7 not provider Greeks" : "Timestamp-verified provider IV")).concat(table(["Horizon", "Shock", "Current hedge \u0394P&L", "Replacement \u0394P&L"], c.scenarios.map((x) => [when(x.horizon), pct(x.shock * 100), money(cur.get(x.horizon + "|" + x.shock)), money(x.additionalPnl)])), '<p class="fine">Sale proceeds reduce cash required; they are not new investment profit. Sampled worst loss is not guaranteed. Current-hedge comparisons after earlier put expiry are withheld.</p><details><summary>Missing current comparisons</summary>').concat(table(["Horizon", "Reason"], ui.hedges.currentErrors.map((x) => [when(x.horizon), x.reason])), "</details>"), null, null);
   }
   function aiReview(context) {
     if (storageError && ((context == null ? void 0 : context.mode) || ui.aiMode) !== "research") throw Error("Recover the saved book before sharing position evidence.");
@@ -10135,7 +10167,7 @@ window.createHalReview = function createHalReview(api) {
     }
     if (id.startsWith("hg-")) {
       ui.hedgeDraft = { ...ui.hedgeDraft || book.hedge };
-      for (const [k, suffix] of Object.entries({ budget: "budget", maxLoss: "loss", protectThrough: "through", maxSpread: "spread", buyFees: "buy", exitFees: "exit", slippage: "slip", ivShift: "iv", rate: "rate", dividend: "dividend", minVolume: "volume", minOI: "oi" })) if ($("hg-" + suffix)) ui.hedgeDraft[k] = text("hg-" + suffix);
+      for (const [k, suffix] of Object.entries({ budget: "budget", maxLoss: "loss", protectThrough: "through", maxSpread: "spread", buyFees: "buy", exitFees: "exit", slippage: "slip", ivShift: "iv", fallbackIV: "iv-assumption", rate: "rate", dividend: "dividend", minVolume: "volume", minOI: "oi" })) if ($("hg-" + suffix)) ui.hedgeDraft[k] = text("hg-" + suffix);
       ui.hedges = null;
       ui.hedgesAt = null;
     }

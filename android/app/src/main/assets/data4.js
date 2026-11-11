@@ -24,9 +24,16 @@ function ingest(state,event,data,now=stamp()){
 function packet(s,section,frame='D',type='consolidated'){return s.research[key(section,frame,type)]||s.research[section+':'+frame]||null;}
 function market(s){
  const result={contracts:[],quotes:{},spot:E.normQuote({}),lastSuccess:s.lastSuccess,lastFailure:s.lastFailure,failure:s.failure};const contracts=new Map();
- const tag=(q,p,h)=>({...q,source:p._cache?'CACHE':q.source,lastSuccess:h?.lastSuccess||p._received_at||p.fetched_at_iso,lastFailure:h?.lastFailure||null,failure:h?.error||null});
+ const tag=(q,p,h,option=false)=>{
+  const errors={...(object(p?.data?.errors)?p.data.errors:{}),...(object(p?.errors)?p.errors:{})};
+  const failedRefresh=!!h?.lastFailure&&(!h.lastSuccess||Date.parse(h.lastFailure)>=Date.parse(h.lastSuccess));
+  // A chain/metadata error does not invalidate independent spot/futures quotes.
+  // Failed quote refreshes and quote-specific provider errors must still fail closed.
+  const quoteError=errors.quotes||(option?errors.option_quotes:null)||(failedRefresh?h.error||'refresh_failed':null);
+  return {...q,source:p._cache?'CACHE':q.source,lastSuccess:h?.lastSuccess||p._received_at||p.fetched_at_iso,lastFailure:h?.lastFailure||null,failure:q.failure||quoteError||null};
+ };
  const choose=(a,b)=>{if(!a)return b;const av=Date.parse(a.quoteAt),bv=Date.parse(b.quoteAt),at=Date.parse(a.tradeAt),bt=Date.parse(b.tradeAt);if(Number.isFinite(at)&&Number.isFinite(bt)&&bt<at)return a;if(Number.isFinite(av)&&(!Number.isFinite(bv)||bv<av))return a;if(bv===av&&Date.parse(b.retrievedAt)<Date.parse(a.retrievedAt))return a;return b;};
- const add=(raw,p,h)=>{const m=E.normalizeMarket(raw);for(const c of m.contracts)contracts.set(c.instrumentKey,c);for(const [k,q]of Object.entries(m.quotes))result.quotes[k]=choose(result.quotes[k],tag(q,p,h));return m;};
+ const add=(raw,p,h)=>{const m=E.normalizeMarket(raw);for(const c of m.contracts)contracts.set(c.instrumentKey,c);for(const [k,q]of Object.entries(m.quotes)){const contract=m.contracts.find(c=>c.instrumentKey===k);result.quotes[k]=choose(result.quotes[k],tag(q,p,h,contract?.type==='PE'||contract?.type==='CE'));}return m;};
  if(s.snapshot){const m=add(s.snapshot,s.snapshot,s.health.market);result.spot=tag(m.spot,s.snapshot,s.health.market);}
  for(const p of Object.values(s.research)){const d=p?.data;if(!d)continue;const h=s.health[key(p.section,p.frame,p.type)];if(['chain','hedges'].includes(p.section))add(d,p,h);if(p.section==='contracts')add({held_contracts:(d.contracts||[]).filter(c=>c.verified||c.reason==='lot_size_mismatch').map(c=>({...c,type:c.type==='PUT'?'PE':c.type})),fetched_at_iso:p.fetched_at_iso},p,h);}
  result.contracts=[...contracts.values()];const held=packet(s,'contracts');if(held)for(const c of held.data?.contracts||[])if(!c.verified&&!['lot_size_mismatch','instrument_key_mismatch'].includes(c.reason)){const type=c.type==='PUT'?'PE':c.type;result.contracts=result.contracts.filter(x=>!(x.type===type&&x.expiry===c.expiry&&(type!=='PE'||x.strike===c.strike)));}

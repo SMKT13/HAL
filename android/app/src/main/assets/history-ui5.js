@@ -25,6 +25,8 @@ function statementRows(rows){
  rows.forEach((r,i)=>{
    const fields=r.map(x=>String(x??'').trim());
    if(!fields.some(x=>x)||fields.slice(1).every(x=>!x)&&/^(Futures|Options)$/i.test(fields[0]))return;
+   // Skip only recognizable broker summary footers, not unknown contract rows.
+   if(/^(?:(?:grand|sub)\s+)?totals?(?:\s+(?:futures|options|realized|realised|p&l|profit|loss))?\s*:?$/i.test(fields[0])||/^net\s+(?:realized|realised)\s+(?:p&l|profit|loss)\s*:?$/i.test(fields[0]))return;
    if(/^scrip name$/i.test(fields[0])){
      columns=['scrip name','quantity','avg buy price','avg sell price','realized p&l'].map(c=>fields.findIndex(v=>v.toLowerCase().replace('realised','realized')===c));
      if(columns.includes(-1))throw Error('Expected Scrip Name, Quantity, Avg Buy Price, Avg Sell Price and Realized P&L.');
@@ -102,7 +104,7 @@ function makeView(api){
  }
  function preview(data){
    const b=getBook();const packet=data.format==='HALDeskHistory';
-   const payload=packet?data.payload:{sourceId:data.sourceId,sourceName:data.sourceName,mode:'incremental',records:statementRows(data.rows||csvRows(data.csv||''))};
+   const payload=packet?data.payload:{sourceId:data.sourceId,sourceName:data.sourceName,sourceHash:data.sourceHash,mode:'incremental',records:statementRows(data.rows||csvRows(data.csv||''))};
    const p=H.previewImport(b,payload),charges=packet?data.charges:null,legs=packet?(data.openCandidates||[]):[];
    if(!Array.isArray(legs)||legs.length>100)throw Error('Invalid proposed open positions.');
    for(const l of legs){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(l.contractMonth))throw Error('Invalid open contract month.');root.HAL4Engine.validateLeg({...l,expiry:l.contractMonth+'-01'});}

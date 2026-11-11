@@ -49,7 +49,8 @@
     });
     const imports=list(h.imports??[],'history import log').map(a=>{
       check(day(a.date)&&['incremental','cumulative'].includes(a.mode)&&Number.isInteger(a.added)&&a.added>=0&&Number.isInteger(a.replaced)&&a.replaced>=0,'Invalid history import log.');
-      return {date:a.date,mode:a.mode,sourceName:text(a.sourceName,'source name'),sourceId:text(a.sourceId,'source ID',160),added:a.added,replaced:a.replaced};
+      check(a.sourceHash==null||/^sha256:[a-f0-9]{64}$/.test(a.sourceHash),'Invalid source content hash.');
+      return {date:a.date,mode:a.mode,sourceName:text(a.sourceName,'source name'),sourceId:text(a.sourceId,'source ID',160),added:a.added,replaced:a.replaced,...(a.sourceHash?{sourceHash:a.sourceHash}:{})};
     });
     return {version:1,records,revisions,imports,excludedJournalIds:excluded,excludeLegacyRealized:h.excludeLegacyRealized===true,charges:chargesRecord(h.charges)};
   }
@@ -72,13 +73,14 @@
   function normalized(payload){
     check(payload&&['incremental','cumulative'].includes(payload.mode),'Choose incremental or cumulative source coverage.');
     const sourceId=text(payload.sourceId,'source ID',160),sourceName=text(payload.sourceName,'source name');
+    check(payload.sourceHash==null||/^sha256:[a-f0-9]{64}$/.test(payload.sourceHash),'Invalid statement content hash.');
     const records=list(payload.records,'history report').map((r,i)=>{
       const row=String(r.sourceRow??r.source?.row??i+1);
       const source={id:sourceId,name:sourceName,row};
       return validateRecord({...r,id:encodeURIComponent(sourceId)+'/'+encodeURIComponent(row),source});
     });
     check(records.length&&new Set(records.map(r=>r.id)).size===records.length,'A report must have unique source rows.');
-    return {sourceId,sourceName,mode:payload.mode,records};
+    return {sourceId,sourceName,sourceHash:payload.sourceHash??null,mode:payload.mode,records};
   }
   function economic(r){return JSON.stringify([r.type,r.contractMonth,r.expiry,r.strike,r.units,r.entry,r.exit,r.gross,r.date]);}
   function key(r){return [r.type,r.contractMonth,r.strike??''].join('|');}
@@ -89,14 +91,22 @@
     function indexRow(r,kind){const k=key(r),entries=index.get(k)||[];entries.push({kind,id:r.id,expiry:r.expiry});index.set(k,entries);}
     h.records.forEach(r=>indexRow(r,'history'));
     const excluded=new Set(h.excludedJournalIds),prior=new Map(h.records.map(r=>[r.id,r]));
+    const sameNamedRow=new Map();
+    for(const old of h.records){const k=old.source.name.trim().toLocaleLowerCase()+'\n'+old.source.row;const group=sameNamedRow.get(k)||[];group.push(old);sameNamedRow.set(k,group);}
+    // Earlier versions used the whole-file hash as the source ID. Recognize that
+    // identity and an already imported content hash without guessing trade dates.
+    const sourceAliases=new Set(h.imports.filter(i=>payload.sourceHash&&i.sourceHash===payload.sourceHash).map(i=>i.sourceId));
+    if(payload.sourceHash)sourceAliases.add(payload.sourceHash);
     for(const j of book.journal||[])if(j.kind==='close'&&!excluded.has(j.id))indexRow({...j.leg,id:j.id,contractMonth:j.leg.expiry.slice(0,7)},'journal');
     for(const r of payload.records){
-      const previous=prior.get(r.id);
+      const named=sameNamedRow.get(r.source.name.trim().toLocaleLowerCase()+'\n'+r.source.row)||[];
+      const aliases=h.records.filter(old=>sourceAliases.has(old.source.id)&&old.source.row===r.source.row);
+      const previous=prior.get(r.id)||(aliases.length===1?aliases[0]:null)||(named.length===1?named[0]:null);
       if(previous&&economic(previous)===economic(r)){duplicates.push(r);continue;}
       additions.push(r);
-      if(previous)conflicts.push({kind:'source-row',incomingId:r.id,id:r.id});
+      if(previous)conflicts.push({kind:'source-row',incomingId:r.id,id:previous.id});
       for(const other of index.get(key(r))||[]){
-        if(other.id===r.id||r.expiry&&other.expiry&&other.expiry!==r.expiry)continue;
+        if(other.id===r.id||previous&&other.id===previous.id||r.expiry&&other.expiry&&other.expiry!==r.expiry)continue;
         conflicts.push({kind:other.kind,incomingId:r.id,id:other.id});
         check(conflicts.length<=limit,'Report contains too many ambiguous overlaps. Split it into smaller reviewed batches.');
       }
@@ -124,7 +134,7 @@
     h.records=h.records.filter(r=>!replace.has(r.id)).concat(pending);
     h.excludedJournalIds=[...new Set(h.excludedJournalIds.concat([...excluded]))];
     if(choices.byConflict?.['legacy\n\nlegacy']==='replace')h.excludeLegacyRealized=true;
-    h.imports.push({date:nowDate(),sourceId:p.payload.sourceId,sourceName:p.payload.sourceName,mode:p.payload.mode,added:pending.length,replaced:replace.size});
+    h.imports.push({date:nowDate(),sourceId:p.payload.sourceId,sourceName:p.payload.sourceName,mode:p.payload.mode,added:pending.length,replaced:replace.size,...(p.payload.sourceHash?{sourceHash:p.payload.sourceHash}:{})});
     next.history=validate(h,next);return next;
   }
   function setCharges(book,statement,confirmed){
