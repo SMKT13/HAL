@@ -134,3 +134,28 @@ test('stale marked loss never fires a live maximum-loss warning',()=>{
  m.quotes.F=Q(4500);
  A.equal(E.risk(b,m,NOW).warnings.some(w=>w.code==='loss_limit'),true);
 });
+
+test('expired unreconciled puts never contribute historical last quotes to live open or net P&L',()=>{
+ const expired=P({expiry:'2026-10-27'}),b=B([F(),expired]),m=M();
+ m.contracts.push({instrumentKey:'P',type:'PE',expiry:'2026-10-27',strike:4500,lotSize:150});
+ const v=E.ledger(b,m,opts),row=v.rows.find(x=>x.leg.id==='p');
+ A.equal(row.mark.price,null);A.equal(row.mark.status,'expired_unreconciled');A.match(row.mark.warnings.join(' '),/settlement/);
+ A.equal(row.pnl,null);A.equal(v.open,null);A.equal(v.net,null);A.equal(v.complete,false);
+ A.equal(E.risk(b,m,NOW).putUnits,0);
+ const saved=E.closeLeg(b,'p',1,15,2,'2026-10-28',{now:NOW});
+ const after=E.ledger(saved,m,opts);
+ A.equal(after.complete,true);near(after.realized,(15-38.9)*150);near(after.charges,2);
+});
+test('expired open legs cannot be valued through manual marks, even manually entered zero',()=>{
+ const b=B([P({expiry:'2026-10-27',manual:0,manualAt:STAMP})]);
+ const value=E.ledger(b,M(),opts);
+ A.equal(value.open,null);A.equal(value.complete,false);A.equal(value.rows[0].mark.status,'expired_unreconciled');
+});
+test('legacy manual zero futures marks stay recoverable but cannot manufacture huge losses',()=>{
+ const b=B([F({manual:0,manualAt:STAMP})]),validated=E.validateBook(b),v=E.ledger(validated,M(),opts);
+ A.equal(validated.legs[0].manual,0);
+ A.equal(v.open,null);A.equal(v.net,null);A.equal(v.complete,false);
+ A.match(v.rows[0].mark.warnings.join(' '),/Manual futures mark must be positive/);
+ const corrected=B([F({manual:5000,manualAt:STAMP})]);near(E.ledger(corrected,M(),opts).open,(5000-4927.35)*300);
+ const cleared=B([F({manual:null})]);near(E.ledger(cleared,M(),opts).open,(5000-4927.35)*300);
+});

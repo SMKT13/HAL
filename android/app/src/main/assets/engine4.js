@@ -40,7 +40,9 @@ function validateLeg(input, index=0) {
   if (!Number.isInteger(l.lotSize) || l.lotSize < 1 || l.lotSize > 100000) fail('Units per lot must be a positive verified whole number.');
   if (!finite(l.entry) || l.entry < 0 || l.entry > 1e7 || (l.type === 'FUT' && l.entry === 0)) fail('Entry price must be a valid non-negative premium or positive futures price.');
   if (l.type === 'PE' && (!finite(l.strike) || l.strike <= 0 || l.strike > 1e7)) fail('Put strike must be positive.');
-  if (l.manual != null && (!finite(l.manual) || l.manual < 0 || l.manual > 1e7)) fail('Manual mark must be non-negative; zero is allowed.');
+  // Keep legacy zero manual futures values loadable for recovery; resolveMark
+  // must withhold their valuation. New zero futures marks are blocked in the editor.
+  if (l.manual != null && (!finite(l.manual) || l.manual < 0 || l.manual > 1e7)) fail('Manual mark must be non-negative; zero is allowed for puts only.');
   if (l.manualAt != null && !Number.isFinite(time(l.manualAt))) fail('Invalid manual mark timestamp.');
   l.id = safeText(l.id,100) || 'leg-'+index;
   l.strike = l.type === 'PE' ? l.strike : null;
@@ -142,7 +144,12 @@ function matchContract(leg, market) {
 function resolveMark(leg, input={}, opts={}) {
  const market=normalizeMarket(input),match=matchContract(leg,market),now=opts.now==null?Date.now():time(opts.now),warnings=[];
  const base={price:null,source:'Unavailable',status:'unavailable',quoteAt:null,tradeAt:null,retrievedAt:null,warnings,contract:match.contract,mismatch:match.mismatch};
+ // Never value an expired unreconciled open position using historical REST or
+ // manual marks. Only an actual close/settlement posted to the journal can move
+ // that P&L into realised history; the saved open leg remains available to review.
+ if(expiryTime(leg.expiry)<now)return {...base,status:'expired_unreconciled',warnings:['Expired contract: record the broker-confirmed close or settlement. Historical and manual marks cannot value this open leg.']};
  if(match.mismatch)return {...base,warnings:[match.error]};
+ if(leg.type==='FUT'&&leg.manual===0)return {...base,warnings:['Manual futures mark must be positive; clear or correct the zero to restore valuation.']};
  if(finite(leg.manual)) {
   const t=time(leg.manualAt);if(Number.isFinite(t)&&t>now+5000)return {...base,warnings:['Manual mark timestamp is in the future']};
   if(!Number.isFinite(t))warnings.push('Manual mark timestamp unavailable');
@@ -154,7 +161,6 @@ function resolveMark(leg, input={}, opts={}) {
  if(!quality.valid)return {...base,...quality,warnings:[...quality.reasons,...quality.warnings],source:q?.source||'Unavailable'};
  const price=opts.markMode==='bid'&&leg.type==='PE'?q.bid:q.price;
  if(!finite(price)||price<0)return {...base,warnings:['Required mark price unavailable']};
- if(expiryTime(leg.expiry)<now)warnings.push('Expired open leg needs actual close or settlement reconciliation');
  return {...base,...quality,price,source:q.source==='CACHE'?'Cached REST':opts.markMode==='bid'&&leg.type==='PE'?'REST bid':'REST LTP',warnings:[...warnings,...quality.warnings],quote:q};
 }
 function ledger(book,input={},opts={}) {
