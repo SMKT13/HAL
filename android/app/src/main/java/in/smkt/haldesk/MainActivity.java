@@ -48,6 +48,9 @@ public final class MainActivity extends Activity {
     private SharedPreferences prefs;
     private final ExecutorService executor=Executors.newSingleThreadExecutor();
     private final ExecutorService researchExecutor=Executors.newFixedThreadPool(2);
+    private final ExecutorService nseExecutor=Executors.newSingleThreadExecutor();
+    private final AtomicBoolean nseWorking=new AtomicBoolean(false);
+    private volatile long lastNseRequest=0;
     private final ExecutorService aiExecutor=Executors.newSingleThreadExecutor();
     private final ExecutorService offlineExecutor=Executors.newSingleThreadExecutor();
     private FinbertClassifier offlineFinbert;
@@ -88,7 +91,7 @@ public final class MainActivity extends Activity {
             @Override public boolean shouldOverrideUrlLoading(WebView view,String url){return true;}
             @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
                 String url=request.getUrl().toString();String asset="";String mime="text/plain";
-                for(String name:new String[]{"index.html","desk4.js","style4.css"})if(url.equals(ORIGIN+name)){asset=name;mime=name.endsWith(".html")?"text/html":name.endsWith(".css")?"text/css":"application/javascript";break;}
+                for(String name:new String[]{"index.html","desk4.js","nse4.js","style4.css"})if(url.equals(ORIGIN+name)){asset=name;mime=name.endsWith(".html")?"text/html":name.endsWith(".css")?"text/css":"application/javascript";break;}
                 try { if(!asset.isEmpty())return new WebResourceResponse(mime,"UTF-8",getAssets().open(asset)); }
                 catch(Exception ignored) { }
                 return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));
@@ -108,7 +111,7 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return "direct";}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","4.2.4");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","4.3.0");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
@@ -212,6 +215,29 @@ public final class MainActivity extends Activity {
                 String code=error instanceof MarketClient.Failure?((MarketClient.Failure)error).code:"network_unavailable";
                 sendMarket("error",object("code",code),current);
             }finally{working.set(false);sendMarket("idle",new JSONObject(),current);}
+        });
+    }
+    // NSE cash-market research is independent of the Upstox token and never
+    // enters the holdings, Greeks, mark-to-market or order-flow calculations.
+    private void refreshNse(){
+        if(!foreground)return;
+        if(!nseWorking.compareAndSet(false,true))return;
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(now-lastNseRequest<60000&&lastNseRequest!=0){
+            nseWorking.set(false);send("nse_error",object("code","refresh_too_soon"));return;
+        }
+        lastNseRequest=now;
+        final int ticket=generation.get();
+        sendMarket("nse_loading",new JSONObject(),ticket);
+        nseExecutor.execute(()->{
+            try{
+                if(!foreground||ticket!=generation.get())return;
+                JSONObject result=new NseMcpClient().load();
+                sendMarket("nse_snapshot",result,ticket);
+            }catch(Exception e){
+                String code=e instanceof NseMcpClient.Failure?((NseMcpClient.Failure)e).code:"nse_unavailable";
+                sendMarket("nse_error",object("code",code),ticket);
+            }finally{nseWorking.set(false);}
         });
     }
     private int dp(int size){return Math.round(size*getResources().getDisplayMetrics().density);}
@@ -344,6 +370,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void ready(){runOnUiThread(()->{pageReady=true;status();});}
         @JavascriptInterface public void settings(){runOnUiThread(()->showSettings());}
         @JavascriptInterface public void refresh(String expiry){MainActivity.this.refresh(expiry);}
+        @JavascriptInterface public void nseRefresh(){MainActivity.this.refreshNse();}
         @JavascriptInterface public void research(String request){MainActivity.this.research(request);}
         @JavascriptInterface public void aiConfig(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,true));}
         @JavascriptInterface public void ai(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,false));}
@@ -390,8 +417,8 @@ public final class MainActivity extends Activity {
         });}
     }
     @Override protected void onPause(){backgroundAt=android.os.SystemClock.elapsedRealtime();foreground=false;generation.incrementAndGet();invalidateAi("AI review cancelled when the app left the foreground.");client.cancel();cancelOffline();stopStream();super.onPause();web.onPause();web.pauseTimers();}
-    @Override protected void onResume(){super.onResume();long awayMs=backgroundAt<0?0:Math.max(0,android.os.SystemClock.elapsedRealtime()-backgroundAt);backgroundAt=-1;foreground=true;lastRequest=0;researchRequests.clear();if(web!=null){web.onResume();web.resumeTimers();if(pageReady){JSONObject resumed=object("state","resumed");try{resumed.put("awayMs",awayMs);}catch(Exception ignored){}send("lifecycle",resumed);offlineStatus();}}}
-    @Override protected void onDestroy(){foreground=false;client.cancel();cancelOffline();streamGeneration.incrementAndGet();stream.shutdown();generation.incrementAndGet();invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");executor.shutdownNow();researchExecutor.shutdownNow();aiExecutor.shutdownNow();offlineExecutor.shutdownNow();if (offlineFinbert!=null)offlineFinbert.close();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}if(books!=null)books.close();super.onDestroy();}
+    @Override protected void onResume(){super.onResume();long awayMs=backgroundAt<0?0:Math.max(0,android.os.SystemClock.elapsedRealtime()-backgroundAt);backgroundAt=-1;foreground=true;lastRequest=0;lastNseRequest=0;researchRequests.clear();if(web!=null){web.onResume();web.resumeTimers();if(pageReady){JSONObject resumed=object("state","resumed");try{resumed.put("awayMs",awayMs);}catch(Exception ignored){}send("lifecycle",resumed);offlineStatus();}}}
+    @Override protected void onDestroy(){foreground=false;client.cancel();cancelOffline();streamGeneration.incrementAndGet();stream.shutdown();generation.incrementAndGet();invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");executor.shutdownNow();researchExecutor.shutdownNow();nseExecutor.shutdownNow();aiExecutor.shutdownNow();offlineExecutor.shutdownNow();if (offlineFinbert!=null)offlineFinbert.close();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}if(books!=null)books.close();super.onDestroy();}
     @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp && window.HALApp.back()",null);else super.onBackPressed();}
 }
 
