@@ -24,7 +24,8 @@ allowlisted to only:
 - `https://mcp.nseindia.in/cmmkt/mcp`
 - `https://mcp.nseindia.in/bhavcopy/cm/mcp`
 
-It negotiates MCP initialization, sends `notifications/initialized`,
+It probes modern stateless MCP (2026-07-28) and falls back to session-based
+initialization/`notifications/initialized` for compatible legacy versions. It
 supports both JSON and SSE tool responses, bounds response size and timeouts,
 never follows redirects, and sends **no token**. Source data is parsed and
 validated natively before being forwarded to the separately allowlisted
