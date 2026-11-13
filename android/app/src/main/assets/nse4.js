@@ -71,7 +71,7 @@
     html+='<h3>Market context</h3>';
     for(const [name,key] of [['NIFTY 50','nifty50'],['India VIX','india_vix']]){
       const v=l[key],ix=v&&v.index;
-      html+=val(name,ix?count(ix.last)+(num(ix.percChange)===null?'':' · '+percent(ix.percChange)):'Unavailable');
+      html+=val(name,ix?money(ix.last).slice(1)+(num(ix.percChange)===null?'':' · '+percent(ix.percChange)):'Unavailable');
       if(v&&v.nseTimestamp)html+=small(name+' NSE time: '+v.nseTimestamp);
     }
     if(b)html+=val('NSE market breadth ('+String(b.date||'EOD')+')',
@@ -114,6 +114,8 @@
     if(lastAttempt&&now-lastAttempt<60000){error='refresh_too_soon';paint();return;}
     lastAttempt=now;pending=true;error='';paint();
     native.nseRefresh();
+    const attempt=lastAttempt;
+    setTimeout(function(){if(pending&&lastAttempt===attempt){pending=false;error="nse_timeout";paint();}},120000);
   }
   try {
     const raw=native&&typeof native.cacheGet==='function'?JSON.parse(native.cacheGet('nse_insights_v1')):null;
@@ -124,6 +126,7 @@
   if(window.HALApp&&typeof window.HALApp.receive==='function'){
     const original=window.HALApp.receive;
     window.HALApp.receive=function(event,data){
+      if(event==='lifecycle'&&data&&data.state==='resumed'){pending=false;paint();}
       if(event==='nse_loading'){pending=true;error='';paint();return;}
       if(event==='nse_snapshot'){
         pending=false;error='';snapshot=data;fromCache=false;
