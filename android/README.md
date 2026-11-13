@@ -5,6 +5,7 @@ Personal HAL research and derivatives desk for Android 8 and later. Package `in.
 - **Position** shows the open book, protection, risk, scenarios, hedge comparisons and dated break-even calculations.
 - **History** imports HAL contract summaries and reconciles them with completed trades and cumulative fees. A preview shows the resulting totals before saving.
 - **Technicals** includes charts, completed-bar indicators, derivatives data and historical pattern comparisons.
+- **Official NSE Insights** uses direct NSE CM and Bhavcopy MCP sources for independently timestamped HAL cash quotes, benchmark/VIX context, 20/50/200 SMA, volume anomalies, price levels, relative strength, breadth and corporate actions. See [NSE integration notes](docs/NSE-MCP-4.3.md).
 - **Research** brings together company disclosures, fundamentals, news and sourced business notes.
 - **AI Desk** provides optional Gemini analysis with an evidence preview and explicit consent.
 
