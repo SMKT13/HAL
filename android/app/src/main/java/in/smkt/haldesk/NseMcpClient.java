@@ -91,17 +91,34 @@ final class NseMcpClient {
         final String url;
         final AtomicInteger requestId=new AtomicInteger();
         String sessionId="";
-        String protocol="2025-03-26";
+        String protocol="2026-07-28";
+        boolean modern=true;
         Session(String target)throws Exception {
             if(!CASH_URL.equals(target)&&!HISTORY_URL.equals(target))throw new Failure("nse_destination_rejected");
             url=target;
-            JSONObject result=rpc("initialize",args("protocolVersion",protocol,
-                "capabilities",new JSONObject(),
-                "clientInfo",args("name","HAL-Desk-Android","version","4.3.0")),false);
-            if(result==null)throw new Failure("nse_handshake_failed");
-            protocol=result.optString("protocolVersion",protocol);
-            if(!protocol.matches("20[0-9]{2}-[0-9]{2}-[0-9]{2}"))throw new Failure("nse_protocol_rejected");
-            rpc("notifications/initialized",new JSONObject(),true);
+            // MCP 2026-07-28 uses stateless POSTs and requires method/name headers.
+            // Probe the public tools/list without creating a legacy session.
+            try {
+                JSONObject list=rpc("tools/list",new JSONObject(),false);
+                if(list!=null&&list.optJSONArray("tools")!=null)return;
+            }catch(Failure ignored){/* The endpoint may still use session-based MCP. */}
+            modern=false;
+            Failure last=new Failure("nse_handshake_failed");
+            for(String version:new String[]{"2025-11-25","2025-06-18","2025-03-26"}){
+                protocol=version;sessionId="";
+                try {
+                    JSONObject result=rpc("initialize",args("protocolVersion",protocol,
+                        "capabilities",new JSONObject(),
+                        "clientInfo",args("name","HAL-Desk-Android","version","4.3.0")),false);
+                    if(result==null)throw new Failure("nse_handshake_failed");
+                    protocol=result.optString("protocolVersion",protocol);
+                    if(!protocol.matches("20[0-9]{2}-[0-9]{2}-[0-9]{2}"))
+                        throw new Failure("nse_protocol_rejected");
+                    rpc("notifications/initialized",new JSONObject(),true);
+                    return;
+                }catch(Failure failure){last=failure;}
+            }
+            throw last;
         }
         Object tool(String name,JSONObject parameters)throws Exception {
             if(!name.matches("[a-zA-Z0-9_]{1,60}"))throw new Failure("nse_tool_rejected");
@@ -138,7 +155,9 @@ final class NseMcpClient {
                 c.setRequestProperty("Content-Type","application/json");
                 c.setRequestProperty("Accept","application/json, text/event-stream");
                 c.setRequestProperty("MCP-Protocol-Version",protocol);
-                if(!sessionId.isEmpty())c.setRequestProperty("Mcp-Session-Id",sessionId);
+                c.setRequestProperty("Mcp-Method",method);
+                if("tools/call".equals(method))c.setRequestProperty("Mcp-Name",params.optString("name"));
+                if(!modern&&!sessionId.isEmpty())c.setRequestProperty("Mcp-Session-Id",sessionId);
                 byte[] bytes=body.toString().getBytes(StandardCharsets.UTF_8);
                 c.setFixedLengthStreamingMode(bytes.length);
                 try(OutputStream out=c.getOutputStream()){out.write(bytes);}
