@@ -7,6 +7,6 @@ assert re.search(r"applicationId ['\"]in.smkt.haldesk['\"]",build)
 assert re.search(r'versionCode\s+27\b',build)
 assert re.search(r"versionName ['\"]4.3.0['\"]",build)
 assert 'https://appassets.androidplatform.net/' in main
-assert 'obj.put("version","4.2.4")' in main
+assert 'obj.put("version","4.3.0")' in main
 assert 'HAL_SIGNING_KEY_FILE' in (root/'build.sh').read_text()
 print('Source identity verified: in.smkt.haldesk 4.3.0 / 27; legacy origin retained')
