@@ -221,7 +221,7 @@ public final class MainActivity extends Activity {
     // enters the holdings, Greeks, mark-to-market or order-flow calculations.
     private void refreshNse(){
         if(!foreground)return;
-        if(!nseWorking.compareAndSet(false,true))return;
+        if(!nseWorking.compareAndSet(false,true)){send("nse_error",object("code","nse_busy"));return;}
         long now=android.os.SystemClock.elapsedRealtime();
         if(now-lastNseRequest<60000&&lastNseRequest!=0){
             nseWorking.set(false);send("nse_error",object("code","refresh_too_soon"));return;
