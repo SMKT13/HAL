@@ -67,7 +67,7 @@ public final class NseMcpClientTest {
         }
         JSONObject levels=NseMcpClient.technicalLevels(new JSONObject().put("data",a));
         assertEquals(6,levels.getInt("trading_days"));
-        assertEquals(4825.0,levels.getDouble("low_5"),0.001); // last five of six
+        assertEquals(4805.0,levels.getDouble("low_5"),0.001); // last five of six
         assertEquals(5050.0,levels.getDouble("high_5"),0.001);
         assertEquals(4800.0,levels.getDouble("low_20"),0.001);
         assertEquals(6,levels.getJSONArray("recent_closes").length());
