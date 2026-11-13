@@ -198,7 +198,7 @@ final class NseMcpClient {
         JSONArray data=history.optJSONArray("data");
         if(data==null||data.length()<5)throw new Failure("nse_history_incomplete");
         double lo5=Double.POSITIVE_INFINITY,hi5=0,lo20=Double.POSITIVE_INFINITY,hi20=0;
-        int count=0;JSONObject last=null;
+        int count=0;JSONObject last=null;JSONArray recent=new JSONArray();
         for(int i=data.length()-1;i>=0&&count<20;i--){
             JSONObject row=data.optJSONObject(i);
             if(row==null||!"HAL".equals(row.optString("symbol")))continue;
@@ -206,6 +206,7 @@ final class NseMcpClient {
                    close=positiveNumber(row.opt("close"));
             if(lo==null||hi==null||close==null||lo>hi||close<lo||close>hi)continue;
             if(last==null)last=row;
+            recent.put(new JSONObject().put("date",row.optString("date")).put("close",close));
             lo20=Math.min(lo20,lo);hi20=Math.max(hi20,hi);
             if(count<5){lo5=Math.min(lo5,lo);hi5=Math.max(hi5,hi);}
             count++;
@@ -213,7 +214,9 @@ final class NseMcpClient {
         if(last==null||count<5)throw new Failure("nse_history_incomplete");
         Double h=positiveNumber(last.opt("high")),l=positiveNumber(last.opt("low")),c=positiveNumber(last.opt("close"));
         double pivot=(h+l+c)/3.0;
-        return args("as_of",last.optString("date"),"trading_days",count,
+        JSONArray chronological=new JSONArray();
+        for(int i=recent.length()-1;i>=0;i--)chronological.put(recent.getJSONObject(i));
+        return args("as_of",last.optString("date"),"trading_days",count,"recent_closes",chronological,
             "low_5",lo5,"high_5",hi5,"low_20",lo20,"high_20",hi20,
             "pivot",pivot,"s1",2*pivot-h,"r1",2*pivot-l,
             "calculation","Unadjusted NSE completed daily bars. Zones are observations, not trading signals.");
@@ -249,6 +252,8 @@ final class NseMcpClient {
             optional(bhav,history,errors,"corporate_actions","get_corporate_actions",
                 args("symbol","HAL","fromDate",today.minusYears(1).toString(),"toDate",today.toString()));
             optional(bhav,history,errors,"breadth","get_market_breadth",obj("date",today.toString()));
+            optional(bhav,history,errors,"relative","get_stock_vs_index",
+                args("symbol","HAL","indexName","Nifty 50","months",1,"date","today"));
         }catch(Exception e){errors.put("historical:"+(e instanceof Failure?((Failure)e).code:"nse_unavailable"));}
         if(!live.has("stock")&&!history.has("levels")&&!history.has("sma20"))
             throw new Failure("nse_all_sources_unavailable");
