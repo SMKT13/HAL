@@ -31,7 +31,7 @@ await check('Options Lab advanced library, local OI history, Greeks, watchlist a
  await p.locator('[data-action="lab6-build"][data-id="buy_put"]').click();
  A.match(await p.locator('main').innerText(),/Hypothetical legs/);
  await p.locator('[data-action="lab6-page"][data-id="greeks"]').click();
- A.match(await p.locator('main').innerText(),/Model net delta/);
+ A.match(await p.locator('main').innerText(),/MODEL NET DELTA/i);
  await p.locator('[data-action="lab6-page"][data-id="oi"]').click();
  await click(p,'lab6-capture');
  const captured=await p.evaluate(()=>reviewCache['research:optionslab_oi_history']);
