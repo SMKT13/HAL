@@ -5,7 +5,7 @@ const YEAR=365*24*3600*1000, okay=n=>typeof n==='number'&&Number.isFinite(n);
 function err(s){throw Error(s);}
 function isoDate(s){return typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&!Number.isNaN(Date.parse(s+'T00:00:00Z'))&&new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s;}
 // NSE stock-derivatives close: 15:40 IST before 2026-12-07; 15:45 from 2026-12-07 (NSE CAS 2.0).
-function end(s){if(!isoDate(s))err('Valid exact expiry required');return Date.parse(s+'T'+(s>='2026-12-07'?'15:45:00':'15:40:00')+'+05:30');}
+function end(s){if(!isoDate(s))err('Valid exact expiry required');return Date.parse(s+'T'+(s>='2026-12-07'?'15:45:00':s>='2026-08-03'?'15:40:00':'15:30:00')+'+05:30');}
 function num(v){return v==null||String(v).trim()===''?null:(Number.isFinite(Number(v))?Number(v):null);}
 function leg(x){
  if(!x||!['CE','PE','FUT'].includes(x.type)||!['LONG','SHORT'].includes(x.side)||!isoDate(x.expiry))err('Select CE, PE or future, side and exact expiry.');
@@ -129,14 +129,64 @@ function analytics(chain,spot){
  return {callOI:completeCall?callOI:null,putOI:completePut?putOI:null,pcr:complete&&callOI>0?putOI/callOI:null,maxPain:pain,atmIv:iv.length?iv.reduce((sum,x)=>sum+x,0)/iv.length:null,changeAvailable,oiCoverage:{complete,callKnown:quotes.filter(x=>x.call.oi!==null).length,putKnown:quotes.filter(x=>x.put.oi!==null).length,total:quotes.length},rows:quotes};
 }
 function actualCopy(book){return (book?.legs||[]).filter(x=>['FUT','PE'].includes(x.type)).map(x=>leg({type:x.type,side:'LONG',expiry:x.expiry,strike:x.strike,lots:x.lots,lotSize:x.lotSize,entry:x.entry,instrumentKey:x.instrumentKey,origin:'actual-copy'}));}
+/* Paper-ledger state machine.  Version 1 is preserved to migrate every saved
+ * 4.4/4.5 draft.  A draft may be changed, but OPEN/CLOSED exposure is immutable.
+ * Opening and closing are explicit state transitions, never portfolio writes. */
 function paperDoc(raw){
  if(!raw||raw.version!==1||!Array.isArray(raw.drafts)||raw.drafts.length>100)err('Invalid PAPER draft backup.');
- const drafts=raw.drafts.map(d=>{const fees=num(d.fees??0);if(!okay(fees)||fees<0||fees>1e7||!Array.isArray(d.legs)||d.legs.length>30)err('Invalid PAPER draft fees or legs.');const legs=d.legs.map(leg),status=['draft','open','closed'].includes(d.status)?d.status:'draft';
+ const seen=new Set();
+ const drafts=raw.drafts.map(d=>{
+  if(!d||typeof d!=='object'||!Array.isArray(d.legs)||d.legs.length>30)err('Invalid PAPER record.');
+  const id=String(d.id||'').slice(0,80),name=String(d.name||'PAPER strategy').slice(0,100),status=d.status;
+  if(!id||seen.has(id))err('Missing or duplicate PAPER transaction ID.');seen.add(id);
+  if(!['draft','open','closed'].includes(status))err('Unknown PAPER trade state.');
+  const legs=d.legs.map(leg),fees=num(d.fees??0),openedFees=num(d.openedFees??d.fees??0);
+  if(!okay(fees)||fees<0||fees>1e7||!okay(openedFees)||openedFees<0||openedFees>1e7)err('Invalid PAPER trade fees.');
+  if(status!=='draft'&&fees<openedFees-1e-7)err('Total PAPER fees cannot be less than opening charges.');
   const exits=Array.isArray(d.exits)?d.exits.map(num):[];
-  if(exits.length>legs.length||exits.some(x=>!okay(x)||x<0||x>1e7))err('Invalid PAPER exit prices; corrupted records are not assumed to be zero.');
-  if(status==='closed'&&(!legs.length||exits.length!==legs.length))err('Closed PAPER trade must record a valid exit for every leg.');
-  return {id:String(d.id||'').slice(0,80),name:String(d.name||'PAPER strategy').slice(0,100),status,legs,fees,createdAt:String(d.createdAt||'').slice(0,35),closedAt:String(d.closedAt||'').slice(0,35),exits,note:String(d.note||'').slice(0,500)};});if(new Set(drafts.map(d=>d.id)).size!==drafts.length)err('Duplicate PAPER draft IDs.');return {version:1,drafts};
+  if(exits.length>legs.length||exits.some(x=>!okay(x)||x<0||x>1e7))err('Invalid PAPER exit prices.');
+  if(status==='closed'&&(!legs.length||exits.length!==legs.length))err('Closed PAPER trade must record an exit for every leg.');
+  if(status!=='closed'&&exits.length)err('Only closed PAPER trades may record exits.');
+  const openedAt=String(d.openedAt||'').slice(0,35),closedAt=String(d.closedAt||'').slice(0,35),createdAt=String(d.createdAt||'').slice(0,35);
+  for(const stamp of [openedAt,closedAt,createdAt])if(stamp&&(!Number.isFinite(Date.parse(stamp))||stamp.length<10))err('Invalid PAPER transaction timestamp.');
+  if(status==='closed'&&openedAt&&closedAt&&Date.parse(closedAt)<Date.parse(openedAt))err('PAPER close cannot precede opening.');
+  if(status!=='closed'&&closedAt)err('Only closed PAPER trades may have a close timestamp.');
+  // Legacy open/closed records were stored without a lock snapshot. Establish
+  // their first validated state as immutable without inventing opening times.
+  const openedLegs=status==='draft'?[]:(Array.isArray(d.openedLegs)?d.openedLegs.map(leg):legs.map(x=>({...x})));
+  if(status!=='draft'&&(!legs.length||JSON.stringify(openedLegs)!==JSON.stringify(legs)))err('Opened PAPER trade exposure cannot be edited retroactively.');
+  return {id,name,status,legs,fees,openedFees:status==='draft'?fees:openedFees,openedAt,openedLegs,createdAt,closedAt,exits,note:String(d.note||'').slice(0,500)};
+ });
+ return {version:1,drafts};
 }
-const api={leg,num,unit,end,bs,evaluate,summary,plot,normalizeChain,info,chainLeg,analytics,TEMPLATES,template,actualCopy,paperDoc};
+function paperStart(raw,id,at){
+ const book=paperDoc(raw),d=book.drafts.find(x=>x.id===id);
+ if(!d||d.status!=='draft'||!d.legs.length)err('Only nonempty PAPER drafts can be opened.');
+ if(typeof at!=='string'||!Number.isFinite(Date.parse(at)))err('Valid PAPER opening timestamp required.');
+ d.status='open';d.openedAt=at;d.openedLegs=d.legs.map(leg);d.openedFees=d.fees;
+ return paperDoc(book);
+}
+function paperClose(raw,id,exits,totalFees,at){
+ const book=paperDoc(raw),d=book.drafts.find(x=>x.id===id);
+ if(!d||d.status!=='open')err('Only open PAPER trades may be closed.');
+ if(!Array.isArray(exits)||exits.length!==d.legs.length)err('One PAPER exit required for each open leg.');
+ const fees=num(totalFees);
+ if(!okay(fees)||fees<d.openedFees||fees>1e7)err('Total charges must include all opening fees and closing fees.');
+ const prices=exits.map(num);
+ if(prices.some(x=>!okay(x)||x<0||x>1e7))err('Enter a valid nonnegative exit price for every PAPER leg.');
+ if(typeof at!=='string'||!Number.isFinite(Date.parse(at))||(d.openedAt&&Date.parse(at)<Date.parse(d.openedAt)))err('Invalid PAPER closing timestamp.');
+ d.status='closed';d.exits=prices;d.fees=fees;d.closedAt=at;
+ return paperDoc(book);
+}
+function paperReplaceDraft(raw,id,newLegs,fees){
+ const book=paperDoc(raw),d=book.drafts.find(x=>x.id===id);
+ if(!d||d.status!=='draft')err('Open or closed PAPER trades are locked. Clone into a new draft instead.');
+ d.legs=newLegs.map(leg);
+ const v=num(fees);if(!okay(v)||v<0||v>1e7)err('Invalid PAPER draft fees.');
+ d.fees=v;d.openedFees=v;
+ return paperDoc(book);
+}
+
+const api={leg,num,unit,end,bs,evaluate,summary,plot,normalizeChain,info,chainLeg,analytics,TEMPLATES,template,actualCopy,paperDoc,paperStart,paperClose,paperReplaceDraft};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.HALOptionsLab=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
