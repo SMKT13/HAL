@@ -1,4 +1,4 @@
-name: HAL regression tests
+name: HAL desktop, finance and Android regression tests
 
 on:
   push:
