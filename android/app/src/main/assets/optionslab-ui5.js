@@ -54,7 +54,7 @@ root.createHalOptionsLab=function(api){
   };
   const rows=c.rows.filter(r=>{
    const ce=E.info(r.call),pe=E.info(r.put);
-   return (!search||String(r.strike).includes(search))&&Math.max(ce.oi||0,pe.oi||0)>=minimumOI&&(!state.onlyQuoted||filter(ce)||filter(pe));
+   return (!search||String(r.strike).includes(search))&&Math.max(ce.oi||0,pe.oi||0)>=minimumOI&&(!(state.onlyQuoted||Number.isFinite(maxSpread)&&maxSpread<100)||filter(ce)||filter(pe));
   });
   const expiries=(ctx.snapshot?.available_expiries||[]).filter(x=>typeof x==='string');
   const expiry='<label>Expiry<select id="lab-expiry">'+expiries.map(d=>'<option value="'+esc(d)+'" '+(d===ctx.expiry?'selected':'')+'>'+esc(d)+'</option>').join('')+'</select></label>';
