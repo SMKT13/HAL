@@ -34,3 +34,29 @@
 .subnav{flex-wrap:nowrap;overflow:auto;scrollbar-width:thin}.subnav button{flex:0 0 auto}
 .ledger-head{display:flex;flex-direction:column;gap:3px;padding:4px 0 14px}.ledger-head strong{font-size:1.8rem}
 @media print{.app-header,.bottom-nav,.connection-strip,.subnav,button,#toast,#modal{display:none!important}body,main,.card{background:white!important;color:black!important;box-shadow:none}main{padding:0!important}.card{break-inside:avoid}}
+
+
+/* Independent HAL Options Lab · mobile-first, no Sensibull assets. */
+.lab-shell{min-width:0}
+.lab-shell .lab-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin;padding:4px 0 12px;margin-bottom:8px}
+.lab-shell .lab-tabs button{white-space:nowrap;min-height:42px;font-size:12px;padding:9px 12px}
+.lab-shell .lab-chain{max-height:500px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.lab-shell .lab-chain table{min-width:690px}
+.lab-shell .lab-chain th,.lab-shell .lab-chain td{font-size:11px;white-space:nowrap;padding:9px 7px}
+.lab-shell .lab-chain button{padding:5px 7px;min-height:32px;font-size:11px;margin:2px}
+.lab-shell tr.lab-atm{background:var(--accent-bg)}
+.lab-shell .lab-leg{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:14px 0;border-bottom:1px solid var(--line)}
+.lab-shell .lab-leg:last-child{border-bottom:0}
+.lab-shell .lab-leg strong{display:block;overflow-wrap:anywhere}
+.lab-shell .lab-leg small{display:block;margin-top:3px;overflow-wrap:anywhere}
+.lab-shell .lab-leg .toolbar{display:flex;flex-wrap:wrap;gap:5px}
+.lab-shell .lab-leg button{font-size:11px;padding:5px 9px;min-height:36px}
+.lab-shell .lab-chart{width:100%;overflow-x:auto;margin:14px 0;border:1px solid var(--line);background:var(--raised);border-radius:12px;padding:10px}
+.lab-shell .lab-chart svg{display:block;width:100%;height:auto;max-height:280px;min-width:300px;overflow:visible;color:var(--muted)}
+.lab-shell .lab-chart p{font-size:11px;margin:6px 0 0}
+.lab-shell textarea{display:block;width:100%;max-width:100%;margin:10px 0}
+.lab-shell details{margin:16px 0;padding:12px;border:1px solid var(--line);border-radius:10px}
+.lab-shell summary{cursor:pointer;font-weight:600}
+.lab-shell .form-grid{margin:10px 0}
+.lab-shell .metrics .metric strong{font-size:18px}
+@media(max-width:500px){.lab-shell .lab-tabs button{font-size:11px}.lab-shell .lab-leg{align-items:flex-start}.lab-shell .lab-chart{padding:5px}.lab-shell .metrics .metric{padding:12px}.lab-shell .metrics .metric strong{font-size:16px}}
