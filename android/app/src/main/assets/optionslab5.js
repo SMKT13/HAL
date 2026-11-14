@@ -137,7 +137,7 @@ function paperDoc(raw){
  const seen=new Set();
  const drafts=raw.drafts.map(d=>{
   if(!d||typeof d!=='object'||!Array.isArray(d.legs)||d.legs.length>30)err('Invalid PAPER record.');
-  const id=String(d.id||'').slice(0,80),name=String(d.name||'PAPER strategy').slice(0,100),status=d.status;
+  const id=String(d.id||'').slice(0,80),name=String(d.name||'PAPER strategy').slice(0,100),status=d.status==null?'draft':d.status;
   if(!id||seen.has(id))err('Missing or duplicate PAPER transaction ID.');seen.add(id);
   if(!['draft','open','closed'].includes(status))err('Unknown PAPER trade state.');
   const legs=d.legs.map(leg),fees=num(d.fees??0),openedFees=num(d.openedFees??d.fees??0);
