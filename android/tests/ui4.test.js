@@ -275,5 +275,39 @@ await (async()=>{
     });
   }finally{await run.context.close();}
 })();
+// Isolate this regression in a fresh browser after legacy page contexts are closed.
+// Chromium's single-process CI mode can terminate if a second active context
+// is created beside the long-running portfolio UI session.
+await browser.close();browser=await launch();
+await check('4.6 PAPER immutable opening, clone and explicit close preserve original trade',async()=>{
+ const fresh=await pageFor();const screen=fresh.page;
+ try{
+  await emit(screen,'snapshot',snap);
+  await nav(screen,'technicals','lab');
+  await click(screen,'lab-add');
+  await click(screen,'lab-paper-save');
+  await click(screen,'lab-open');
+  const savedOpen=await screen.evaluate(()=>structuredClone(reviewCache['research:optionslab_paper'].drafts[0]));
+  A.equal(savedOpen.status,'open');A.ok(savedOpen.openedAt);
+  A.deepEqual(savedOpen.openedLegs,savedOpen.legs);
+  A.equal(await screen.locator('[data-action="lab-delete"]').count(),0);
+  await screen.locator('[data-action="lab-load"]').click();
+  A.match(await screen.locator('main').innerText(),/Locked PAPER trade loaded as a new/i);
+  await click(screen,'lab-paper-save');
+  const cloned=await screen.evaluate(()=>reviewCache['research:optionslab_paper']);
+  A.equal(cloned.drafts.length,2);A.equal(new Set(cloned.drafts.map(d=>d.id)).size,2);
+  A.deepEqual(cloned.drafts.find(d=>d.status==='open'),savedOpen);
+  await click(screen,'lab-close-start');
+  await screen.locator('#lab-exit-0').fill('70');
+  await screen.locator('#lab-exit-fees').fill('12');
+  await click(screen,'lab-close-confirm');
+  const closed=await screen.evaluate(()=>reviewCache['research:optionslab_paper'].drafts.find(d=>d.status==='closed'));
+  A.deepEqual(closed.legs,savedOpen.legs);A.deepEqual(closed.openedLegs,savedOpen.openedLegs);
+  A.equal(closed.fees,12);A.equal(closed.exits[0],70);
+  A.equal(await screen.locator('[data-action="lab-delete"]').count(),1); // only the unsent draft
+  A.deepEqual(fresh.errors,[]);
+ }finally{await fresh.context.close();}
+});
+
 console.log(`${checks} UI integration checks passed (synthetic bridge, not Android device tests).`)
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

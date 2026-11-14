@@ -424,8 +424,18 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        # Every research/data API is personal.  Never expose trading-adjacent
+        # research to the public just because it is backed by Yahoo data.
+        # /health stays unauthenticated so hosting probes still work.
+        if len(self.path) > 4096:
+            self._send(414, b'{"error":"request_uri_too_long"}', 'application/json')
+            return
         url = urlsplit(self.path)
         path = url.path
+        if path.startswith('/api/') and not upstox_feed.authorized(
+                self.headers.get('X-HAL-Viewer-Key', '')):
+            self._send(403, b'{"error":"viewer_key_required"}', 'application/json')
+            return
         if path == '/api/agents':
             data = get_data()
             if not data.get('quote'):

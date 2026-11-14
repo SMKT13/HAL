@@ -1,25 +1,50 @@
-# HAL Desk 4.2.4 installation
+# HAL Desk 4.6.0 — private signing and upgrade
 
-This release has application ID `in.smkt.haldesk`, versionCode 26 and minimum Android API 26. Export a JSON backup from the installed app before updating. Keep the installed app and its storage if Android reports a certificate conflict.
+This source builds Android application ID **`in.smkt.haldesk`**, versionCode **31**, versionName **4.6.0**, minimum SDK **26**. The original signing certificate is mandatory for installing **over** an earlier HAL Desk without uninstalling or losing app data.
 
-## Sign the unsigned candidate
+## 1. Back up your data
 
-Sign the aligned APK locally with the original HAL keystore. The Android SDK Build Tools prompt for its password when this command runs in a terminal. The private keystore and password belong outside the source tree.
+On the installed app, export the real Position/History JSON backup and keep it safely outside the device. Paper research drafts are stored independently and require their own PAPER export from Technicals → Options Lab. Record the current app version, outstanding contracts and lifetime fees. **Do not uninstall the existing app.**
+
+## 2. Build an unsigned candidate
+
+Use Node 22, JDK 17, Android SDK 35 and Build Tools 35.0.0:
 
 ```sh
-apksigner sign --ks /private/path/personal.jks --ks-key-alias hal-personal --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true --out HAL-Desk-v4.2.4-signed.apk HAL-Desk-v4.2.4-unsigned.apk
-apksigner verify --verbose --print-certs HAL-Desk-v4.2.4-signed.apk
-apksigner verify --verbose --print-certs HAL-Desk-v4.1.0-signed.apk
+cd android
+npm ci
+npm test
+npm run test:ui
+HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash build.sh
 ```
 
-Compare the SHA-256 certificate fingerprints on both APKs. The expected fingerprint is `a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382`. Confirm v2 and v3 verification on the signed update. The project also provides `scripts/verify-apk.py` for these checks against the previous APK and the tested assets.
+The script rebuilds generated WebView assets, runs native tests and lint, assembles, and aligns `build/HAL-Desk-v4.6.0-unsigned.apk`. A CI artifact is unsigned and cannot upgrade an existing installation.
 
-## Update and check the book
+## 3. Sign privately with the **original** keystore
 
-1. Open the verified signed 4.2.4 APK on the phone with the previous HAL Desk installation and select **Update**.
-2. In **Position → Book**, check each open contract, expiry, lot size, entry and manual mark against your records. Check completed closes in **Journal & funding**.
-3. In **History → Import statement**, select the private HAL history JSON or a supported HAL XLSX or CSV. Review duplicate rows, overlaps, accepted results and charge coverage. Confirm and save. The app also offers an explicit, broker-reviewed open-book import for an empty book.
-4. In **Position → Break-even**, choose a scenario date, price range, basis and costs. For a date beyond an open put's expiry, supply the assumed earlier settlement spot or record the actual close. The gross open result remains available with an unknown allocation of historical costs.
-5. Save dated checkpoints for comparisons under **Review periods**. Open **Settings** to inspect connections or export a backup.
+Keep the keystore and password **outside** the repository, CI workflow and shared folders. The signing alias is `hal-personal`. On a trusted local workstation:
 
-Authenticated market feeds, optional AI requests and phone-specific upgrade behavior can be checked after installing the signed update. Cached quotes retain their source times. The history import works offline.
+```sh
+export HAL_SIGNING_KEY_FILE="/path/outside/repo/HAL-Desk-original-personal.jks"
+export HAL_SIGNING_PASSWORD_FILE="/path/outside/repo/password.txt"
+ANDROID_SDK_ROOT="$ANDROID_HOME" bash build.sh
+```
+
+`build.sh` uses Android `zipalign` and `apksigner`, verifies v2/v3 signatures and **refuses** to output an upgrade APK if the certificate does not match the expected SHA-256 fingerprint:
+
+```text
+a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382
+```
+
+The output is `build/HAL-Desk-v4.6.0-signed.apk`. Signing with a new keystore—even with the same alias—does not make it upgrade-compatible.
+
+## 4. Upgrade and verify
+
+1. Keep the installed old HAL Desk; install the verified **signed** APK and choose **Update**.
+2. Confirm the installed version shows 4.6.0 and the open futures/puts have unchanged contract identities, quantities, expiries, entry values and manual marks.
+3. Check lifetime realised history, closed October trades, premium costs, charges, funding and journal counts against the exported backup.
+4. Open the Options Lab and confirm saved paper drafts, opened/closed trade records and separate OI/IV history (if previously recorded). Open PAPER positions should be immutable.
+5. Check offline mode; then validate live Upstox spot/futures/options, quote freshness and token-expiry handling. Confirm AI remains opt-in.
+6. If installation reports a **certificate conflict**, stop. Do not uninstall or replace the app; compare the old and new APK signing certificate fingerprints first.
+
+GitHub Actions and browser tests **do not substitute** for real-device upgrade and live-market-data checks.

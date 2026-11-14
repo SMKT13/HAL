@@ -1,71 +1,74 @@
-# HAL Desk 4.1.0
+# HAL Desk
 
-Personal Android research and position-management desk for Hindustan Aeronautics Limited (NSE: HAL). Package `in.smkt.haldesk`, versionCode **26**, Android **8.0+**. Direct read-only Upstox data, optional Gemini and opt-in local FinBERT. No broker orders, fund transfers or required application server.
+Personal research, derivatives risk and portfolio accounting for **Hindustan Aeronautics Limited (NSE: HAL)**. This repository contains two **separate** applications: the primary Android desk and an older desktop/browser viewer. Neither application sends orders, reads broker account holdings or transfers funds.
 
-The Android application has five primary tabs: **Position**, **History**, **Technicals**, **Research** and **AI Desk**. It supports multiple long futures and protective puts, partial closes, preserved realised history, exact-contract marks, expiry-gap checks, deterministic scenarios, hedge comparisons and offline books.
+## Current release sources
 
-## 4.2.4 third-audit fixes and private signed release
+| Application | Source | Version | Storage |
+| --- | --- | --- | --- |
+| Android HAL Desk | `android/` | **4.6.0**, versionCode **31** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
+| Desktop/web HAL viewer | `src/`, `backend/`, `server.ts`, `server.py` | Separate web product | Browser-origin-local portfolio, optional local Python market feed |
 
-- The quote-quality gate requires a known Upstox REST source and a sensible, recent HTTP retrieval clock before quotes qualify for hedge screens or risk alerts. Labeled stale observations remain viewable; unrecognized sources are not treated as genuine REST marks.
-- Expired, unreconciled positions receive the highest review priority, ahead of missing quote or disconnected connection notices, so the user is directed to record actual broker-confirmed settlement/close.
-- The release preserves versionCode 26, package `in.smkt.haldesk`, the original signing identity and all saved local books/journal records. Signing only uses the private archived original key outside the repository.
+**The two apps do not automatically share positions, history, model outputs or subscriptions.** Export/import only through documented, validated formats. The web viewer is not the canonical Android portfolio.
 
-## 4.2.4 expired-position and manual-mark corrections
+## Android desk capabilities
 
-- Expired, unreconciled open derivatives cannot use old exchange prices or manual marks to fabricate open profit or strategy net P&L. Record the actual broker-confirmed close or settlement to recognise the outcome; existing positions and transaction records remain preserved.
-- Manual futures marks must be strictly positive in the position editor. Older saved zero futures marks remain recoverable but are excluded from valuation; zero manual put marks remain supported.
-- Release 4.2.4 / versionCode 26 retains package `in.smkt.haldesk` and requires the original signing certificate for in-place Android upgrades.
+- **Position:** exact-contract long HAL futures and protective puts, partial closes, reconciliation, lifetime trading charges, risk and expiry gaps, multi-leg scenarios and break-even.
+- **History:** actual completed trades, broker-reviewed statement imports, charges, funding snapshots, explicit backups and recovery.
+- **Technicals / Options Lab:** expiry-specific chain, standard trading indicators, **PAPER-only** CE/PE/FUT strategies, 38 reference categories (only mathematically defined recipes can be auto-built), payoff graphs, Greek models, OI/IV snapshots, watchlist and paper journal. Opening PAPER trades freezes the position and entry snapshot in 4.6; editing requires a clone, not a retrospective rewrite.
+- **Research:** corporate disclosures, fundamentals, company news and separately sourced official NSE cash-market observations.
+- **AI Desk:** optional user-authorized Gemini calls and opt-in offline FinBERT. Deterministic calculations remain authoritative.
 
-## 4.2.4 second-audit corrections
+Data quality is explicit: retrieval time is not a trade time; incomplete chains cannot produce complete PCR/max pain; expired derivative legs require reconciliation; a single future spot cannot determine the settlement of already expired puts. Options with physical settlement entail broker-specific delivery/margin obligations. No hedge, recovery plan or model output guarantees profits.
 
-- Zero-valued provider market prices cannot become false portfolio losses; explicit user-entered zero put marks remain supported.
-- HAL NSE stock derivative expiry clocks follow date-effective 15:30 / 15:40 / 15:45 IST sessions; settlement must still be reconciled separately.
-- Price-review and net-loss alerts require valid fresh quotes rather than silently using stale observations.
-- Import of exported lifetime-history CSV is supported; whole-statement grand totals are checked against HAL gross rows before saving.
-- Upstox instrument-keyed news arrays and partial article metadata are supported, and absent option-contract discovery uses a bounded retry interval.
-- Version 4.2.4 / versionCode 26 preserves the app ID and requires the original signing certificate for upgrades.
+## Run and test
 
-## 4.2.4 reliability fixes
+### Android source
 
-The Android desk now isolates chain-only market errors from independent quotes, supports explicit user-assumed IV for strictly labelled model-only hedge comparisons when provider Greek timestamps are absent, and reconciles corrected named broker reports while preserving file hashes. Recognized statement total rows are safely ignored. **Distinct reports must use distinct file names**; never accept a reconciliation as separate trading activity without checking the source.
-
-## Daily review update
-
-4.1.0 reorganizes the app around Today → My Position → Plan: a compact daily
-briefing, automatic previous-visit comparisons, combined protection explanations,
-question-led scenarios and hypothetical exposure comparisons. Business evidence
-is grouped around HAL's orders, deliveries, margins and cash flow. Contextual AI
-keeps the explicit evidence-sharing consent step.
-See [behavior and validation](android/docs/DAILY-REVIEW-4.1.md).
-
-The 4.0.2 protective-put matching fix remains included. Saved holdings and
-completed history retain schema 4.
-
-## Source and release
-
-- [Android architecture and build instructions](android/README.md)
-- [Installation and preserved signing identity](android/INSTALL.md)
-- [Historical 4.0.2 verification report and limitations](android/docs/VERIFICATION.md)
-- [Provider capabilities and restrictions](android/docs/API-CAPABILITIES.md)
-- [Acceptance criteria](android/docs/ACCEPTANCE.md)
-- [Repository synchronization notes](docs/REPOSITORY-SYNC-4.0.2.md)
-
-The previous 4.0.2 APK was built and signed privately with the original HAL certificate. The 4.2.4 source is an unsigned candidate until privately signed and verified. GitHub contains the source, tests and verification records; CI produces **unsigned** candidates for private local signing. Keystores, passwords, API credentials and personal portfolio backups must never be committed. Update the existing installation without uninstalling it or clearing its data, and export a book backup first.
+Requires **JDK 17**, Android **SDK 35** and Build Tools **35.0.0**, Gradle wrapper **8.10.2**, Node **22** and pinned npm packages.
 
 ```sh
 cd android
 npm ci
-npm run assets
 npm test
 npx playwright install chromium
 npm run test:ui
-./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease
+HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash build.sh
 ```
 
-Use JDK 17, Gradle 8.10.2 and Android SDK 35/build-tools 35.0.0. The Gradle wrapper and npm lockfile pin build dependencies. Run `bash tests/test-native-ai.sh` for the additional mocked Gemini checks. Signing is a separate private local step described in the Android guide.
+**4.6 change:** `app/src/main/assets/desk4.js` and `web-assets-sha256.json` are generated artifacts, **not committed files**. The pinned build script `scripts/build-assets.js` regenerates them for browser tests, and Gradle automatically regenerates and verifies them before Android packaging. No hand-edited or stale WebView bundle is used as source of truth.
 
-Historical 4.0.2 release verification recorded 153 calculation/data tests, 57 native/framework tests, 28 browser integration checks and 219 mocked Gemini assertions passing. Framework tests use Robolectric API 26 and 35. A physical-device upgrade, authenticated provider requests and actual FinBERT inference remain unverified; these results do not claim live-account or phone testing.
+Android application ID stays `in.smkt.haldesk`. An upgrade requires the **original HAL signing certificate**, not a new keystore. Use [private local signing instructions](android/INSTALL.md); never commit, paste into issues, or upload the JKS/password to CI.
 
-## Existing web viewer
+### Desktop/web viewer
 
-The earlier React/Python web viewer remains available with its [own setup guide](docs/WEB-VIEWER.md). Its three existing calculation modules and regression tests are preserved under `web-engine/`, independent of the Android rebuild. It retains schema-2 behavior and is not a web edition of Android 4.0.2. Do not import an Android schema-4 book into it without a compatible migration.
+```sh
+npm ci
+cp .env.example .env
+npm run lint
+npm run test:python
+npm test
+npm run test:web-engine
+npm run build
+npm run dev
+```
+
+Set a **separate** `HAL_VIEWER_KEY` and any optional provider credentials in the local environment. Web API routes require viewer authentication. For production behind a reverse proxy, set `HAL_PUBLIC_ORIGIN` to the actual HTTPS origin; POST-origin checks include scheme and port. The optional standalone Python server also requires the viewer key for all `/api/*` endpoints.
+
+See [web viewer deployment](docs/WEB-VIEWER.md), [Android architecture](android/README.md) and [provider capabilities](android/docs/API-CAPABILITIES.md).
+
+## System boundaries and reliability
+
+- **Financial accounting:** deterministic, revision-checked local saved book; exact expiry and lot validation; actual positions are never merged with hypothetical paper positions.
+- **Market adapters:** direct read-only Upstox Android access; independent official NSE cash research; cached/offline states explicitly marked. Web feed is a separate service.
+- **Security:** native Keystore AES-GCM, HTTPS and request allowlists, restricted bundled WebView origin, backup credential screening, no Android cloud/device transfer of the book or credentials. Keep any public clone free of signing material.
+- **Regression gates:** Node finance tests, Android native/Robolectric tests, AI policy tests, lint, browser simulations, and reproducible unsigned release APK in GitHub Actions. These tests **do not** establish live Upstox access or a physical-device upgrade.
+- **Android release process:** build unsigned in CI; privately sign with the original certificate; verify fingerprint and v2/v3 signatures; back up saved data before upgrading in place.
+
+The repository's legacy `verification/` files and archived documents document **historical** builds; use current [GitHub Actions](../../actions) for the latest test status rather than treating old reports as proof of the latest release.
+
+## Scope of the 4.6 refactor
+
+The 4.6 source refactor removes stale generated files, adds an immutable PAPER ledger state machine (with backward-compatible old draft migration), requires authentication on the optional Python API, validates complete HTTPS origins for web AI POSTs, and expands regression coverage. **It is not a claim that every historical module was rewritten or every issue is eliminated.** Physical installation, original-key signing and authenticated broker validation remain release acceptance steps.
+
+See [refactor audit and remaining tasks](docs/REFACTOR-4.6.md).

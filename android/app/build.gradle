@@ -7,8 +7,8 @@ android {
         applicationId 'in.smkt.haldesk'
         minSdk 26
         targetSdk 35
-        versionCode 30
-        versionName '4.5.1'
+        versionCode 31
+        versionName '4.6.0'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -47,7 +47,14 @@ dependencies {
 
 
 // A stale generated bundle must never ship after editing its source.
+// Generated JS and its manifest are derived build outputs, never hand-edited
+// or checked into the repository. Rebuild before validating/packaging assets.
+tasks.register('generateWebAssets', Exec) {
+    workingDir rootProject.projectDir
+    commandLine 'node', 'scripts/build-assets.js'
+}
 tasks.register('verifyWebAssets') {
+    dependsOn('generateWebAssets')
     doLast {
         def hashes = new groovy.json.JsonSlurper().parse(rootProject.file('web-assets-sha256.json'))
         hashes.each { name, expected ->

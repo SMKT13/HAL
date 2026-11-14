@@ -8,7 +8,8 @@ root.createHalOptionsLab=function(api){
  const base=original(api),E=root.HALOptionsLab,esc=api.esc,money=api.money,card=api.card,btn=api.btn,empty=api.empty;
  const key='research:optionslab_workspace',prev='research:optionslab_workspace_prev',histKey='research:optionslab_oi_history';
  const st={page:'core',outlook:'all',strategy:'',chartMetric:'pcr',strikeSearch:'',onlyWatch:false,shock:-5,iv:30,rate:6,dividend:0,fee:0,openEvent:false,error:'',message:'',dataReady:false};
- let workspace={version:1,watch:[],events:[],notes:[]},history={version:1,samples:[]},loaded=false,baseRecoverable=false,committedWorkspace={version:1,watch:[],events:[],notes:[]};
+ let workspace={version:1,watch:[],events:[],notes:[]},history={version:1,samples:[]},loaded=false,baseRecoverable=false,committedWorkspace={version:1,watch:[],events:[],notes:[]},recordCounter=0;
+ const newRecordId=(prefix,rows)=>{let id;do{id=prefix+'-'+Date.now()+'-'+(++recordCounter);}while(rows.some(r=>r.id===id));return id;};
  const copy=x=>JSON.parse(JSON.stringify(x));
  function nativeGet(name){
   const n=root.HALNative;
@@ -148,12 +149,12 @@ root.createHalOptionsLab=function(api){
    else if(name==='lab6-event-add'){
     const value=id=>document.getElementById(id)?.value||'',date=value('lab6-event-date'),title=value('lab6-event-title').trim(),source=value('lab6-event-source').trim();
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date+'T00:00:00Z'))||!title||title.length>140||source.length>400)throw Error('Enter an event date and concise title.');
-    workspace.events.push({id:'event-'+Date.now(),date,title,source});save();
+    workspace.events.push({id:newRecordId('event',workspace.events),date,title,source});save();
    }
    else if(name==='lab6-event-delete'){workspace.events=workspace.events.filter(x=>x.id!==id);save();}
    else if(name==='lab6-note-add'){
     const text=document.getElementById('lab6-note-text')?.value.trim()||'';if(!text||text.length>1400)throw Error('Write a note (up to 1400 characters).');
-    workspace.notes.push({id:'note-'+Date.now(),at:new Date().toISOString(),text});save();
+    workspace.notes.push({id:newRecordId('note',workspace.notes),at:new Date().toISOString(),text});save();
    }
    else if(name==='lab6-note-delete'){workspace.notes=workspace.notes.filter(x=>x.id!==id);save();}
    else if(name==='lab6-recalc'){}

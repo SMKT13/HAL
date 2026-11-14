@@ -143,6 +143,24 @@ test("AI requires consent, validated book and same-origin requests", async () =>
     await f.close();
   }
 });
+test("AI rejects a downgraded HTTP origin even when the host matches", async () => {
+  const f = await fixture({
+    env: {
+      HAL_VIEWER_KEY: "test-viewer",
+      GEMINI_API_KEY: "server-secret",
+      HAL_AI_SEARCH: "1",
+      HAL_PUBLIC_ORIGIN: "https://hal.example.test",
+    },
+  });
+  try {
+    const body = {consent: true, book: A.emptyBook(), message: "Explain my HAL risk"};
+    assert.equal((await f.request("/api/ai/copilot", body, { Origin: "http://hal.example.test" })).status, 403);
+    assert.equal((await f.request("/api/ai/copilot", body, { Origin: "https://hal.example.test" })).status, 200);
+    assert.equal(f.calls.length, 1);
+  } finally {
+    await f.close();
+  }
+});
 test("AI uses server evidence, retains stale status, and excludes secrets and personal notes", async () => {
   const f = await fixture();
   try {

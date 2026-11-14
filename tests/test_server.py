@@ -187,25 +187,60 @@ class CacheTests(unittest.TestCase):
         self.assertIsNone(result['mkt'])
         self.assertFalse(result['stale'])
 
-    def test_http_unavailable_is_503_and_health_is_available(self):
-        httpd = server.ThreadingHTTPServer(('127.0.0.1', 0), server.Handler)
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
-        base = f'http://127.0.0.1:{httpd.server_port}'
-        try:
-            with patch.object(server, 'get_data', return_value={'error':'unavailable'}) as get:
-                with self.assertRaises(urllib.error.HTTPError) as failure:
-                    urllib.request.urlopen(base + '/api/data?notforce=1')
-                self.assertEqual(failure.exception.code, 503)
-                get.assert_called_once_with(force=False)
-            for path in ('/health',):
-                with urllib.request.urlopen(base + path) as response:
+    def test_http_authentication_is_mandatory_for_every_data_route(self):
+        with patch.dict(os.environ, {'HAL_VIEWER_KEY': 'unit-test-private-viewer'}):
+            httpd = server.ThreadingHTTPServer(('127.0.0.1', 0), server.Handler)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            base = f'http://127.0.0.1:{httpd.server_port}'
+            try:
+                with patch.object(server, 'get_data') as market:
+                    for path in ('/api/data', '/api/agents', '/api/upstox/hal',
+                                 '/api/upstox/research'):
+                        for headers in ({}, {'X-HAL-Viewer-Key': 'wrong-key'}):
+                            req = urllib.request.Request(base + path, headers=headers)
+                            with self.assertRaises(urllib.error.HTTPError) as failure:
+                                urllib.request.urlopen(req)
+                            self.assertEqual(failure.exception.code, 403)
+                            self.assertEqual(failure.exception.headers['X-Content-Type-Options'], 'nosniff')
+                    market.assert_not_called()
+
+                with patch.object(server, 'get_data', return_value={'error': 'unavailable'}) as market:
+                    req = urllib.request.Request(
+                        base + '/api/data?notforce=1',
+                        headers={'X-HAL-Viewer-Key': 'unit-test-private-viewer'})
+                    with self.assertRaises(urllib.error.HTTPError) as failure:
+                        urllib.request.urlopen(req)
+                    self.assertEqual(failure.exception.code, 503)
+                    market.assert_called_once_with(force=False)
+                with urllib.request.urlopen(base + '/health') as response:
                     self.assertEqual(response.status, 200)
                     self.assertTrue(response.read())
-        finally:
-            httpd.shutdown()
-            httpd.server_close()
-            thread.join()
+                with self.assertRaises(urllib.error.HTTPError) as failure:
+                    urllib.request.urlopen(base + '/api/data?' + ('x' * 4100))
+                self.assertEqual(failure.exception.code, 414)
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+                thread.join()
+
+    def test_no_configured_viewer_key_fail_closed(self):
+        with patch.dict(os.environ, {'HAL_VIEWER_KEY': ''}):
+            httpd = server.ThreadingHTTPServer(('127.0.0.1', 0), server.Handler)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            base = f'http://127.0.0.1:{httpd.server_port}'
+            try:
+                request = urllib.request.Request(
+                    base + '/api/data',
+                    headers={'X-HAL-Viewer-Key': 'made-up-key'})
+                with self.assertRaises(urllib.error.HTTPError) as failure:
+                    urllib.request.urlopen(request)
+                self.assertEqual(failure.exception.code, 403)
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+                thread.join()
 
 
 if __name__ == '__main__':
