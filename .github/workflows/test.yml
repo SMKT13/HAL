@@ -66,6 +66,10 @@ jobs:
           if-no-files-found: error
       - run: npm test
         working-directory: android
+      - name: Ensure compiled WebView files are not tracked
+        run: |
+          ! git ls-files --error-unmatch android/app/src/main/assets/desk4.js >/dev/null 2>&1
+          ! git ls-files --error-unmatch android/web-assets-sha256.json >/dev/null 2>&1
       - name: Verify regenerated Android asset hashes
         run: node -e "const fs=require('fs'),c=require('crypto'),p=JSON.parse(fs.readFileSync('web-assets-sha256.json'));for(const [f,h] of Object.entries(p)){if(c.createHash('sha256').update(fs.readFileSync('app/src/main/assets/'+f)).digest('hex')!==h)process.exit(1)}console.log('All regenerated assets match SHA256 manifest')"
         working-directory: android
@@ -77,9 +81,9 @@ jobs:
       - name: Upload unsigned candidate and test reports
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v4.5.1-unsigned-and-reports
+          name: HAL-Desk-v4.6.0-unsigned-and-reports
           path: |
-            android/build/HAL-Desk-v4.5.1-unsigned.apk
+            android/build/HAL-Desk-v4.6.0-unsigned.apk
             android/app/build/reports/tests/testReleaseUnitTest/
             android/app/build/reports/lint-results-release.html
           retention-days: 7
