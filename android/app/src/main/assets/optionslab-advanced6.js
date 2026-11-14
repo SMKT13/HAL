@@ -146,16 +146,16 @@ function history(raw){
  const seen=new Set(),out=[];
  for(const s of raw.samples){
   if(!s||typeof s.at!=='string'||!Number.isFinite(Date.parse(s.at))||typeof s.expiry!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s.expiry)||!/^\d{4}-\d{2}-\d{2}$/.test(s.day))throw Error('Corrupt HAL options history; existing observations have not been silently replaced.');
-  const key=s.expiry+'|'+s.at;if(seen.has(key))continue;seen.add(key);
+  const key=s.expiry+'|'+Date.parse(s.at);if(seen.has(key))continue;seen.add(key);
    if(new Date(Date.parse(s.at)+IST).toISOString().slice(0,10)!==s.day)throw Error('Options history trading-date mismatch.');
   const sample={at:s.at,day:String(s.day||''),expiry:String(s.expiry).slice(0,10)};
   for(const name of ['spot','pcr','maxPain','callOI','putOI','iv','atmStrike','rollingStraddle'])sample[name]=finite(s[name])?s[name]:null;
   out.push(sample);
  }
- return {version:1,samples:out.sort((a,b)=>a.at.localeCompare(b.at)).slice(-1000)};
+ return {version:1,samples:out.sort((a,b)=>Date.parse(a.at)-Date.parse(b.at)).slice(-1000)};
 }
 function appendHistory(raw,s){
- const h=history(raw||{version:1,samples:[]});h.samples=h.samples.filter(x=>x.at!==s.at||x.expiry!==s.expiry);h.samples.push(s);h.samples.sort((a,b)=>a.at.localeCompare(b.at));h.samples=h.samples.slice(-1000);return history(h);
+ const h=history(raw||{version:1,samples:[]});h.samples=h.samples.filter(x=>x.expiry!==s.expiry||Date.parse(x.at)!==Date.parse(s.at));h.samples.push(s);h.samples.sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));h.samples=h.samples.slice(-1000);return history(h);
 }
 function ivPercentile(raw,expiry,min=20){
  const s=history(raw).samples.filter(x=>x.expiry===expiry&&finite(x.iv)),byDay=new Map();
