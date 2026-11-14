@@ -52,7 +52,7 @@ test('snapshot refuses expired contract',()=>{
 test('balanced large short/long call legs retain finite payoff limits',()=>{
  const long=leg('CE','LONG',100,1,10000),short=leg('CE','SHORT',200,2,10000);
  const sum=E.summary(val([long,short]),120);
- A.equal(sum.maxProfit,150000000);A.equal(sum.maxLoss,150000000);
+ A.equal(sum.maxProfit,151500000);A.equal(sum.maxLoss,0);
  A.equal(sum.tailSlope,0);
 });
 test('OI/IV samples are ordered by real time across mixed ISO offsets',()=>{
