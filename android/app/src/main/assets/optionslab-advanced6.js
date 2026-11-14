@@ -135,8 +135,9 @@ function quoteSafety(raw,now=Date.now()){
 }
 function snapshot(chain,spot,now=Date.now()){
  const c=chain&&Array.isArray(chain.rows)?chain:E.normalizeChain(chain),a=E.analytics(c,spot),at=Date.parse(c.fetchedAt);
- check(Number.isFinite(at)&&at<=now+60000,'Verified provider HTTP retrieval time required to save history.');
+ check(Number.isFinite(at)&&at<=now+60000&&at>=now-600000,'Recent provider HTTP retrieval time (within 10 minutes) required to save history; refresh chain first.');
  check(c.rows.length>0&&finite(spot)&&spot>0,'Valid HAL price and chain required.');
+ check(/^\d{4}-\d{2}-\d{2}$/.test(c.expiry)&&Number.isFinite(E.end(c.expiry))&&E.end(c.expiry)>=at,'Cannot capture an expired or unidentified option chain.');
  const atm=c.rows.reduce((p,q)=>Math.abs(p.strike-spot)<Math.abs(q.strike-spot)?p:q,c.rows[0]),call=E.info(atm.call),put=E.info(atm.put);
  return {at:c.fetchedAt,day:new Date(at+IST).toISOString().slice(0,10),expiry:c.expiry,spot,pcr:a.pcr,maxPain:a.maxPain,callOI:a.callOI,putOI:a.putOI,iv:a.atmIv,atmStrike:atm.strike,rollingStraddle:finite(call.price)&&finite(put.price)?call.price+put.price:null,source:c.source,notes:'Market observation only, not an executable price.'};
 }
@@ -144,16 +145,17 @@ function history(raw){
  if(!raw||raw.version!==1||!Array.isArray(raw.samples)||raw.samples.length>1200)throw Error('Invalid HAL options history.');
  const seen=new Set(),out=[];
  for(const s of raw.samples){
-  if(!s||typeof s.at!=='string'||!Number.isFinite(Date.parse(s.at))||s.expiry==null)continue;
-  const key=s.expiry+'|'+s.at;if(seen.has(key))continue;seen.add(key);
+  if(!s||typeof s.at!=='string'||!Number.isFinite(Date.parse(s.at))||typeof s.expiry!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s.expiry)||!/^\d{4}-\d{2}-\d{2}$/.test(s.day))throw Error('Corrupt HAL options history; existing observations have not been silently replaced.');
+  const key=s.expiry+'|'+Date.parse(s.at);if(seen.has(key))continue;seen.add(key);
+   if(new Date(Date.parse(s.at)+IST).toISOString().slice(0,10)!==s.day)throw Error('Options history trading-date mismatch.');
   const sample={at:s.at,day:String(s.day||''),expiry:String(s.expiry).slice(0,10)};
   for(const name of ['spot','pcr','maxPain','callOI','putOI','iv','atmStrike','rollingStraddle'])sample[name]=finite(s[name])?s[name]:null;
   out.push(sample);
  }
- return {version:1,samples:out.sort((a,b)=>a.at.localeCompare(b.at)).slice(-1000)};
+ return {version:1,samples:out.sort((a,b)=>Date.parse(a.at)-Date.parse(b.at)).slice(-1000)};
 }
 function appendHistory(raw,s){
- const h=history(raw||{version:1,samples:[]});h.samples=h.samples.filter(x=>x.at!==s.at||x.expiry!==s.expiry);h.samples.push(s);h.samples.sort((a,b)=>a.at.localeCompare(b.at));h.samples=h.samples.slice(-1000);return h;
+ const h=history(raw||{version:1,samples:[]});h.samples=h.samples.filter(x=>x.expiry!==s.expiry||Date.parse(x.at)!==Date.parse(s.at));h.samples.push(s);h.samples.sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));h.samples=h.samples.slice(-1000);return history(h);
 }
 function ivPercentile(raw,expiry,min=20){
  const s=history(raw).samples.filter(x=>x.expiry===expiry&&finite(x.iv)),byDay=new Map();
@@ -163,15 +165,15 @@ function ivPercentile(raw,expiry,min=20){
  const below=values.filter(v=>v<latest).length,equal=values.filter(v=>v===latest).length;
  return {value:100*(below+0.5*equal)/values.length,count:values.length,required:min,latest,method:'Percentage of saved sessions with lower ATM IV (half credit for ties). Snapshot history only; not exchange historical IV.'};
 }
-function pop(legs,spot,iv,rate=6,dividend=0,now=Date.now()){
- const risk=riskSummary(legs,spot,0,now);check(risk.exact,'Shared non-expired expiry required for theoretical probability.');
+function pop(legs,spot,iv,rate=6,dividend=0,now=Date.now(),fees=0){
+ const risk=riskSummary(legs,spot,fees,now);check(risk.exact,'Shared non-expired expiry required for theoretical probability.');
  const expiry=E.end(legs[0].expiry),T=(expiry-now)/YEAR,v=iv/100,r=rate/100,q=dividend/100;
  check(T>0&&finite(spot)&&spot>0&&finite(iv)&&iv>0&&iv<=500,'IV and time to expiry required for theoretical probability.');
- const br=risk.breakevens.slice().sort((a,b)=>a-b),cuts=[0,...br,Infinity],pnl=E.evaluate(legs,{now,mode:'expiry'}).price;
+ const br=risk.breakevens.slice().sort((a,b)=>a-b),cuts=[0,...br,Infinity],pnl=E.evaluate(legs,{now,mode:'expiry',fees}).price;
  function dist(s){if(s===Infinity)return 1;if(s<=0)return 0;const z=(Math.log(s/spot)-(r-q-v*v/2)*T)/(v*Math.sqrt(T));return N(z);}
  let probability=0;
  for(let i=0;i<cuts.length-1;i++){const a=cuts[i],b=cuts[i+1],mid=b===Infinity?Math.max(spot*3,a*2+spot):a+(b-a)/2;if(pnl(mid)>0)probability+=dist(b)-dist(a);}
- return {probability:Math.min(1,Math.max(0,probability)),model:'Risk-neutral lognormal estimate based on user-supplied IV, r, q; excludes fees and physical-settlement outcomes; not a real-world probability.'};
+ return {probability:Math.min(1,Math.max(0,probability)),model:'Risk-neutral lognormal estimate based on user-supplied IV, r, q; includes user-entered fees but excludes physical-settlement outcomes; not a real-world probability.'};
 }
 const api={CATALOG:catalog(),template,catalog,greeks,riskSummary,quoteSafety,snapshot,history,appendHistory,ivPercentile,pop};
 Object.assign(E,api);

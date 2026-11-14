@@ -1,4 +1,6 @@
-# HAL Desk 4.5.0
+# HAL Desk 4.5.1
+
+**Options Lab 4.5.1 audit fixes:** exact piecewise-linear payoff roots and signed best-case P&L; rejection of invalid PAPER exits; prior PAPER snapshot remains available after recovery; quote filters apply consistently; local OI distinguishes zero and unknown; stale option snapshots cannot be saved as fresh history; watchlists are expiry-scoped; original app identity and journal remain unchanged.
 
 **Extended Options Lab:** 38 strategy reference categories (31 auto-built under suitable verified chain conditions; futures/calendar require their matching quotes; ambiguous recipes remain manual), PAPER leg editing, theoretical Greeks, quote-spread checks, local PCR/OI/IV snapshot charts, same-expiry historical IV percentile only with at least 20 sessions, watchlist, HAL event review and notes. Uses original signed-app identity and keeps the real-book ledger untouched.
 

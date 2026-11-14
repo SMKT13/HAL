@@ -4,6 +4,7 @@
 const YEAR=365*24*3600*1000, okay=n=>typeof n==='number'&&Number.isFinite(n);
 function err(s){throw Error(s);}
 function isoDate(s){return typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&!Number.isNaN(Date.parse(s+'T00:00:00Z'))&&new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s;}
+// NSE stock-derivatives close: 15:40 IST before 2026-12-07; 15:45 from 2026-12-07 (NSE CAS 2.0).
 function end(s){if(!isoDate(s))err('Valid exact expiry required');return Date.parse(s+'T'+(s>='2026-12-07'?'15:45:00':'15:40:00')+'+05:30');}
 function num(v){return v==null||String(v).trim()===''?null:(Number.isFinite(Number(v))?Number(v):null);}
 function leg(x){
@@ -48,19 +49,29 @@ function evaluate(raw,params={}){
  }};
 }
 function summary(valuation,spot){
- const legs=valuation.legs,price=valuation.price,prices=[0,...legs.filter(l=>l.type!=='FUT').map(l=>l.strike)].sort((a,b)=>a-b),points=[...new Set(prices)],values=points.map(price),maxK=Math.max(1,...points),tail=Math.max(maxK*2,spot*2,100);
- const slopes=valuation.exact?((price(tail*2)-price(tail))/(tail)):null;
- const y0=price(0),ys=values,low=Math.min(...ys),high=Math.max(...ys);
- const breakEvens=[];
+ // Exact expiry P&L is piecewise linear. The terminal ray must be solved
+ // algebraically; sampling at 2x spot/strike misses distant breakevens.
+ const price=valuation.price,legs=valuation.legs,points=[...new Set([0,...legs.filter(l=>l.type!=='FUT').map(l=>l.strike)])].sort((a,b)=>a-b);
+ const ys=points.map(price),roots=[],flatBreakevenRanges=[],eps=1e-7;
  if(valuation.exact){
-  for(let i=0;i<points.length-1;i++){const a=points[i],b=points[i+1],ya=ys[i],yb=ys[i+1];if(Math.abs(ya)<1e-7)breakEvens.push(a);if(ya*yb<0)breakEvens.push(a+(b-a)*(-ya)/(yb-ya));}
-  if(Math.abs(ys[ys.length-1])<1e-7)breakEvens.push(points[points.length-1]);
-  const tailVal=price(tail);
-  if(ys[ys.length-1]*tailVal<0)breakEvens.push(points[points.length-1]+(tail-points[points.length-1])*(-ys[ys.length-1])/(tailVal-ys[ys.length-1]));
+  for(let i=0;i<points.length-1;i++){
+   const x0=points[i],x1=points[i+1],y0=ys[i],y1=ys[i+1];
+   if(Math.abs(y0)<=eps&&Math.abs(y1)<=eps)flatBreakevenRanges.push([x0,x1]);
+   if(Math.abs(y0)<=eps)roots.push(x0);
+   if(y0*y1<0)roots.push(x0+(x1-x0)*(-y0)/(y1-y0));
+  }
+  const last=points.length-1,x=points[last],y=ys[last];
+  if(Math.abs(y)<=eps)roots.push(x);
+  const slope=legs.reduce((sum,l)=>sum+((l.type==='FUT'||l.type==='CE')?sign(l)*unit(l):0),0);
+  if(Math.abs(slope)>1e-10&&Math.abs(y)>eps){
+   const crossing=x-y/slope;
+   if(crossing>x+eps&&Number.isFinite(crossing))roots.push(crossing);
+  }
+  // Ignore negative underlying prices: stock price domain is [0,+Infinity).
+  const result={atSpot:price(spot),estimatedCharges:valuation.fees,breakevens:[...new Set(roots.filter(x=>x>=0&&Number.isFinite(x)).map(x=>Math.round(x*100)/100))].sort((a,b)=>a-b),flatBreakevenRanges,maxProfit:slope>1e-9?Infinity:Math.max(...ys),maxLoss:slope< -1e-9?Infinity:Math.max(0,-Math.min(...ys)),payoffFloor:Math.min(...ys),tailSlope:slope};
+  return result;
  }
- const result={atSpot:price(spot),estimatedCharges:valuation.fees,breakevens:[...new Set(breakEvens.map(x=>Math.round(x*100)/100))],maxProfit:null,maxLoss:null};
- if(valuation.exact){result.maxProfit=slopes>1e-9?Infinity:Math.max(high,0);result.maxLoss=slopes< -1e-9?Infinity:Math.max(-low,0);result.payoffFloor=Math.min(low,0);result.tailSlope=slopes;}
- return result;
+ return {atSpot:price(spot),estimatedCharges:valuation.fees,breakevens:[],flatBreakevenRanges:[],maxProfit:null,maxLoss:null};
 }
 function plot(valuation,spot,steps=71){
  if(!okay(spot)||spot<=0)err('Enter a valid HAL reference price.');
@@ -105,17 +116,26 @@ function template(id,chain,spot){
  }
 }
 function analytics(chain,spot){
- const r=chain.rows,callOI=r.reduce((s,x)=>s+(info(x.call).oi||0),0),putOI=r.reduce((s,x)=>s+(info(x.put).oi||0),0);
- const ivs=r.map(x=>({strike:x.strike,call:info(x.call).iv,put:info(x.put).iv}));
- const atm=ivs.length?ivs.reduce((a,b)=>Math.abs(b.strike-spot)<Math.abs(a.strike-spot)?b:a,ivs[0]):null;
- const pain=r.length&&callOI+putOI>0?r.map(x=>({strike:x.strike,amount:r.reduce((a,z)=>a+(info(z.call).oi||0)*Math.max(0,x.strike-z.strike)+(info(z.put).oi||0)*Math.max(0,z.strike-x.strike),0)})).sort((a,b)=>a.amount-b.amount)[0].strike:null;
- const changeAvailable=r.some(x=>info(x.call).prevOi!==null||info(x.put).prevOi!==null);
- return {callOI:callOI||null,putOI:putOI||null,pcr:callOI>0?putOI/callOI:null,maxPain:pain,atmIv:atm?[atm.call,atm.put].filter(okay).length?([atm.call,atm.put].filter(okay).reduce((s,x)=>s+x,0)/[atm.call,atm.put].filter(okay).length):null:null,changeAvailable,rows:r.map(x=>({strike:x.strike,call:info(x.call),put:info(x.put)}))};
+ const r=chain.rows,quotes=r.map(x=>({strike:x.strike,call:info(x.call),put:info(x.put)}));
+ const completeCall=r.length>0&&quotes.every(x=>x.call.oi!==null&&x.call.oi>=0);
+ const completePut=r.length>0&&quotes.every(x=>x.put.oi!==null&&x.put.oi>=0);
+ const complete=completeCall&&completePut;
+ const callOI=quotes.reduce((s,x)=>s+(x.call.oi||0),0),putOI=quotes.reduce((s,x)=>s+(x.put.oi||0),0);
+ const atm=quotes.length&&Number.isFinite(spot)?quotes.reduce((a,b)=>Math.abs(b.strike-spot)<Math.abs(a.strike-spot)?b:a,quotes[0]):null;
+ // Max pain / PCR are not identifiable from a partial OI chain. Missing is not zero.
+ const pain=complete&&callOI+putOI>0?quotes.map(x=>({strike:x.strike,amount:quotes.reduce((a,z)=>a+z.call.oi*Math.max(0,x.strike-z.strike)+z.put.oi*Math.max(0,z.strike-x.strike),0)})).sort((a,b)=>a.amount-b.amount)[0].strike:null;
+ const iv=atm?[atm.call.iv,atm.put.iv].filter(okay):[];
+ const changeAvailable=quotes.some(x=>x.call.prevOi!==null||x.put.prevOi!==null);
+ return {callOI:completeCall?callOI:null,putOI:completePut?putOI:null,pcr:complete&&callOI>0?putOI/callOI:null,maxPain:pain,atmIv:iv.length?iv.reduce((sum,x)=>sum+x,0)/iv.length:null,changeAvailable,oiCoverage:{complete,callKnown:quotes.filter(x=>x.call.oi!==null).length,putKnown:quotes.filter(x=>x.put.oi!==null).length,total:quotes.length},rows:quotes};
 }
 function actualCopy(book){return (book?.legs||[]).filter(x=>['FUT','PE'].includes(x.type)).map(x=>leg({type:x.type,side:'LONG',expiry:x.expiry,strike:x.strike,lots:x.lots,lotSize:x.lotSize,entry:x.entry,instrumentKey:x.instrumentKey,origin:'actual-copy'}));}
 function paperDoc(raw){
  if(!raw||raw.version!==1||!Array.isArray(raw.drafts)||raw.drafts.length>100)err('Invalid PAPER draft backup.');
- const drafts=raw.drafts.map(d=>{const fees=num(d.fees??0);if(!okay(fees)||fees<0||fees>1e7||!Array.isArray(d.legs)||d.legs.length>30)err('Invalid PAPER draft fees or legs.');return {id:String(d.id||'').slice(0,80),name:String(d.name||'PAPER strategy').slice(0,100),status:['draft','open','closed'].includes(d.status)?d.status:'draft',legs:d.legs.map(leg),fees,createdAt:String(d.createdAt||'').slice(0,35),closedAt:String(d.closedAt||'').slice(0,35),exits:Array.isArray(d.exits)?d.exits.map(num):[],note:String(d.note||'').slice(0,500)};});if(new Set(drafts.map(d=>d.id)).size!==drafts.length)err('Duplicate PAPER draft IDs.');return {version:1,drafts};
+ const drafts=raw.drafts.map(d=>{const fees=num(d.fees??0);if(!okay(fees)||fees<0||fees>1e7||!Array.isArray(d.legs)||d.legs.length>30)err('Invalid PAPER draft fees or legs.');const legs=d.legs.map(leg),status=['draft','open','closed'].includes(d.status)?d.status:'draft';
+  const exits=Array.isArray(d.exits)?d.exits.map(num):[];
+  if(exits.length>legs.length||exits.some(x=>!okay(x)||x<0||x>1e7))err('Invalid PAPER exit prices; corrupted records are not assumed to be zero.');
+  if(status==='closed'&&(!legs.length||exits.length!==legs.length))err('Closed PAPER trade must record a valid exit for every leg.');
+  return {id:String(d.id||'').slice(0,80),name:String(d.name||'PAPER strategy').slice(0,100),status,legs,fees,createdAt:String(d.createdAt||'').slice(0,35),closedAt:String(d.closedAt||'').slice(0,35),exits,note:String(d.note||'').slice(0,500)};});if(new Set(drafts.map(d=>d.id)).size!==drafts.length)err('Duplicate PAPER draft IDs.');return {version:1,drafts};
 }
 const api={leg,num,unit,end,bs,evaluate,summary,plot,normalizeChain,info,chainLeg,analytics,TEMPLATES,template,actualCopy,paperDoc};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.HALOptionsLab=api;

@@ -30,4 +30,8 @@ npm test
 npm run test:ui
 ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease
 ```
-CI performs browser synthetic-data tests and native regression tests. Android package remains `in.smkt.haldesk`; build 4.5.0 uses versionCode 29. A signed **upgrade** must use the original signing certificate, which is not checked into the repository. Unsigned CI APKs are not installable upgrades.
+CI performs browser synthetic-data tests and native regression tests. Android package remains `in.smkt.haldesk`; build 4.5.1 uses versionCode 30. A signed **upgrade** must use the original signing certificate, which is not checked into the repository. Unsigned CI APKs are not installable upgrades.
+
+
+## 4.5.1 correctness audit
+Fixes checked against numerical regression tests: payoff crossing beyond chart range, guaranteed-loss strategies, zero-vs-missing OI, PAPER closed-exit integrity, expiry mismatch and snapshot recovery, stale option history, expiry-scoped watchlist. Historical captures now require a fresh HTTP observation (10 minutes), and the app retains the NSE's November 2026 15:40 / December 2026 15:45 stock F&O close-time transition.

@@ -5,22 +5,44 @@ root.createHalOptionsLab=function(api){
  const E=root.HALOptionsLab,esc=api.esc,money=api.money,num=api.num,card=api.card,btn=api.btn,row=api.row,empty=api.empty;
  const key='research:optionslab_paper',previous='research:optionslab_previous';
  const state={view:'chain',legs:[],editing:null,editIndex:null,mode:'expiry',fees:0,spot:null,horizon:'',iv:30,rate:6,dividend:0,basis:0,template:'long-call',overlay1:'',overlay2:'',closeId:null,chainSearch:'',minOI:0,maxSpread:100,onlyQuoted:false,source:'No verified option chain loaded',error:''};
- let paper={version:1,drafts:[]},loaded=false;
- function save(){
+ let paper={version:1,drafts:[]},loaded=false,committedPaper={version:1,drafts:[]};
+ const copy=x=>JSON.parse(JSON.stringify(x));
+ function save(skipPrevious=false){
   const data=E.paperDoc(paper),serialized=JSON.stringify(data),native=root.HALNative;
-  if(native?.cachePut){
-   if(loaded){const old=JSON.parse(native.cacheGet(key));if(old.ok&&old.data){const previousSave=JSON.parse(native.cachePut(previous,JSON.stringify(old.data)));if(!previousSave.ok)throw Error('Could not preserve previous paper snapshot.');}}
-   const r=JSON.parse(native.cachePut(key,serialized));if(!r.ok)throw Error('PAPER save failed; no actual positions were changed.');
-  }else{localStorage.setItem('hal_paper_previous_v1',localStorage.getItem('hal_paper_v1')||'{"version":1,"drafts":[]}');localStorage.setItem('hal_paper_v1',serialized);}
-  paper=data;
+  let persisted=null;
+  try{
+   if(native?.cachePut){
+    const previousResult=JSON.parse(native.cacheGet(key));
+    if(!previousResult.ok)throw Error('Cannot verify current PAPER data; changes withheld.');
+    persisted=previousResult.data;
+    if(!skipPrevious&&persisted){const backup=JSON.parse(native.cachePut(previous,JSON.stringify(E.paperDoc(persisted))));if(!backup.ok)throw Error('Previous PAPER snapshot could not be preserved.');}
+    const result=JSON.parse(native.cachePut(key,serialized));
+    if(!result.ok)throw Error('PAPER write failed; no actual positions were changed.');
+   }else{
+    persisted=JSON.parse(localStorage.getItem('hal_paper_v1')||'null');
+    if(!skipPrevious&&persisted)localStorage.setItem('hal_paper_previous_v1',JSON.stringify(E.paperDoc(persisted)));
+    localStorage.setItem('hal_paper_v1',serialized);
+   }
+   paper=data;committedPaper=copy(data);
+  }catch(e){
+   // Revert to the last verified successful write, even if the latest cache read failed.
+   paper=copy(committedPaper);
+   throw e;
+  }
  }
  function load(){
   if(loaded)return;loaded=true;
-  try{const native=root.HALNative,reply=native?.cacheGet?JSON.parse(native.cacheGet(key)):null,raw=reply?(reply.ok?reply.data:null):JSON.parse(localStorage.getItem('hal_paper_v1')||'null');paper=raw?E.paperDoc(raw):{version:1,drafts:[]};}
+  try{const native=root.HALNative,reply=native?.cacheGet?JSON.parse(native.cacheGet(key)):null,raw=reply?(reply.ok?reply.data:null):JSON.parse(localStorage.getItem('hal_paper_v1')||'null');paper=raw?E.paperDoc(raw):{version:1,drafts:[]};committedPaper=copy(paper);}
   catch(e){paper={version:1,drafts:[]};state.error='Paper drafts unavailable: '+e.message+'. Existing actual holdings are unaffected.';}
  }
  const get=()=>api.labContext();
- function context(){const x=get(),base=x.chain?.option_rows?.length?x.chain:x.snapshot?.option_rows?.length&&x.snapshot?.option_expiry===x.expiry?x.snapshot:x.chain||{};return {...x,chain:E.normalizeChain({...base,option_expiry:x.expiry||base.option_expiry})};}
+ function context(){
+  const x=get(),raw=x.chain?.option_rows?.length?x.chain:x.snapshot?.option_rows?.length&&x.snapshot?.option_expiry===x.expiry?x.snapshot:x.chain||{};
+  // A different expiry's cached strikes must never be relabelled as the selected expiry.
+  const mismatch=!!(x.expiry&&raw.option_expiry&&raw.option_expiry!==x.expiry);
+  const base=mismatch?{}:raw;
+  return {...x,chain:E.normalizeChain({...base,option_expiry:x.expiry||base.option_expiry,chain_error:mismatch?'expiry_snapshot_mismatch':base.chain_error})};
+ }
  function fmt(x,d=2){return typeof x==='number'&&Number.isFinite(x)?x.toLocaleString('en-IN',{maximumFractionDigits:d}):'—';}
  function tools(){return '<div class="lab-tabs">'+[['chain','Chain'],['builder','Strategy'],['payoff','Payoff'],['oi','OI / IV'],['paper','Paper trades']].map(x=>btn('lab-tab',x[1],'data-id="'+x[0]+'" '+(state.view===x[0]?'class="primary"':''))).join('')+'</div>';}
  function shown(o){const q=E.info(o);return [q.price,q.bid,q.ask,q.volume,q.oi,q.iv,q.delta].map(x=>fmt(x,3));}
@@ -33,7 +55,7 @@ root.createHalOptionsLab=function(api){
   };
   const rows=c.rows.filter(r=>{
    const ce=E.info(r.call),pe=E.info(r.put);
-   return (!search||String(r.strike).includes(search))&&Math.max(ce.oi||0,pe.oi||0)>=minimumOI&&(!state.onlyQuoted||filter(ce)||filter(pe));
+   return (!search||String(r.strike).includes(search))&&Math.max(ce.oi||0,pe.oi||0)>=minimumOI&&(!(state.onlyQuoted||Number.isFinite(maxSpread)&&maxSpread<100)||filter(ce)||filter(pe));
   });
   const expiries=(ctx.snapshot?.available_expiries||[]).filter(x=>typeof x==='string');
   const expiry='<label>Expiry<select id="lab-expiry">'+expiries.map(d=>'<option value="'+esc(d)+'" '+(d===ctx.expiry?'selected':'')+'>'+esc(d)+'</option>').join('')+'</select></label>';
@@ -73,7 +95,7 @@ root.createHalOptionsLab=function(api){
   try{
    const v=E.evaluate(state.legs,opts),summary=E.summary(v,spot),lines=[{name:'Current paper strategy',data:E.plot(v,spot)}],issues=[];
    for(const id of [state.overlay1,state.overlay2])if(id){const draft=paper.drafts.find(d=>d.id===id);if(draft)try{lines.push({name:draft.name,data:E.plot(E.evaluate(draft.legs,{...opts,fees:draft.fees}),spot)});}catch(e){issues.push(draft.name+': '+e.message);}}
-   const metric='<div class="metrics">'+[['At scenario spot',money(summary.atSpot)],['Maximum potential profit',v.exact?(summary.maxProfit===Infinity?'Unbounded':money(summary.maxProfit)):'Not established'],['Maximum potential loss',v.exact?(summary.maxLoss===Infinity?'Unbounded':money(summary.maxLoss)):'Not established'],['Exact breakevens',v.exact?(summary.breakevens.map(x=>'₹'+fmt(x)).join(', ')||'None identified'):'Model-only']].map(x=>'<div class="metric"><small>'+esc(x[0])+'</small><strong>'+esc(x[1])+'</strong></div>').join('')+'</div>';
+   const metric='<div class="metrics">'+[['At scenario spot',money(summary.atSpot)],['Best achievable P&L',v.exact?(summary.maxProfit===Infinity?'Unbounded':money(summary.maxProfit)):'Not established'],['Maximum potential loss',v.exact?(summary.maxLoss===Infinity?'Unbounded':money(summary.maxLoss)):'Not established'],['Exact breakevens',v.exact?(summary.breakevens.map(x=>'₹'+fmt(x)).join(', ')||'None identified'):'Model-only']].map(x=>'<div class="metric"><small>'+esc(x[0])+'</small><strong>'+esc(x[1])+'</strong></div>').join('')+'</div>';
    output=metric+graph(lines)+(issues.length?'<p class="warning">'+esc(issues.join('; '))+'</p>':'')+'<p class="fine">'+(v.exact?'Exact intrinsic-value payoff at common expiry. Prices assumed nonnegative.':'Black–Scholes theoretical options at target date with user-assumed IV; future mark = HAL scenario spot + user-assumed basis.')+' P&L is relative to hypothetical entry prices, includes entered charges once, and does not include margin funding, physical delivery or market execution.</p>';
   }catch(e){output=empty('Payoff unavailable',e.message);}
   return card('Interactive PAPER payoff',control+overlays+btn('lab-recalc','Recalculate','class="primary"')+output);
@@ -86,7 +108,7 @@ root.createHalOptionsLab=function(api){
  }
  function paperView(){
   const drafts=paper.drafts.slice().reverse().map(d=>'<div class="lab-leg"><div><strong>'+esc(d.name)+'</strong><small>PAPER · '+esc(d.status.toUpperCase())+' · '+d.legs.length+' legs · created '+esc(d.createdAt||'unknown')+'</small>'+(d.status==='closed'&&d.exits.length===d.legs.length?'<small>Recorded hypothetical P&L '+money(d.legs.reduce((sum,l,i)=>sum+(d.exits[i]-l.entry)*E.unit(l)*(l.side==='LONG'?1:-1),-d.fees))+'</small>':'')+'</div><div class="toolbar">'+btn('lab-load','Open','data-id="'+esc(d.id)+'"')+(d.status==='draft'?btn('lab-open','Mark paper open','data-id="'+esc(d.id)+'"'):'')+(d.status==='open'?btn('lab-close-start','Paper exit','data-id="'+esc(d.id)+'"'):'')+btn('lab-paper-rename','Name / notes','data-id="'+esc(d.id)+'"')+btn('lab-paper-clone','Clone','data-id="'+esc(d.id)+'"')+btn('lab-delete','Delete','data-id="'+esc(d.id)+'"')+'</div></div>').join('')||empty('No paper strategies','Save a draft from the Strategy tab.');
-  const closing=paper.drafts.find(d=>d.id===state.closeId),exit=closing?'<div class="card"><h3>Record hypothetical closing prices · '+esc(closing.name)+'</h3><div class="form-grid">'+closing.legs.map((l,i)=>'<label>'+esc(l.side+' '+l.type+' '+(l.strike||''))+' exit price (₹)<input type="number" id="lab-exit-'+i+'" min="0" step="any"></label>').join('')+'<label>Closing fees (₹)<input type="number" id="lab-exit-fees" value="'+closing.fees+'" min="0" step="any"></label></div>'+btn('lab-close-confirm','Record PAPER exit','class="primary"')+'</div>':'';
+  const closing=paper.drafts.find(d=>d.id===state.closeId),exit=closing?'<div class="card"><h3>Record hypothetical closing prices · '+esc(closing.name)+'</h3><div class="form-grid">'+closing.legs.map((l,i)=>'<label>'+esc(l.side+' '+l.type+' '+(l.strike||''))+' exit price (₹)<input type="number" id="lab-exit-'+i+'" min="0" step="any"></label>').join('')+'<label>Total PAPER trade fees (opening + closing, ₹)<input type="number" id="lab-exit-fees" value="'+closing.fees+'" min="0" step="any"></label></div>'+btn('lab-close-confirm','Record PAPER exit','class="primary"')+'</div>':'';
   return card('Virtual paper trading','<p class="fine">PAPER — NO BROKER ORDERS. Hypothetical prices and exit outcomes are user-entered. This ledger never merges into actual Position or History.</p>'+drafts+exit+'<div class="toolbar">'+btn('lab-paper-save','Save current draft','class="primary"')+btn('lab-export','Export PAPER JSON')+btn('lab-recover','Restore previous PAPER snapshot')+'</div><details><summary>Import separate PAPER JSON (replace drafts)</summary><textarea id="lab-import-json" rows="5" placeholder="Paste exported PAPER JSON"></textarea><label><input id="lab-import-confirm" type="checkbox">Replace my paper drafts only</label>'+btn('lab-import','Import PAPER data')+'</details>');
  }
  function view(){load();const c=context();if(state.spot===null)state.spot=c.market?.spot?.price||c.snapshot?.spot?.last_price||null;
@@ -142,7 +164,7 @@ root.createHalOptionsLab=function(api){
    }
    else if(name==='lab-delete'){paper.drafts=paper.drafts.filter(x=>x.id!==id);save();if(state.editing===id)state.editing=null;}
    else if(name==='lab-export'){api.native('exportBackup',JSON.stringify({tag:'HAL_PAPER_ONLY',...E.paperDoc(paper)},null,2));}
-   else if(name==='lab-recover'){const native=root.HALNative,resp=native?.cacheGet?JSON.parse(native.cacheGet(previous)):null,raw=resp?(resp.ok?resp.data:null):JSON.parse(localStorage.getItem('hal_paper_previous_v1')||'null');if(!raw)throw Error('No previous paper snapshot available.');paper=E.paperDoc(raw);save();}
+   else if(name==='lab-recover'){const native=root.HALNative,resp=native?.cacheGet?JSON.parse(native.cacheGet(previous)):null,raw=resp?(resp.ok?resp.data:null):JSON.parse(localStorage.getItem('hal_paper_previous_v1')||'null');if(!raw)throw Error('No previous paper snapshot available.');paper=E.paperDoc(raw);save(true);}
    else if(name==='lab-import'){
     if(!document.getElementById('lab-import-confirm')?.checked)throw Error('Confirm replacement of paper drafts.');
     const raw=JSON.parse(document.getElementById('lab-import-json')?.value||'');if(raw.tag!=='HAL_PAPER_ONLY')throw Error('Only HAL PAPER exports can be imported here.');

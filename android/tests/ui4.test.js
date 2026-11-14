@@ -51,6 +51,25 @@ await check('Options Lab advanced library, local OI history, Greeks, watchlist a
  A.equal(await p.evaluate(()=>saved?.legs?.length||0),0);
  A.deepEqual(x.errors,[]);
 });
+await check('failed Options Lab cache writes cannot silently replace PAPER records or watchlists',async()=>{
+ await nav(p,'technicals','lab');
+ await p.locator('[data-action="lab6-page"][data-id="journal"]').click();
+ const beforeResearch=await p.evaluate(()=>JSON.stringify(reviewCache['research:optionslab_workspace']));
+ await p.evaluate(()=>window.forceCacheFailure=true);
+ await p.locator('[data-action="lab6-watch"]').first().click();
+ A.equal(await p.evaluate(()=>JSON.stringify(reviewCache['research:optionslab_workspace'])),beforeResearch);
+ A.match(await p.locator('main').innerText(),/Native storage rejected changes/);
+ await p.evaluate(()=>window.forceCacheFailure=false);
+ await p.locator('[data-action="lab6-page"][data-id="core"]').click();
+ await p.locator('[data-action="lab-tab"][data-id="paper"]').click();
+ const beforePaper=await p.evaluate(()=>JSON.stringify(reviewCache['research:optionslab_paper']));
+ await p.evaluate(()=>window.forceCacheFailure=true);
+ await p.locator('[data-action="lab-delete"]').first().click();
+ A.equal(await p.evaluate(()=>JSON.stringify(reviewCache['research:optionslab_paper'])),beforePaper);
+ A.match(await p.locator('main').innerText(),/PAPER snapshot|PAPER write|Previous PAPER/);
+ await p.evaluate(()=>window.forceCacheFailure=false);
+ A.deepEqual(x.errors,[]);
+});
 await check('official NSE lens is independent, cacheable, escaped and never a derivatives mark',async()=>{
  await nav(p,'technicals','markets');
  await p.locator('#nse-insights').waitFor();
