@@ -71,3 +71,8 @@ test('theoretical profit probability applies charges once and goes to zero when 
  const ls=[leg('CE','SHORT',100,5)];const raw=E.pop(ls,100,25,6,0,NOW,0),net=E.pop(ls,100,25,6,0,NOW,1000);
  A.ok(raw.probability>0);A.equal(net.probability,0);
 });
+
+test('partial OI data never creates fictitious PCR or max pain',()=>{
+ const c=chain();delete c.rows[0].put.quote.open_interest;
+ const a=E.analytics(c,100);A.equal(a.pcr,null);A.equal(a.maxPain,null);A.equal(a.putOI,null);A.equal(a.callOI,0);A.equal(a.oiCoverage.complete,false);
+});
