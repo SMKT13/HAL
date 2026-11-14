@@ -137,7 +137,7 @@ function snapshot(chain,spot,now=Date.now()){
  const c=chain&&Array.isArray(chain.rows)?chain:E.normalizeChain(chain),a=E.analytics(c,spot),at=Date.parse(c.fetchedAt);
  check(Number.isFinite(at)&&at<=now+60000&&at>=now-600000,'Recent provider HTTP retrieval time (within 10 minutes) required to save history; refresh chain first.');
  check(c.rows.length>0&&finite(spot)&&spot>0,'Valid HAL price and chain required.');
- check(/^\d{4}-\d{2}-\\d{2}$/.test(c.expiry)&&Number.isFinite(E.end(c.expiry))&&E.end(c.expiry)>=at,'Cannot capture an expired or unidentified option chain.');
+ check(/^\d{4}-\d{2}-\d{2}$/.test(c.expiry)&&Number.isFinite(E.end(c.expiry))&&E.end(c.expiry)>=at,'Cannot capture an expired or unidentified option chain.');
  const atm=c.rows.reduce((p,q)=>Math.abs(p.strike-spot)<Math.abs(q.strike-spot)?p:q,c.rows[0]),call=E.info(atm.call),put=E.info(atm.put);
  return {at:c.fetchedAt,day:new Date(at+IST).toISOString().slice(0,10),expiry:c.expiry,spot,pcr:a.pcr,maxPain:a.maxPain,callOI:a.callOI,putOI:a.putOI,iv:a.atmIv,atmStrike:atm.strike,rollingStraddle:finite(call.price)&&finite(put.price)?call.price+put.price:null,source:c.source,notes:'Market observation only, not an executable price.'};
 }
