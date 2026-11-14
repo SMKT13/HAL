@@ -121,7 +121,8 @@ function analytics(chain,spot){
  const atm=ivs.length?ivs.reduce((a,b)=>Math.abs(b.strike-spot)<Math.abs(a.strike-spot)?b:a,ivs[0]):null;
  const pain=r.length&&callOI+putOI>0?r.map(x=>({strike:x.strike,amount:r.reduce((a,z)=>a+(info(z.call).oi||0)*Math.max(0,x.strike-z.strike)+(info(z.put).oi||0)*Math.max(0,z.strike-x.strike),0)})).sort((a,b)=>a.amount-b.amount)[0].strike:null;
  const changeAvailable=r.some(x=>info(x.call).prevOi!==null||info(x.put).prevOi!==null);
- return {callOI:callOI||null,putOI:putOI||null,pcr:callOI>0?putOI/callOI:null,maxPain:pain,atmIv:atm?[atm.call,atm.put].filter(okay).length?([atm.call,atm.put].filter(okay).reduce((s,x)=>s+x,0)/[atm.call,atm.put].filter(okay).length):null:null,changeAvailable,rows:r.map(x=>({strike:x.strike,call:info(x.call),put:info(x.put)}))};
+ const callKnown=r.some(x=>info(x.call).oi!==null),putKnown=r.some(x=>info(x.put).oi!==null);
+  return {callOI:callKnown?callOI:null,putOI:putKnown?putOI:null,pcr:callOI>0&&putKnown?putOI/callOI:null,maxPain:pain,atmIv:atm?[atm.call,atm.put].filter(okay).length?([atm.call,atm.put].filter(okay).reduce((s,x)=>s+x,0)/[atm.call,atm.put].filter(okay).length):null:null,changeAvailable,rows:r.map(x=>({strike:x.strike,call:info(x.call),put:info(x.put)}))};
 }
 function actualCopy(book){return (book?.legs||[]).filter(x=>['FUT','PE'].includes(x.type)).map(x=>leg({type:x.type,side:'LONG',expiry:x.expiry,strike:x.strike,lots:x.lots,lotSize:x.lotSize,entry:x.entry,instrumentKey:x.instrumentKey,origin:'actual-copy'}));}
 function paperDoc(raw){
