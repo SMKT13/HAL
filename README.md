@@ -6,8 +6,8 @@ Personal research, derivatives risk and portfolio accounting for **Hindustan Aer
 
 | Application | Source | Version | Storage |
 | --- | --- | --- | --- |
-| Android HAL Desk | \`android/\` | **4.6.0**, versionCode **31** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
-| Desktop/web HAL viewer | \`src/\`, \`backend/\`, \`server.ts\`, \`server.py\` | Separate web product | Browser-origin-local portfolio, optional local Python market feed |
+| Android HAL Desk | `android/` | **4.6.0**, versionCode **31** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
+| Desktop/web HAL viewer | `src/`, `backend/`, `server.ts`, `server.py` | Separate web product | Browser-origin-local portfolio, optional local Python market feed |
 
 **The two apps do not automatically share positions, history, model outputs or subscriptions.** Export/import only through documented, validated formats. The web viewer is not the canonical Android portfolio.
 
@@ -27,22 +27,22 @@ Data quality is explicit: retrieval time is not a trade time; incomplete chains 
 
 Requires **JDK 17**, Android **SDK 35** and Build Tools **35.0.0**, Gradle wrapper **8.10.2**, Node **22** and pinned npm packages.
 
-\`\`\`sh
+```sh
 cd android
 npm ci
 npm test
 npx playwright install chromium
 npm run test:ui
 HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash build.sh
-\`\`\`
+```
 
-**4.6 change:** \`app/src/main/assets/desk4.js\` and \`web-assets-sha256.json\` are generated artifacts, **not committed files**. The pinned build script \`scripts/build-assets.js\` regenerates them for browser tests, and Gradle automatically regenerates and verifies them before Android packaging. No hand-edited or stale WebView bundle is used as source of truth.
+**4.6 change:** `app/src/main/assets/desk4.js` and `web-assets-sha256.json` are generated artifacts, **not committed files**. The pinned build script `scripts/build-assets.js` regenerates them for browser tests, and Gradle automatically regenerates and verifies them before Android packaging. No hand-edited or stale WebView bundle is used as source of truth.
 
-Android application ID stays \`in.smkt.haldesk\`. An upgrade requires the **original HAL signing certificate**, not a new keystore. Use [private local signing instructions](android/INSTALL.md); never commit, paste into issues, or upload the JKS/password to CI.
+Android application ID stays `in.smkt.haldesk`. An upgrade requires the **original HAL signing certificate**, not a new keystore. Use [private local signing instructions](android/INSTALL.md); never commit, paste into issues, or upload the JKS/password to CI.
 
 ### Desktop/web viewer
 
-\`\`\`sh
+```sh
 npm ci
 cp .env.example .env
 npm run lint
@@ -51,9 +51,9 @@ npm test
 npm run test:web-engine
 npm run build
 npm run dev
-\`\`\`
+```
 
-Set a **separate** \`HAL_VIEWER_KEY\` and any optional provider credentials in the local environment. Web API routes require viewer authentication. For production behind a reverse proxy, set \`HAL_PUBLIC_ORIGIN\` to the actual HTTPS origin; POST-origin checks include scheme and port. The optional standalone Python server also requires the viewer key for all \`/api/*\` endpoints.
+Set a **separate** `HAL_VIEWER_KEY` and any optional provider credentials in the local environment. Web API routes require viewer authentication. For production behind a reverse proxy, set `HAL_PUBLIC_ORIGIN` to the actual HTTPS origin; POST-origin checks include scheme and port. The optional standalone Python server also requires the viewer key for all `/api/*` endpoints.
 
 See [web viewer deployment](docs/WEB-VIEWER.md), [Android architecture](android/README.md) and [provider capabilities](android/docs/API-CAPABILITIES.md).
 
@@ -65,7 +65,7 @@ See [web viewer deployment](docs/WEB-VIEWER.md), [Android architecture](android/
 - **Regression gates:** Node finance tests, Android native/Robolectric tests, AI policy tests, lint, browser simulations, and reproducible unsigned release APK in GitHub Actions. These tests **do not** establish live Upstox access or a physical-device upgrade.
 - **Android release process:** build unsigned in CI; privately sign with the original certificate; verify fingerprint and v2/v3 signatures; back up saved data before upgrading in place.
 
-The repository's legacy \`verification/\` files and archived documents document **historical** builds; use current [GitHub Actions](../../actions) for the latest test status rather than treating old reports as proof of the latest release.
+The repository's legacy `verification/` files and archived documents document **historical** builds; use current [GitHub Actions](../../actions) for the latest test status rather than treating old reports as proof of the latest release.
 
 ## Scope of the 4.6 refactor
 
