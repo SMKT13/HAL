@@ -9,7 +9,7 @@ root.createHalOptionsLab=function(api){
  function save(){
   const data=E.paperDoc(paper),serialized=JSON.stringify(data),native=root.HALNative;
   if(native?.cachePut){
-   if(loaded)native.cachePut(previous,JSON.stringify({version:1,drafts:paper.drafts}));
+   if(loaded){const old=JSON.parse(native.cacheGet(key));if(old.ok&&old.data){const previousSave=JSON.parse(native.cachePut(previous,JSON.stringify(old.data)));if(!previousSave.ok)throw Error('Could not preserve previous paper snapshot.');}}
    const r=JSON.parse(native.cachePut(key,serialized));if(!r.ok)throw Error('PAPER save failed; no actual positions were changed.');
   }else{localStorage.setItem('hal_paper_previous_v1',localStorage.getItem('hal_paper_v1')||'{"version":1,"drafts":[]}');localStorage.setItem('hal_paper_v1',serialized);}
   paper=data;
