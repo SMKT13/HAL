@@ -1,4 +1,6 @@
-# HAL Desk 4.4.0
+# HAL Desk 4.5.0
+
+**Extended Options Lab:** 38 strategy reference categories (31 auto-built under suitable verified chain conditions; futures/calendar require their matching quotes; ambiguous recipes remain manual), PAPER leg editing, theoretical Greeks, quote-spread checks, local PCR/OI/IV snapshot charts, same-expiry historical IV percentile only with at least 20 sessions, watchlist, HAL event review and notes. Uses original signed-app identity and keeps the real-book ledger untouched.
 
 **New Options Lab (PAPER only):** Technicals → Options Lab includes independent HAL option-chain research, ten basic options templates, long/short hypothetical positions, same-expiry payoff and modelled target-date curves, OI/IV observations, strategy overlays and separate paper drafts/exits. Actual-book schema 4 and journal are unchanged. This is a source implementation; Android verification must be run before release.
 
