@@ -4,8 +4,8 @@ const E=require('../app/src/main/assets/optionslab5.js');
 require('../app/src/main/assets/optionslab-advanced6.js');
 const NOW=Date.parse('2026-11-14T05:00:00Z'),DATE='2026-12-29',near=(a,b,eps=1e-5)=>A.ok(Math.abs(a-b)<eps, a+' versus '+b);
 const chain=(date=DATE)=>E.normalizeChain({option_expiry:date,fetched_at_iso:'2026-11-14T05:00:00Z',source:'synthetic Upstox data',option_rows:[90,95,100,105,110,115].map(strike=>({
- strike,call:{instrument_key:'C'+date+strike,lot_size:150,quote:{last_price:6,bid:5,ask:7,open_interest:1000,previous_oi:850,volume:1200,quote_as_of:'2026-11-14T04:59:59Z',last_trade_at:'2026-11-14T04:59:59Z',retrieved_at:'2026-11-14T05:00:00Z'},iv:25},
- put:{instrument_key:'P'+date+strike,lot_size:150,quote:{last_price:8,bid:7,ask:9,open_interest:1500,previous_oi:1450,volume:1000,quote_as_of:'2026-11-14T04:59:59Z',last_trade_at:'2026-11-14T04:59:59Z',retrieved_at:'2026-11-14T05:00:00Z'},iv:31}
+ strike,call:{instrument_key:'C'+date+strike,lot_size:150,quote:{last_price:6,bid:5,ask:5.4,open_interest:1000,previous_oi:850,volume:1200,quote_as_of:'2026-11-14T04:59:59Z',last_trade_at:'2026-11-14T04:59:59Z',retrieved_at:'2026-11-14T05:00:00Z'},iv:25},
+ put:{instrument_key:'P'+date+strike,lot_size:150,quote:{last_price:8,bid:7,ask:7.5,open_interest:1500,previous_oi:1450,volume:1000,quote_as_of:'2026-11-14T04:59:59Z',last_trade_at:'2026-11-14T04:59:59Z',retrieved_at:'2026-11-14T05:00:00Z'},iv:31}
 }))});
 test('all 38 APK-named strategy categories are catalogued without proprietary assets',()=>{
  A.equal(E.CATALOG.length,38);A.equal(new Set(E.CATALOG.map(x=>x.id)).size,38);
@@ -53,7 +53,7 @@ test('quote safety flags wide spread and absent/stale clocks, not false freshnes
 });
 test('historical snapshot stores only HTTP-dated evidence and derived ATM straddle',()=>{
  const s=E.snapshot(chain(),100,NOW);A.equal(s.expiry,DATE);A.equal(s.rollingStraddle,14);A.equal(s.day,'2026-11-14');
- A.throws(()=>E.snapshot({...chain(),fetched_at_iso:null},100,NOW),/retrieval/);
+ A.throws(()=>E.snapshot({...chain(),fetchedAt:null},100,NOW),/retrieval/);
 });
 test('OI/IV history is date and expiry scoped, stable sorted and deduplicated',()=>{
  const sample=E.snapshot(chain(),100,NOW),other={...sample,at:'2026-11-15T05:00:00Z',day:'2026-11-15'};
