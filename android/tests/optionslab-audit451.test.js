@@ -47,3 +47,22 @@ test('NSE November and December close-time boundary is preserved',()=>{
 test('snapshot refuses expired contract',()=>{
  const c=chain();c.expiry='2026-10-27';A.throws(()=>E.snapshot(c,100,NOW),/expired/);
 });
+
+
+test('balanced large short/long call legs retain finite payoff limits',()=>{
+ const long=leg('CE','LONG',100,1,10000),short=leg('CE','SHORT',200,2,10000);
+ const sum=E.summary(val([long,short]),120);
+ A.equal(sum.maxProfit,150000000);A.equal(sum.maxLoss,150000000);
+ A.equal(sum.tailSlope,0);
+});
+test('OI/IV samples are ordered by real time across mixed ISO offsets',()=>{
+ const h={version:1,samples:[
+  {at:'2026-11-13T21:30:00Z',day:'2026-11-14',expiry,iv:31},
+  {at:'2026-11-14T00:30:00+05:30',day:'2026-11-14',expiry,iv:30}
+ ]};
+ const sorted=E.history(h);
+ A.equal(sorted.samples[0].iv,30);A.equal(sorted.samples[1].iv,31);
+ const duplicate={at:'2026-11-14T03:00:00+05:30',day:'2026-11-14',expiry,iv:32};
+ const dedup=E.appendHistory(sorted,duplicate);
+ A.equal(dedup.samples.length,2);A.equal(dedup.samples[1].iv,32);
+});
