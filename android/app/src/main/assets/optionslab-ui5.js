@@ -4,7 +4,7 @@
 root.createHalOptionsLab=function(api){
  const E=root.HALOptionsLab,esc=api.esc,money=api.money,num=api.num,card=api.card,btn=api.btn,row=api.row,empty=api.empty;
  const key='research:optionslab_paper',previous='research:optionslab_previous';
- const state={view:'chain',legs:[],editing:null,editIndex:null,mode:'expiry',fees:0,spot:null,horizon:'',iv:30,rate:6,dividend:0,basis:0,template:'long-call',overlay1:'',overlay2:'',closeId:null,source:'No verified option chain loaded',error:''};
+ const state={view:'chain',legs:[],editing:null,editIndex:null,mode:'expiry',fees:0,spot:null,horizon:'',iv:30,rate:6,dividend:0,basis:0,template:'long-call',overlay1:'',overlay2:'',closeId:null,chainSearch:'',minOI:0,maxSpread:100,onlyQuoted:false,source:'No verified option chain loaded',error:''};
  let paper={version:1,drafts:[]},loaded=false;
  function save(){
   const data=E.paperDoc(paper),serialized=JSON.stringify(data),native=root.HALNative;
@@ -25,15 +25,28 @@ root.createHalOptionsLab=function(api){
  function tools(){return '<div class="lab-tabs">'+[['chain','Chain'],['builder','Strategy'],['payoff','Payoff'],['oi','OI / IV'],['paper','Paper trades']].map(x=>btn('lab-tab',x[1],'data-id="'+x[0]+'" '+(state.view===x[0]?'class="primary"':''))).join('')+'</div>';}
  function shown(o){const q=E.info(o);return [q.price,q.bid,q.ask,q.volume,q.oi,q.iv,q.delta].map(x=>fmt(x,3));}
  function chain(ctx){
-  const c=ctx.chain,a=E.analytics(c,ctx.market?.spot?.price||ctx.snapshot?.spot?.last_price||0),rows=c.rows;
+  const c=ctx.chain,spot=ctx.market?.spot?.price||ctx.snapshot?.spot?.last_price||0,a=E.analytics(c,spot);
+  const search=String(state.chainSearch||''),minimumOI=Number(state.minOI)||0,maxSpread=Number(state.maxSpread);
+  const filter=q=>{
+   const spread=Number.isFinite(q.ask)&&q.ask>0&&Number.isFinite(q.bid)&&q.bid>0?(q.ask-q.bid)/q.ask*100:null;
+   return !!q.instrumentKey&&Number.isFinite(q.lotSize)&&Number.isFinite(spread)&&spread>=0&&(!Number.isFinite(maxSpread)||spread<=maxSpread);
+  };
+  const rows=c.rows.filter(r=>{
+   const ce=E.info(r.call),pe=E.info(r.put);
+   return (!search||String(r.strike).includes(search))&&Math.max(ce.oi||0,pe.oi||0)>=minimumOI&&(!state.onlyQuoted||filter(ce)||filter(pe));
+  });
   const expiries=(ctx.snapshot?.available_expiries||[]).filter(x=>typeof x==='string');
-  const expire='<label>HAL expiry<select id="lab-expiry">'+expiries.map(d=>'<option value="'+esc(d)+'" '+(d===ctx.expiry?'selected':'')+'>'+esc(d)+'</option>').join('')+'</select></label>';
-  const table='<div class="table-wrap lab-chain"><table><thead><tr><th>CE add</th><th>CE bid / ask</th><th>CE OI</th><th>Strike</th><th>PE OI</th><th>PE bid / ask</th><th>PE add</th></tr></thead><tbody>'+
-   rows.slice(0,180).map(r=>{const call=E.info(r.call),put=E.info(r.put),atm=ctx.market?.spot?.price||ctx.snapshot?.spot?.last_price,highlight=Number.isFinite(atm)&&Math.abs(r.strike-atm)<=Math.max(1,atm*.005);
-   const add=(type,side,quote)=>quote.instrumentKey&&Number.isFinite(quote.lotSize)&&Number.isFinite(side==='LONG'?quote.ask:quote.bid)?btn('lab-add',side==='LONG'?'Buy':'Sell','data-strike="'+r.strike+'" data-type="'+type+'" data-side="'+side+'"'):'' ;
-   return '<tr'+(highlight?' class="lab-atm"':'')+'><td>'+add('CE','LONG',call)+' '+add('CE','SHORT',call)+'</td><td>'+fmt(call.bid)+' / '+fmt(call.ask)+'</td><td>'+fmt(call.oi,0)+'</td><th>'+fmt(r.strike,0)+'</th><td>'+fmt(put.oi,0)+'</td><td>'+fmt(put.bid)+' / '+fmt(put.ask)+'</td><td>'+add('PE','LONG',put)+' '+add('PE','SHORT',put)+'</td></tr>';}).join('')+'</tbody></table></div>';
+  const expiry='<label>Expiry<select id="lab-expiry">'+expiries.map(d=>'<option value="'+esc(d)+'" '+(d===ctx.expiry?'selected':'')+'>'+esc(d)+'</option>').join('')+'</select></label>';
+  const filters='<div class="form-grid"><label>Search strike<input id="lab-chain-search" type="search" placeholder="e.g. 4500" value="'+esc(state.chainSearch)+'"></label><label>Min OI<input id="lab-chain-minOI" type="number" min="0" value="'+esc(state.minOI)+'"></label><label>Max bid/ask spread (%)<input id="lab-chain-maxSpread" type="number" min="0" max="100" value="'+esc(state.maxSpread)+'"></label><label><input type="checkbox" id="lab-chain-onlyQuoted" '+(state.onlyQuoted?'checked':'')+'>Only quoted contracts with verified lot size</label></div>';
+  const headers=['CE Add','CE Bid / Ask','CE OI','CE IV','CE Delta','CE Vol','Strike','PE Vol','PE Delta','PE IV','PE OI','PE Bid / Ask','PE Add'];
+  const table='<div class="table-wrap lab-chain"><table><thead><tr>'+headers.map(x=>'<th>'+esc(x)+'</th>').join('')+'</tr></thead><tbody>'+rows.slice(0,180).map(r=>{
+   const call=E.info(r.call),put=E.info(r.put),highlight=Number.isFinite(spot)&&Math.abs(r.strike-spot)<=Math.max(1,spot*.005);
+   const add=(type,side,q)=>q.instrumentKey&&Number.isFinite(q.lotSize)&&Number.isFinite(side==='LONG'?q.ask:q.bid)?btn('lab-add',side==='LONG'?'Buy':'Sell','data-strike="'+r.strike+'" data-type="'+type+'" data-side="'+side+'"'):'';
+   const values=[add('CE','LONG',call)+' '+add('CE','SHORT',call),fmt(call.bid)+' / '+fmt(call.ask),fmt(call.oi,0),fmt(call.iv,2),fmt(call.delta,3),fmt(call.volume,0),fmt(r.strike,0),fmt(put.volume,0),fmt(put.delta,3),fmt(put.iv,2),fmt(put.oi,0),fmt(put.bid)+' / '+fmt(put.ask),add('PE','LONG',put)+' '+add('PE','SHORT',put)];
+   return '<tr'+(highlight?' class="lab-atm"':'')+'>'+values.map((v,i)=>(i===6?'<th>':'<td>')+v+(i===6?'</th>':'</td>')).join('')+'</tr>';
+  }).join('')+'</tbody></table></div>';
   const metrics='<div class="metrics">'+[['Put/call OI ratio',a.pcr],['Derived max pain',a.maxPain],['Call OI',a.callOI],['Put OI',a.putOI]].map(x=>'<div class="metric"><small>'+esc(x[0])+'</small><strong>'+fmt(x[1],2)+'</strong></div>').join('')+'</div>';
-  return card('HAL · Options chain',expire+'<div class="toolbar">'+btn('lab-refresh','Refresh selected chain','class="primary"')+btn('lab-tab','Open strategy builder','data-id="builder"')+'</div><p class="fine">Upstox REST chain · HTTP retrieved '+esc(c.fetchedAt||ctx.snapshot?.fetched_at_iso||'unknown')+' · selected expiry '+esc(ctx.expiry||'not selected')+'. Bid/ask and OI are indicative; empty fields are unavailable, not zero. '+esc(c.error||'')+'</p>'+metrics+(rows.length?table:empty('No listed chain data','Connect Upstox or refresh the chosen HAL expiry.'))+'<p class="fine">Max pain is derived from the visible OI distribution; it is not a forecast. PAPER selections never place trades.</p>');
+  return card('HAL · Options chain',expiry+filters+'<div class="toolbar">'+btn('lab-refresh','Refresh selected chain','class="primary"')+btn('lab-tab','Build hypothetical strategy','data-id="builder"')+'</div><p class="fine">Upstox chain · HTTP retrieval '+esc(c.fetchedAt||ctx.snapshot?.fetched_at_iso||'unknown')+' · expiry '+esc(ctx.expiry||'not selected')+'. Displayed quotes are indicative; filtering never changes the underlying portfolio.</p>'+metrics+'<p class="fine">Showing '+rows.length+' of '+c.rows.length+' strikes; full-chain statistics are unaffected by filters.</p>'+(rows.length?table:empty('No matching listed contracts','Refresh, change expiry, or relax search and liquidity filters.'))+'<p class="fine">Provider IV/Greeks may have different freshness from HTTP retrieval. Verify timestamps before relying on quotes. PAPER buttons cannot place orders.</p>');
  }
  function builder(ctx){
   const snapshot=ctx.snapshot||{},underlying=ctx.market?.spot?.price||snapshot.spot?.last_price||null;
@@ -142,6 +155,8 @@ root.createHalOptionsLab=function(api){
  function change(el){
   if(!el?.id?.startsWith('lab-'))return false;const k=el.id.slice(4);
   if(k==='expiry'){api.labSetExpiry(el.value);return true;}
+  for(const [suffix,field]of [['chain-search','chainSearch'],['chain-minOI','minOI'],['chain-maxSpread','maxSpread']])if(k===suffix){state[field]=el.value;api.render();return true;}
+  if(k==='chain-onlyQuoted'){state.onlyQuoted=el.checked;api.render();return true;}
   const fields={template:'template',mode:'mode',spot:'spot',fees:'fees',horizon:'horizon',iv:'iv',rate:'rate',dividend:'dividend',basis:'basis',overlay1:'overlay1',overlay2:'overlay2'};
   if(fields[k]){state[fields[k]]=el.value;api.render();return true;}
   return false;
