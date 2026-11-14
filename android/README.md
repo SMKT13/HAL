@@ -1,4 +1,6 @@
-# HAL Desk 4.3.0
+# HAL Desk 4.4.0
+
+**New Options Lab (PAPER only):** Technicals → Options Lab includes independent HAL option-chain research, ten basic options templates, long/short hypothetical positions, same-expiry payoff and modelled target-date curves, OI/IV observations, strategy overlays and separate paper drafts/exits. Actual-book schema 4 and journal are unchanged. This is a source implementation; Android verification must be run before release.
 
 Personal HAL research and derivatives desk for Android 8 and later. Package `in.smkt.haldesk`, versionCode 27.
 
