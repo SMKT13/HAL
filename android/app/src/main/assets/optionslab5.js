@@ -62,7 +62,7 @@ function summary(valuation,spot){
   }
   const last=points.length-1,x=points[last],y=ys[last];
   if(Math.abs(y)<=eps)roots.push(x);
-  const slope=price(x+1)-y;
+  const slope=legs.reduce((sum,l)=>sum+((l.type==='FUT'||l.type==='CE')?sign(l)*unit(l):0),0);
   if(Math.abs(slope)>1e-10&&Math.abs(y)>eps){
    const crossing=x-y/slope;
    if(crossing>x+eps&&Number.isFinite(crossing))roots.push(crossing);
