@@ -116,13 +116,17 @@ function template(id,chain,spot){
  }
 }
 function analytics(chain,spot){
- const r=chain.rows,callOI=r.reduce((s,x)=>s+(info(x.call).oi||0),0),putOI=r.reduce((s,x)=>s+(info(x.put).oi||0),0);
- const ivs=r.map(x=>({strike:x.strike,call:info(x.call).iv,put:info(x.put).iv}));
- const atm=ivs.length?ivs.reduce((a,b)=>Math.abs(b.strike-spot)<Math.abs(a.strike-spot)?b:a,ivs[0]):null;
- const pain=r.length&&callOI+putOI>0?r.map(x=>({strike:x.strike,amount:r.reduce((a,z)=>a+(info(z.call).oi||0)*Math.max(0,x.strike-z.strike)+(info(z.put).oi||0)*Math.max(0,z.strike-x.strike),0)})).sort((a,b)=>a.amount-b.amount)[0].strike:null;
- const changeAvailable=r.some(x=>info(x.call).prevOi!==null||info(x.put).prevOi!==null);
- const callKnown=r.some(x=>info(x.call).oi!==null),putKnown=r.some(x=>info(x.put).oi!==null);
-  return {callOI:callKnown?callOI:null,putOI:putKnown?putOI:null,pcr:callOI>0&&putKnown?putOI/callOI:null,maxPain:pain,atmIv:atm?[atm.call,atm.put].filter(okay).length?([atm.call,atm.put].filter(okay).reduce((s,x)=>s+x,0)/[atm.call,atm.put].filter(okay).length):null:null,changeAvailable,rows:r.map(x=>({strike:x.strike,call:info(x.call),put:info(x.put)}))};
+ const r=chain.rows,quotes=r.map(x=>({strike:x.strike,call:info(x.call),put:info(x.put)}));
+ const completeCall=r.length>0&&quotes.every(x=>x.call.oi!==null&&x.call.oi>=0);
+ const completePut=r.length>0&&quotes.every(x=>x.put.oi!==null&&x.put.oi>=0);
+ const complete=completeCall&&completePut;
+ const callOI=quotes.reduce((s,x)=>s+(x.call.oi||0),0),putOI=quotes.reduce((s,x)=>s+(x.put.oi||0),0);
+ const atm=quotes.length&&Number.isFinite(spot)?quotes.reduce((a,b)=>Math.abs(b.strike-spot)<Math.abs(a.strike-spot)?b:a,quotes[0]):null;
+ // Max pain / PCR are not identifiable from a partial OI chain. Missing is not zero.
+ const pain=complete&&callOI+putOI>0?quotes.map(x=>({strike:x.strike,amount:quotes.reduce((a,z)=>a+z.call.oi*Math.max(0,x.strike-z.strike)+z.put.oi*Math.max(0,z.strike-x.strike),0)})).sort((a,b)=>a.amount-b.amount)[0].strike:null;
+ const iv=atm?[atm.call.iv,atm.put.iv].filter(okay):[];
+ const changeAvailable=quotes.some(x=>x.call.prevOi!==null||x.put.prevOi!==null);
+ return {callOI:completeCall?callOI:null,putOI:completePut?putOI:null,pcr:complete&&callOI>0?putOI/callOI:null,maxPain:pain,atmIv:iv.length?iv.reduce((sum,x)=>sum+x,0)/iv.length:null,changeAvailable,oiCoverage:{complete,callKnown:quotes.filter(x=>x.call.oi!==null).length,putKnown:quotes.filter(x=>x.put.oi!==null).length,total:quotes.length},rows:quotes};
 }
 function actualCopy(book){return (book?.legs||[]).filter(x=>['FUT','PE'].includes(x.type)).map(x=>leg({type:x.type,side:'LONG',expiry:x.expiry,strike:x.strike,lots:x.lots,lotSize:x.lotSize,entry:x.entry,instrumentKey:x.instrumentKey,origin:'actual-copy'}));}
 function paperDoc(raw){
