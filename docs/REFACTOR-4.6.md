@@ -2,12 +2,12 @@
 
 ## Scope and boundaries
 
-This is a targeted, cross-repository source refactor, **not** a claim that every one of the historical files was replaced. It preserves the original Android application ID \`in.smkt.haldesk\`, versionCode progression (30 → 31), expected original signing certificate and saved real-book schema 4. There is no order execution.
+This is a targeted, cross-repository source refactor, **not** a claim that every one of the historical files was replaced. It preserves the original Android application ID `in.smkt.haldesk`, versionCode progression (30 → 31), expected original signing certificate and saved real-book schema 4. There is no order execution.
 
 - **Paper ledger:** Immutable OPEN/CLOSED execution snapshots, explicit validated draft → open → close transitions, cumulative fees, transaction-clock checks, compatibility with saved schema-1 PAPER drafts and historical opened records. Real book and PAPER book remain separated.
 - **Android build pipeline:** The generated browser JS bundle and SHA-256 manifest have one source of truth, the checked-in source modules. They are no longer tracked and are rebuilt by npm/Gradle before testing/packaging. CI rejects reintroduction of the generated files.
-- **Private Python data server:** All \`/api/*\` routes—including Yahoo-backed research and agents—require a separate \`HAL_VIEWER_KEY\`. \`/health\` stays unauthenticated. Very long paths fail early. The developer's Python web viewer must send its key.
-- **React backend:** POST \`Origin\` must match scheme, hostname and port of the configured public origin, not merely hostname. Set \`HAL_PUBLIC_ORIGIN\` behind an HTTPS reverse proxy.
+- **Private Python data server:** All `/api/*` routes—including Yahoo-backed research and agents—require a separate `HAL_VIEWER_KEY`. `/health` stays unauthenticated. Very long paths fail early. The developer's Python web viewer must send its key.
+- **React backend:** POST `Origin` must match scheme, hostname and port of the configured public origin, not merely hostname. Set `HAL_PUBLIC_ORIGIN` behind an HTTPS reverse proxy.
 - **Version/documentation:** Android build, native version, release identity test, scripts, current README and installation documentation reference the same version. Historical artifact records are not fresh CI evidence.
 - **Tests:** New deterministic paper-ledger and API authorization cases; existing accounting, provider adapter, unit, native, browser and AI regression suites continue to run.
 
