@@ -80,7 +80,7 @@ The optional feed cache is disposable. Open books remain on the user's device; c
 
 ## Android
 
-The Android application is now HAL Desk 4.0.2. Its source, build instructions and migration details are in [android/README.md](../android/README.md). The older web viewer retains its own schema-2 calculations under `web-engine/`; the two interfaces are not feature-equivalent. Android schema-4 exports are not automatically compatible with the older web viewer.
+The native Android application is HAL Desk 4.6.0 (source; the private upgrade APK must still be signed with the existing certificate). Its source, build instructions and migration details are in [android/README.md](../android/README.md). The older web viewer retains its own schema-2 calculations under `web-engine/`; the two interfaces are not feature-equivalent. Android schema-4 exports are not automatically compatible with the older web viewer.
 
 ## Verification
 
