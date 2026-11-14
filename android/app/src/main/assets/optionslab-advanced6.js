@@ -165,15 +165,15 @@ function ivPercentile(raw,expiry,min=20){
  const below=values.filter(v=>v<latest).length,equal=values.filter(v=>v===latest).length;
  return {value:100*(below+0.5*equal)/values.length,count:values.length,required:min,latest,method:'Percentage of saved sessions with lower ATM IV (half credit for ties). Snapshot history only; not exchange historical IV.'};
 }
-function pop(legs,spot,iv,rate=6,dividend=0,now=Date.now()){
- const risk=riskSummary(legs,spot,0,now);check(risk.exact,'Shared non-expired expiry required for theoretical probability.');
+function pop(legs,spot,iv,rate=6,dividend=0,now=Date.now(),fees=0){
+ const risk=riskSummary(legs,spot,fees,now);check(risk.exact,'Shared non-expired expiry required for theoretical probability.');
  const expiry=E.end(legs[0].expiry),T=(expiry-now)/YEAR,v=iv/100,r=rate/100,q=dividend/100;
  check(T>0&&finite(spot)&&spot>0&&finite(iv)&&iv>0&&iv<=500,'IV and time to expiry required for theoretical probability.');
- const br=risk.breakevens.slice().sort((a,b)=>a-b),cuts=[0,...br,Infinity],pnl=E.evaluate(legs,{now,mode:'expiry'}).price;
+ const br=risk.breakevens.slice().sort((a,b)=>a-b),cuts=[0,...br,Infinity],pnl=E.evaluate(legs,{now,mode:'expiry',fees}).price;
  function dist(s){if(s===Infinity)return 1;if(s<=0)return 0;const z=(Math.log(s/spot)-(r-q-v*v/2)*T)/(v*Math.sqrt(T));return N(z);}
  let probability=0;
  for(let i=0;i<cuts.length-1;i++){const a=cuts[i],b=cuts[i+1],mid=b===Infinity?Math.max(spot*3,a*2+spot):a+(b-a)/2;if(pnl(mid)>0)probability+=dist(b)-dist(a);}
- return {probability:Math.min(1,Math.max(0,probability)),model:'Risk-neutral lognormal estimate based on user-supplied IV, r, q; excludes fees and physical-settlement outcomes; not a real-world probability.'};
+ return {probability:Math.min(1,Math.max(0,probability)),model:'Risk-neutral lognormal estimate based on user-supplied IV, r, q; includes user-entered fees but excludes physical-settlement outcomes; not a real-world probability.'};
 }
 const api={CATALOG:catalog(),template,catalog,greeks,riskSummary,quoteSafety,snapshot,history,appendHistory,ivPercentile,pop};
 Object.assign(E,api);
