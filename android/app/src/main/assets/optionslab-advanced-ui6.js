@@ -8,7 +8,8 @@ root.createHalOptionsLab=function(api){
  const base=original(api),E=root.HALOptionsLab,esc=api.esc,money=api.money,card=api.card,btn=api.btn,empty=api.empty;
  const key='research:optionslab_workspace',prev='research:optionslab_workspace_prev',histKey='research:optionslab_oi_history';
  const st={page:'core',outlook:'all',strategy:'',chartMetric:'pcr',strikeSearch:'',onlyWatch:false,shock:-5,iv:30,rate:6,dividend:0,fee:0,openEvent:false,error:'',message:'',dataReady:false};
- let workspace={version:1,watch:[],events:[],notes:[]},history={version:1,samples:[]},loaded=false,baseRecoverable=false;
+ let workspace={version:1,watch:[],events:[],notes:[]},history={version:1,samples:[]},loaded=false,baseRecoverable=false,committedWorkspace={version:1,watch:[],events:[],notes:[]};
+ const copy=x=>JSON.parse(JSON.stringify(x));
  function nativeGet(name){
   const n=root.HALNative;
   if(n?.cacheGet){const r=JSON.parse(n.cacheGet(name));if(!r.ok)throw Error('Cache read error.');return r.data;}
@@ -26,19 +27,18 @@ root.createHalOptionsLab=function(api){
  }
  function load(){
   if(loaded)return;loaded=true;
-  try{workspace=cleanWorkspace(nativeGet(key));history=E.history(nativeGet(histKey)||{version:1,samples:[]});st.dataReady=true;}
+  try{workspace=cleanWorkspace(nativeGet(key));history=E.history(nativeGet(histKey)||{version:1,samples:[]});committedWorkspace=copy(workspace);st.dataReady=true;}
   catch(e){st.error='Local Options Lab research cache could not be read; it has not been overwritten. '+e.message;st.dataReady=false;}
  }
  function save(){
   if(!st.dataReady)throw Error('Recover workspace cache first; refusing to overwrite unreadable data.');
-  const next=cleanWorkspace(workspace),old=nativeGet(key);
   try{
+   const next=cleanWorkspace(workspace),old=nativeGet(key);
    if(old)nativePut(prev,old);
    nativePut(key,next);
-   workspace=next;
+   workspace=next;committedWorkspace=copy(next);
   }catch(e){
-   // Keep the browser state consistent with the last committed native cache.
-   try{workspace=cleanWorkspace(old);}catch(_){}
+   workspace=copy(committedWorkspace);
    throw e;
   }
  }
