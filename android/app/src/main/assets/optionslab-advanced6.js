@@ -147,7 +147,7 @@ function history(raw){
  for(const s of raw.samples){
   if(!s||typeof s.at!=='string'||!Number.isFinite(Date.parse(s.at))||typeof s.expiry!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s.expiry)||!/^\d{4}-\d{2}-\d{2}$/.test(s.day))throw Error('Corrupt HAL options history; existing observations have not been silently replaced.');
   const key=s.expiry+'|'+s.at;if(seen.has(key))continue;seen.add(key);
-   if(s.at.slice(0,10)!==s.day&&new Date(Date.parse(s.at)+IST).toISOString().slice(0,10)!==s.day)throw Error('Options history trading-date mismatch.');
+   if(new Date(Date.parse(s.at)+IST).toISOString().slice(0,10)!==s.day)throw Error('Options history trading-date mismatch.');
   const sample={at:s.at,day:String(s.day||''),expiry:String(s.expiry).slice(0,10)};
   for(const name of ['spot','pcr','maxPain','callOI','putOI','iv','atmStrike','rollingStraddle'])sample[name]=finite(s[name])?s[name]:null;
   out.push(sample);
