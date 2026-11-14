@@ -86,7 +86,6 @@ function template(id,chain,spot,opts={}){
  }
  throw Error('Unsupported strategy category.');
 }
-function cdf(x){const t=1/(1+.2316419*Math.abs(x)),d=.3989422804014327*Math.exp(-x*x/2);const p=1-d*t*(.31938153+t*(-.356563782+t*(1.781477937+t*(-1.821255978+t*(-1.330274429))));return x>=0?p:1-p;}
 // Separate clean approximation for all model Greeks; never relabel as provider Greeks.
 function N(x){const a=Math.abs(x),t=1/(1+.2316419*a),v=.3989422804014327*Math.exp(-a*a/2);
  const p=1-v*t*(.31938153+t*(-.356563782+t*(1.781477937+t*(-1.821255978+t*1.330274429))));
