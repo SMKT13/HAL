@@ -23,6 +23,34 @@ await check('Options Lab paper chain, payoff and actual-book isolation',async()=
  A.match(await p.locator('main').innerText(),/Exact intrinsic-value payoff/);
  A.deepEqual(x.errors,[]);
 });
+await check('Options Lab advanced library, local OI history, Greeks, watchlist and manual event',async()=>{
+ await emit(p,'snapshot',snap);await nav(p,'technicals','lab');
+ A.equal(await p.locator('[data-action="lab6-page"]').count(),5);
+ await p.locator('[data-action="lab6-page"][data-id="catalog"]').click();
+ A.match(await p.locator('main').innerText(),/38 reference categories/);
+ await p.locator('[data-action="lab6-build"][data-id="buy_put"]').click();
+ A.match(await p.locator('main').innerText(),/Hypothetical legs/);
+ await p.locator('[data-action="lab6-page"][data-id="greeks"]').click();
+ A.match(await p.locator('main').innerText(),/Model net delta/);
+ await p.locator('[data-action="lab6-page"][data-id="oi"]').click();
+ await click(p,'lab6-capture');
+ const captured=await p.evaluate(()=>reviewCache['research:optionslab_oi_history']);
+ A.equal(captured.samples.length,1);A.equal(captured.samples[0].expiry,PUT.expiry);
+ A.match(await p.locator('main').innerText(),/IV percentile/);
+ await p.locator('[data-action="lab6-page"][data-id="journal"]').click();
+ await p.locator('[data-action="lab6-watch"]').first().click();
+ A.equal((await p.evaluate(()=>reviewCache['research:optionslab_workspace'].watch)).length,1);
+ await p.locator('#lab6-event-date').fill('2026-11-20');
+ await p.locator('#lab6-event-title').fill('HAL results review');
+ await click(p,'lab6-event-add');
+ A.match(await p.locator('main').innerText(),/HAL results review/);
+ A.equal((await p.evaluate(()=>reviewCache['research:optionslab_workspace'].events)).length,1);
+ await p.locator('#lab6-note-text').fill('Stay inside the plan; no automatic order execution.');
+ await click(p,'lab6-note-add');
+ A.match(await p.locator('main').innerText(),/Stay inside the plan/);
+ A.equal(await p.evaluate(()=>saved?.legs?.length||0),0);
+ A.deepEqual(x.errors,[]);
+});
 await check('official NSE lens is independent, cacheable, escaped and never a derivatives mark',async()=>{
  await nav(p,'technicals','markets');
  await p.locator('#nse-insights').waitFor();
