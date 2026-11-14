@@ -134,7 +134,7 @@ function quoteSafety(raw,now=Date.now()){
  return {issues,spread,available:issues.length===0};
 }
 function snapshot(chain,spot,now=Date.now()){
- const c=E.normalizeChain(chain),a=E.analytics(c,spot),at=Date.parse(c.fetchedAt);
+ const c=chain&&Array.isArray(chain.rows)?chain:E.normalizeChain(chain),a=E.analytics(c,spot),at=Date.parse(c.fetchedAt);
  check(Number.isFinite(at)&&at<=now+60000,'Verified provider HTTP retrieval time required to save history.');
  check(c.rows.length>0&&finite(spot)&&spot>0,'Valid HAL price and chain required.');
  const atm=c.rows.reduce((p,q)=>Math.abs(p.strike-spot)<Math.abs(q.strike-spot)?p:q,c.rows[0]),call=E.info(atm.call),put=E.info(atm.put);
