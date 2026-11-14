@@ -115,7 +115,7 @@ function analytics(chain,spot){
 function actualCopy(book){return (book?.legs||[]).filter(x=>['FUT','PE'].includes(x.type)).map(x=>leg({type:x.type,side:'LONG',expiry:x.expiry,strike:x.strike,lots:x.lots,lotSize:x.lotSize,entry:x.entry,instrumentKey:x.instrumentKey,origin:'actual-copy'}));}
 function paperDoc(raw){
  if(!raw||raw.version!==1||!Array.isArray(raw.drafts)||raw.drafts.length>100)err('Invalid PAPER draft backup.');
- return {version:1,drafts:raw.drafts.map(d=>({id:String(d.id||'').slice(0,80),name:String(d.name||'PAPER strategy').slice(0,100),status:['draft','open','closed'].includes(d.status)?d.status:'draft',legs:(Array.isArray(d.legs)?d.legs:[]).slice(0,30).map(leg),fees:num(d.fees)||0,createdAt:String(d.createdAt||'').slice(0,35),closedAt:String(d.closedAt||'').slice(0,35),exits:Array.isArray(d.exits)?d.exits.map(num):[],note:String(d.note||'').slice(0,500)}))};
+ const drafts=raw.drafts.map(d=>{const fees=num(d.fees??0);if(!okay(fees)||fees<0||fees>1e7||!Array.isArray(d.legs)||d.legs.length>30)err('Invalid PAPER draft fees or legs.');return {id:String(d.id||'').slice(0,80),name:String(d.name||'PAPER strategy').slice(0,100),status:['draft','open','closed'].includes(d.status)?d.status:'draft',legs:d.legs.map(leg),fees,createdAt:String(d.createdAt||'').slice(0,35),closedAt:String(d.closedAt||'').slice(0,35),exits:Array.isArray(d.exits)?d.exits.map(num):[],note:String(d.note||'').slice(0,500)};});if(new Set(drafts.map(d=>d.id)).size!==drafts.length)err('Duplicate PAPER draft IDs.');return {version:1,drafts};
 }
 const api={leg,num,unit,end,bs,evaluate,summary,plot,normalizeChain,info,chainLeg,analytics,TEMPLATES,template,actualCopy,paperDoc};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.HALOptionsLab=api;
