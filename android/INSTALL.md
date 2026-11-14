@@ -1,6 +1,6 @@
 # HAL Desk 4.6.0 — private signing and upgrade
 
-This source builds Android application ID **\`in.smkt.haldesk\`**, versionCode **31**, versionName **4.6.0**, minimum SDK **26**. The original signing certificate is mandatory for installing **over** an earlier HAL Desk without uninstalling or losing app data.
+This source builds Android application ID **`in.smkt.haldesk`**, versionCode **31**, versionName **4.6.0**, minimum SDK **26**. The original signing certificate is mandatory for installing **over** an earlier HAL Desk without uninstalling or losing app data.
 
 ## 1. Back up your data
 
@@ -10,33 +10,33 @@ On the installed app, export the real Position/History JSON backup and keep it s
 
 Use Node 22, JDK 17, Android SDK 35 and Build Tools 35.0.0:
 
-\`\`\`sh
+```sh
 cd android
 npm ci
 npm test
 npm run test:ui
 HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash build.sh
-\`\`\`
+```
 
-The script rebuilds generated WebView assets, runs native tests and lint, assembles, and aligns \`build/HAL-Desk-v4.6.0-unsigned.apk\`. A CI artifact is unsigned and cannot upgrade an existing installation.
+The script rebuilds generated WebView assets, runs native tests and lint, assembles, and aligns `build/HAL-Desk-v4.6.0-unsigned.apk`. A CI artifact is unsigned and cannot upgrade an existing installation.
 
 ## 3. Sign privately with the **original** keystore
 
-Keep the keystore and password **outside** the repository, CI workflow and shared folders. The signing alias is \`hal-personal\`. On a trusted local workstation:
+Keep the keystore and password **outside** the repository, CI workflow and shared folders. The signing alias is `hal-personal`. On a trusted local workstation:
 
-\`\`\`sh
+```sh
 export HAL_SIGNING_KEY_FILE="/path/outside/repo/HAL-Desk-original-personal.jks"
 export HAL_SIGNING_PASSWORD_FILE="/path/outside/repo/password.txt"
 ANDROID_SDK_ROOT="$ANDROID_HOME" bash build.sh
-\`\`\`
+```
 
-\`build.sh\` uses Android \`zipalign\` and \`apksigner\`, verifies v2/v3 signatures and **refuses** to output an upgrade APK if the certificate does not match the expected SHA-256 fingerprint:
+`build.sh` uses Android `zipalign` and `apksigner`, verifies v2/v3 signatures and **refuses** to output an upgrade APK if the certificate does not match the expected SHA-256 fingerprint:
 
-\`\`\`text
+```text
 a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382
-\`\`\`
+```
 
-The output is \`build/HAL-Desk-v4.6.0-signed.apk\`. Signing with a new keystore—even with the same alias—does not make it upgrade-compatible.
+The output is `build/HAL-Desk-v4.6.0-signed.apk`. Signing with a new keystore—even with the same alias—does not make it upgrade-compatible.
 
 ## 4. Upgrade and verify
 
