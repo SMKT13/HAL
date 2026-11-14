@@ -60,3 +60,30 @@
 .lab-shell .form-grid{margin:10px 0}
 .lab-shell .metrics .metric strong{font-size:18px}
 @media(max-width:500px){.lab-shell .lab-tabs button{font-size:11px}.lab-shell .lab-leg{align-items:flex-start}.lab-shell .lab-chart{padding:5px}.lab-shell .metrics .metric{padding:12px}.lab-shell .metrics .metric strong{font-size:16px}}
+
+
+/* HAL 4.5 options research */
+.lab-advanced{min-width:0}
+.lab-advanced>.lab-tabs{display:flex;gap:7px;overflow-x:auto;scrollbar-width:thin;margin:8px 0 18px;padding:3px 0}
+.lab-advanced>.lab-tabs button{white-space:nowrap;min-height:42px;padding:9px 12px;font-size:12px}
+.lab-catalog-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:9px}
+.lab-catalog-item{display:flex;flex-direction:column;align-items:stretch;gap:12px;padding:15px;border:1px solid var(--line);border-radius:12px;background:var(--raised)}
+.lab-catalog-item strong{display:block;font-size:13px;overflow-wrap:anywhere}
+.lab-catalog-item small{display:block;color:var(--muted);margin-top:4px;font-size:11px}
+.lab-catalog-item button{width:100%;font-size:12px;min-height:38px}
+.lab-chain-bars{display:grid;grid-template-columns:1fr;gap:7px;margin:12px 0;max-height:350px;overflow:auto}
+.lab-bar-row{display:grid;grid-template-columns:70px minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center;font-variant-numeric:tabular-nums}
+.lab-bar-row small{text-align:right;color:var(--muted);font-size:11px}
+.lab-bar-row span{background:var(--raised);min-width:0;height:12px;border-radius:3px;overflow:hidden}
+.lab-bar-row i{display:block;height:100%;border-radius:3px}
+.lab-watch-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.lab-watch-row>div{flex:1;min-width:170px}
+.lab-watch-row strong{display:block}
+.lab-watch-row small{display:block;color:var(--muted);margin-top:3px}
+.lab-watch-row p{margin:5px 0 0;white-space:pre-wrap}
+.lab-watch-row button{min-height:36px}
+.lab-advanced .lab-chart svg{display:block;width:100%;height:auto;min-width:260px}
+.lab-advanced .lab-chart{overflow-x:auto}
+.lab-advanced label{min-width:0}
+.lab-advanced select,.lab-advanced input,.lab-advanced textarea{max-width:100%}
+@media(max-width:400px){.lab-catalog-grid{grid-template-columns:1fr}.lab-advanced>.lab-tabs button{font-size:11px;padding:8px 10px}.lab-watch-row{align-items:flex-start}}
