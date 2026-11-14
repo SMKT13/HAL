@@ -36,7 +36,7 @@ await check('Options Lab advanced library, local OI history, Greeks, watchlist a
  await click(p,'lab6-capture');
  const captured=await p.evaluate(()=>reviewCache['research:optionslab_oi_history']);
  A.equal(captured.samples.length,1);A.equal(captured.samples[0].expiry,PUT.expiry);
- A.match(await p.locator('main').innerText(),/IV percentile/);
+ A.match(await p.locator('main').innerText(),/IV percentile/i);
  await p.locator('[data-action="lab6-page"][data-id="journal"]').click();
  await p.locator('[data-action="lab6-watch"]').first().click();
  A.equal((await p.evaluate(()=>reviewCache['research:optionslab_workspace'].watch)).length,1);
