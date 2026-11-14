@@ -4,7 +4,7 @@
 root.createHalOptionsLab=function(api){
  const E=root.HALOptionsLab,esc=api.esc,money=api.money,num=api.num,card=api.card,btn=api.btn,row=api.row,empty=api.empty;
  const key='research:optionslab_paper',previous='research:optionslab_previous';
- const state={view:'chain',legs:[],editing:null,mode:'expiry',fees:0,spot:null,horizon:'',iv:30,rate:6,dividend:0,basis:0,template:'long-call',overlay1:'',overlay2:'',closeId:null,source:'No verified option chain loaded',error:''};
+ const state={view:'chain',legs:[],editing:null,editIndex:null,mode:'expiry',fees:0,spot:null,horizon:'',iv:30,rate:6,dividend:0,basis:0,template:'long-call',overlay1:'',overlay2:'',closeId:null,source:'No verified option chain loaded',error:''};
  let paper={version:1,drafts:[]},loaded=false;
  function save(){
   const data=E.paperDoc(paper),serialized=JSON.stringify(data),native=root.HALNative;
@@ -38,7 +38,7 @@ root.createHalOptionsLab=function(api){
  function builder(ctx){
   const snapshot=ctx.snapshot||{},underlying=ctx.market?.spot?.price||snapshot.spot?.last_price||null;
   const opts=E.TEMPLATES.map(t=>'<option value="'+t[0]+'" '+(t[0]===state.template?'selected':'')+'>'+esc(t[1])+'</option>').join('');
-  const current=state.legs.map((l,i)=>'<div class="lab-leg"><div><strong>'+esc(l.side)+' '+esc(l.type)+(l.strike?' ₹'+fmt(l.strike,0):'')+'</strong><small>'+esc(l.expiry)+' · '+fmt(l.lots,0)+' × '+fmt(l.lotSize,0)+' units · '+money(l.entry)+' · '+esc(l.origin)+'</small></div>'+btn('lab-remove','Remove','data-id="'+i+'"')+'</div>').join('')||empty('No paper legs','Pick a strategy template, add an option from the chain, or enter a hypothetical contract.');
+  const current=state.legs.map((l,i)=>'<div class="lab-leg"><div><strong>'+esc(l.side)+' '+esc(l.type)+(l.strike?' ₹'+fmt(l.strike,0):'')+'</strong><small>'+esc(l.expiry)+' · '+fmt(l.lots,0)+' × '+fmt(l.lotSize,0)+' units · '+money(l.entry)+' · '+esc(l.origin)+'</small></div>'+btn('lab-edit','Edit','data-id="'+i+'"')+btn('lab-duplicate','Duplicate','data-id="'+i+'"')+btn('lab-remove','Remove','data-id="'+i+'"')+'</div>').join('')||empty('No paper legs','Pick a strategy template, add an option from the chain, or enter a hypothetical contract.');
   const entry='<details><summary>Manually add a paper leg</summary><div class="form-grid"><label>Contract<select id="lab-new-type"><option>CE</option><option>PE</option><option>FUT</option></select></label><label>Direction<select id="lab-new-side"><option value="LONG">Buy / long</option><option value="SHORT">Sell / short</option></select></label><label>Expiry<input id="lab-new-expiry" type="date" value="'+esc(ctx.expiry||'')+'"></label><label>Strike<input id="lab-new-strike" type="number" inputmode="decimal" placeholder="For CE / PE"></label><label>Lots<input id="lab-new-lots" type="number" min="1" value="1"></label><label>Verified units / lot<input id="lab-new-size" type="number" min="1"></label><label>Hypothetical entry price<input id="lab-new-entry" type="number" min="0" step="any"></label></div>'+btn('lab-manual','Add PAPER leg','class="primary"')+'</details>';
   return card('Paper strategy builder','<p class="fine">PAPER ONLY — no real positions or orders are changed. Templates use quoted buy/sell prices and verified lot sizes when available.</p><div class="form-grid"><label>Strategy<select id="lab-template">'+opts+'</select></label></div><div class="toolbar">'+btn('lab-use-template','Build template','class="primary"')+btn('lab-import-actual','Copy my actual position to PAPER')+btn('lab-clear','Clear draft')+'</div><h3>Hypothetical legs</h3>'+current+entry+'<div class="toolbar">'+btn('lab-tab','View payoff','data-id="payoff" class="primary"')+btn('lab-paper-save','Save paper draft')+'</div><p class="fine">Current HAL spot: '+money(underlying)+'. A protective-put template assumes a same-expiry future at spot as a hypothetical example; edit as needed. Imported actual positions are copied, never altered.</p>');
  }
@@ -72,7 +72,7 @@ root.createHalOptionsLab=function(api){
   return card('HAL derivatives intelligence','<div class="metrics">'+[['Put/call OI ratio',fmt(a.pcr,3)],['Max pain (derived)',a.maxPain===null?'—':'₹'+fmt(a.maxPain,0)],['ATM IV (%)',fmt(a.atmIv,2)],['OI change available?',a.changeAvailable?'Some fields':'No verified baseline']].map(x=>'<div class="metric"><small>'+x[0]+'</small><strong>'+x[1]+'</strong></div>').join('')+'</div><div class="table-wrap"><table><thead><tr>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div><p class="fine">Current chain only; previous OI and changes require provider fields. IV percentile and historical OI charts are deliberately not estimated without a validated snapshot series. Max pain is not a trading signal.</p>');
  }
  function paperView(){
-  const drafts=paper.drafts.slice().reverse().map(d=>'<div class="lab-leg"><div><strong>'+esc(d.name)+'</strong><small>PAPER · '+esc(d.status.toUpperCase())+' · '+d.legs.length+' legs · created '+esc(d.createdAt||'unknown')+'</small>'+(d.status==='closed'&&d.exits.length===d.legs.length?'<small>Recorded hypothetical P&L '+money(d.legs.reduce((sum,l,i)=>sum+(d.exits[i]-l.entry)*E.unit(l)*(l.side==='LONG'?1:-1),-d.fees))+'</small>':'')+'</div><div class="toolbar">'+btn('lab-load','Open','data-id="'+esc(d.id)+'"')+(d.status==='draft'?btn('lab-open','Mark paper open','data-id="'+esc(d.id)+'"'):'')+(d.status==='open'?btn('lab-close-start','Paper exit','data-id="'+esc(d.id)+'"'):'')+btn('lab-delete','Delete','data-id="'+esc(d.id)+'"')+'</div></div>').join('')||empty('No paper strategies','Save a draft from the Strategy tab.');
+  const drafts=paper.drafts.slice().reverse().map(d=>'<div class="lab-leg"><div><strong>'+esc(d.name)+'</strong><small>PAPER · '+esc(d.status.toUpperCase())+' · '+d.legs.length+' legs · created '+esc(d.createdAt||'unknown')+'</small>'+(d.status==='closed'&&d.exits.length===d.legs.length?'<small>Recorded hypothetical P&L '+money(d.legs.reduce((sum,l,i)=>sum+(d.exits[i]-l.entry)*E.unit(l)*(l.side==='LONG'?1:-1),-d.fees))+'</small>':'')+'</div><div class="toolbar">'+btn('lab-load','Open','data-id="'+esc(d.id)+'"')+(d.status==='draft'?btn('lab-open','Mark paper open','data-id="'+esc(d.id)+'"'):'')+(d.status==='open'?btn('lab-close-start','Paper exit','data-id="'+esc(d.id)+'"'):'')+btn('lab-paper-rename','Name / notes','data-id="'+esc(d.id)+'"')+btn('lab-paper-clone','Clone','data-id="'+esc(d.id)+'"')+btn('lab-delete','Delete','data-id="'+esc(d.id)+'"')+'</div></div>').join('')||empty('No paper strategies','Save a draft from the Strategy tab.');
   const closing=paper.drafts.find(d=>d.id===state.closeId),exit=closing?'<div class="card"><h3>Record hypothetical closing prices · '+esc(closing.name)+'</h3><div class="form-grid">'+closing.legs.map((l,i)=>'<label>'+esc(l.side+' '+l.type+' '+(l.strike||''))+' exit price (₹)<input type="number" id="lab-exit-'+i+'" min="0" step="any"></label>').join('')+'<label>Closing fees (₹)<input type="number" id="lab-exit-fees" value="'+closing.fees+'" min="0" step="any"></label></div>'+btn('lab-close-confirm','Record PAPER exit','class="primary"')+'</div>':'';
   return card('Virtual paper trading','<p class="fine">PAPER — NO BROKER ORDERS. Hypothetical prices and exit outcomes are user-entered. This ledger never merges into actual Position or History.</p>'+drafts+exit+'<div class="toolbar">'+btn('lab-paper-save','Save current draft','class="primary"')+btn('lab-export','Export PAPER JSON')+btn('lab-recover','Restore previous PAPER snapshot')+'</div><details><summary>Import separate PAPER JSON (replace drafts)</summary><textarea id="lab-import-json" rows="5" placeholder="Paste exported PAPER JSON"></textarea><label><input id="lab-import-confirm" type="checkbox">Replace my paper drafts only</label>'+btn('lab-import','Import PAPER data')+'</details>');
  }
@@ -90,15 +90,35 @@ root.createHalOptionsLab=function(api){
    else if(name==='lab-import-actual'){const legs=E.actualCopy(c.book);if(!legs.length)throw Error('No existing confirmed-book futures or puts available to copy.');state.legs=legs;state.editing=null;}
    else if(name==='lab-clear'){state.legs=[];state.editing=null;}
    else if(name==='lab-remove'){state.legs.splice(Number(id),1);state.editing=null;}
+   else if(name==='lab-duplicate'){const x=state.legs[Number(id)];if(!x)throw Error('PAPER leg unavailable.');state.legs.push(E.leg(x));state.editing=null;}
+   else if(name==='lab-edit'){
+    const n=Number(id),x=state.legs[n];if(!x)throw Error('PAPER leg unavailable.');const val=id=>document.getElementById(id)?.value;
+    api.modal('Edit hypothetical PAPER leg','<p class="fine">Edits only the hypothetical strategy, never the broker ledger.</p><div class="form-grid"><label>Type<select id="lab-edit-type">'+['CE','PE','FUT'].map(t=>'<option value="'+t+'" '+(x.type===t?'selected':'')+'>'+t+'</option>').join('')+'</select></label><label>Direction<select id="lab-edit-side">'+['LONG','SHORT'].map(t=>'<option value="'+t+'" '+(x.side===t?'selected':'')+'>'+t+'</option>').join('')+'</select></label><label>Exact expiry<input id="lab-edit-expiry" type="date" value="'+esc(x.expiry)+'"></label><label>Strike (₹)<input id="lab-edit-strike" type="number" min="0" value="'+esc(x.strike??'')+'"></label><label>Lots<input id="lab-edit-lots" type="number" min="1" value="'+x.lots+'"></label><label>Units / lot<input id="lab-edit-size" type="number" min="1" value="'+x.lotSize+'"></label><label>Entry premium / price<input id="lab-edit-entry" type="number" min="0" step="any" value="'+x.entry+'"></label></div>','Update PAPER leg',()=>{
+     const next=E.leg({type:val('lab-edit-type'),side:val('lab-edit-side'),expiry:val('lab-edit-expiry'),strike:val('lab-edit-strike'),lots:val('lab-edit-lots'),lotSize:val('lab-edit-size'),entry:val('lab-edit-entry'),origin:'manual'});state.legs[n]=next;state.editing=null;api.render();
+    });
+   }
    else if(name==='lab-manual'){const val=x=>document.getElementById(x)?.value;state.legs.push(E.leg({type:val('lab-new-type'),side:val('lab-new-side'),expiry:val('lab-new-expiry'),strike:val('lab-new-strike'),lots:val('lab-new-lots'),lotSize:val('lab-new-size'),entry:val('lab-new-entry')}));state.editing=null;}
    else if(name==='lab-recalc'){/* Values committed by change handlers. */}
    else if(name==='lab-paper-save'){
     if(!state.legs.length)throw Error('Add a paper leg before saving.');
     const now=new Date().toISOString(),current=paper.drafts.find(d=>d.id===state.editing);
+    if(current&&current.status==='closed')throw Error('Closed PAPER trade is immutable. Duplicate it as a new draft.');
     const d={id:current?.id||'paper-'+Date.now(),name:current?.name||'HAL strategy '+now.slice(0,16).replace('T',' '),status:current?.status||'draft',legs:state.legs.map(E.leg),fees:Number(state.fees)||0,createdAt:current?.createdAt||now,closedAt:current?.closedAt||'',exits:current?.exits||[],note:current?.note||''};
     paper.drafts=current?paper.drafts.map(x=>x.id===d.id?d:x):[...paper.drafts,d];save();state.editing=d.id;state.view='paper';
    }
-   else if(name==='lab-load'){const d=paper.drafts.find(x=>x.id===id);if(!d)throw Error('Draft not found.');state.legs=d.legs.map(E.leg);state.fees=d.fees;state.editing=id;state.view='builder';}
+   else if(name==='lab-load'){const d=paper.drafts.find(x=>x.id===id);if(!d)throw Error('Draft not found.');state.legs=d.legs.map(E.leg);state.fees=d.fees;state.editing=d.status==='closed'?null:id;state.view='builder';}
+   else if(name==='lab-paper-rename'){
+    const d=paper.drafts.find(x=>x.id===id);if(!d)throw Error('PAPER draft not found.');
+    api.modal('Rename PAPER strategy','<label>Name<input id="lab-rename" maxlength="100" value="'+esc(d.name)+'"></label><label>Trade notes<textarea id="lab-note" maxlength="500">'+esc(d.note)+'</textarea></label>','Save notes',()=>{
+     const name=document.getElementById('lab-rename')?.value.trim(),note=document.getElementById('lab-note')?.value||'';
+     if(!name)throw Error('Enter a strategy name.');
+     d.name=name.slice(0,100);d.note=note.slice(0,500);save();api.render();
+    });
+   }
+   else if(name==='lab-paper-clone'){
+    const original=paper.drafts.find(x=>x.id===id);if(!original)throw Error('Paper strategy not found.');
+    state.legs=original.legs.map(E.leg);state.editing=null;state.view='builder';state.fees=original.fees;
+   }
    else if(name==='lab-open'){const d=paper.drafts.find(x=>x.id===id);if(d&&d.status==='draft'){d.status='open';save();}}
    else if(name==='lab-close-start'){state.closeId=id;}
    else if(name==='lab-close-confirm'){
@@ -126,7 +146,7 @@ root.createHalOptionsLab=function(api){
   if(fields[k]){state[fields[k]]=el.value;api.render();return true;}
   return false;
  }
- const actions={};for(const name of ['tab','refresh','add','use-template','import-actual','clear','remove','manual','recalc','paper-save','load','open','close-start','close-confirm','delete','export','recover','import']){const k='lab-'+name;actions[k]=b=>action(k,b);}
- return {view,actions,change};
+ const actions={};for(const name of ['tab','refresh','add','use-template','import-actual','clear','remove','edit','duplicate','paper-rename','paper-clone','manual','recalc','paper-save','load','open','close-start','close-confirm','delete','export','recover','import']){const k='lab-'+name;actions[k]=b=>action(k,b);}
+ return {view,actions,change,getDraft:()=>({legs:state.legs.map(E.leg),fees:Number(state.fees)||0}),loadStrategy:legs=>{state.legs=legs.map(E.leg);state.editing=null;state.view='builder';api.render();},setView:page=>{if(['chain','builder','payoff','oi','paper'].includes(page))state.view=page;api.render();}};
 };
 })(typeof globalThis!=='undefined'?globalThis:this);
