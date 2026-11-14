@@ -32,10 +32,20 @@ root.createHalOptionsLab=function(api){
  function save(){
   if(!st.dataReady)throw Error('Recover workspace cache first; refusing to overwrite unreadable data.');
   const next=cleanWorkspace(workspace),old=nativeGet(key);
-  if(old)nativePut(prev,old);nativePut(key,next);workspace=next;
+  try{
+   if(old)nativePut(prev,old);
+   nativePut(key,next);
+   workspace=next;
+  }catch(e){
+   // Keep the browser state consistent with the last committed native cache.
+   try{workspace=cleanWorkspace(old);}catch(_){}
+   throw e;
+  }
  }
  function info(){const c=api.labContext(),raw=c.chain?.option_rows?.length?c.chain:c.snapshot?.option_rows?.length&&c.snapshot.option_expiry===c.expiry?c.snapshot:c.chain||{};
-  const chain=E.normalizeChain({...raw,option_expiry:c.expiry||raw.option_expiry});
+  const mismatch=!!(c.expiry&&raw.option_expiry&&c.expiry!==raw.option_expiry);
+  const source=mismatch?{}:raw;
+  const chain=E.normalizeChain({...source,option_expiry:c.expiry||source.option_expiry,chain_error:mismatch?'expiry_snapshot_mismatch':source.chain_error});
   const marketSpot=c.market?.spot?.price??c.snapshot?.spot?.last_price;
   const extra=(c.chains||[]).map(x=>E.normalizeChain(x)).filter(x=>x.rows.length&&x.expiry!==chain.expiry);
   const futures=(c.market?.contracts||[]).filter(x=>x.type==='FUT').map(f=>{const q=c.market?.quotes?.[f.instrumentKey];return {expiry:f.expiry,lotSize:f.lotSize,price:q?.price,instrumentKey:f.instrumentKey};});
@@ -50,7 +60,7 @@ root.createHalOptionsLab=function(api){
  const timestamp=x=>x&&Number.isFinite(Date.parse(x))?new Date(x).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'unknown';
  function source(ctx){return '<p class="fine">HAL chain expiry '+rx(ctx.chain.expiry||'unavailable')+' · Upstox HTTP retrieval '+rx(timestamp(ctx.chain.fetchedAt))+' · independently calculated observations. Historical cache is local, not guaranteed continuous.</p>';}
  function catalog(ctx){
-  const picks=E.CATALOG.filter(x=>st.outlook==='all'||x.outlook.toLowerCase().includes(st.outlook));
+  const picks=E.CATALOG.filter(x=>st.outlook==='all'||(st.outlook==='manual'?x.mode==='manual':x.outlook.toLowerCase().includes(st.outlook)));
   const select='<label>Filter by outlook<select id="lab6-outlook">'+[['all','All strategy types'],['bullish','Bullish'],['bearish','Bearish'],['range','Range-bound'],['volatile','Volatile'],['time','Time spread'],['manual','Manual']].map(([v,label])=>'<option value="'+v+'" '+(v===st.outlook?'selected':'')+'>'+label+'</option>').join('')+'</select></label>';
   const panel='<div class="lab-catalog-grid">'+picks.map(x=>{
     const kind=x.mode==='manual'?'Manual / ambiguous':x.mode==='two-expiry'?'Two expiry chains':'Listed chain';
@@ -95,11 +105,12 @@ root.createHalOptionsLab=function(api){
  }
  function journal(ctx){
   const s=st.strikeSearch.trim(),ws=workspace.watch;
-  const strikes=ctx.chain.rows.filter(r=>(!s||String(r.strike).includes(s))&&(!st.onlyWatch||ws.includes(String(r.strike)))).slice(0,120);
+  const watched=strike=>ws.includes(ctx.chain.expiry+'|'+strike)||ws.includes(String(strike));
+  const strikes=ctx.chain.rows.filter(r=>(!s||String(r.strike).includes(s))&&(!st.onlyWatch||watched(r.strike))).slice(0,120);
   const listed='<div class="form-grid"><label>Find strike<input id="lab6-strikeSearch" type="search" value="'+rx(st.strikeSearch)+'" placeholder="4500"></label><label><input id="lab6-onlyWatch" type="checkbox" '+(st.onlyWatch?'checked':'')+'>Only watched strikes</label></div>';
   const rows=strikes.map(r=>{
-   const ce=E.info(r.call),pe=E.info(r.put),ca=E.quoteSafety(r.call),pa=E.quoteSafety(r.put),watched=ws.includes(String(r.strike));
-   return '<div class="lab-watch-row"><div><strong>₹'+fmt(r.strike,0)+'</strong><small>CE '+money(ce.price)+' · PE '+money(pe.price)+'</small><small>Spread CE '+fmt(ca.spread)+'% / PE '+fmt(pa.spread)+'% · '+(ca.issues.length?'CE review':'CE timestamps valid')+' · '+(pa.issues.length?'PE review':'PE timestamps valid')+'</small></div>'+btn('lab6-watch',watched?'Unwatch':'Watch','data-id="'+r.strike+'"')+'</div>';
+   const ce=E.info(r.call),pe=E.info(r.put),ca=E.quoteSafety(r.call),pa=E.quoteSafety(r.put),isWatched=watched(r.strike);
+   return '<div class="lab-watch-row"><div><strong>₹'+fmt(r.strike,0)+'</strong><small>CE '+money(ce.price)+' · PE '+money(pe.price)+'</small><small>Spread CE '+fmt(ca.spread)+'% / PE '+fmt(pa.spread)+'% · '+(ca.issues.length?'CE review':'CE timestamps valid')+' · '+(pa.issues.length?'PE review':'PE timestamps valid')+'</small></div>'+btn('lab6-watch',isWatched?'Unwatch':'Watch','data-id="'+r.strike+'"')+'</div>';
   }).join('')||empty('No matching listed strikes');
   const events=workspace.events.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(n=>'<div class="lab-watch-row"><div><strong>'+rx(n.date)+' · '+rx(n.title)+'</strong><small>Manually entered event · '+rx(n.source||'source not recorded')+'</small></div>'+btn('lab6-event-delete','Delete','data-id="'+rx(n.id)+'"')+'</div>').join('')||empty('No HAL events recorded');
   const notes=workspace.notes.slice(-25).reverse().map(n=>'<div class="lab-watch-row"><div><small>'+rx(timestamp(n.at))+'</small><p>'+rx(n.text)+'</p></div>'+btn('lab6-note-delete','Delete','data-id="'+rx(n.id)+'"')+'</div>').join('')||empty('No discipline notes');
@@ -129,7 +140,10 @@ root.createHalOptionsLab=function(api){
    else if(name==='lab6-watch'){
     if(!st.dataReady)throw Error('Workspace cache unavailable.');
     const found=ctx.chain.rows.some(r=>String(r.strike)===id);if(!found)throw Error('Strike is no longer listed.');
-    workspace.watch=workspace.watch.includes(id)?workspace.watch.filter(x=>x!==id):[...workspace.watch,id];save();
+    const fullKey=ctx.chain.expiry+'|'+id;
+    const already=workspace.watch.includes(fullKey)||workspace.watch.includes(id);
+    workspace.watch=already?workspace.watch.filter(x=>x!==fullKey&&x!==id):[...workspace.watch,fullKey];
+    save();
    }
    else if(name==='lab6-event-add'){
     const value=id=>document.getElementById(id)?.value||'',date=value('lab6-event-date'),title=value('lab6-event-title').trim(),source=value('lab6-event-source').trim();
