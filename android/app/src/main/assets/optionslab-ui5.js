@@ -5,7 +5,8 @@ root.createHalOptionsLab=function(api){
  const E=root.HALOptionsLab,esc=api.esc,money=api.money,num=api.num,card=api.card,btn=api.btn,row=api.row,empty=api.empty;
  const key='research:optionslab_paper',previous='research:optionslab_previous';
  const state={view:'chain',legs:[],editing:null,editIndex:null,spotManuallySet:false,mode:'expiry',fees:0,spot:null,horizon:'',iv:30,rate:6,dividend:0,basis:0,template:'long-call',overlay1:'',overlay2:'',closeId:null,chainSearch:'',minOI:0,maxSpread:100,onlyQuoted:false,source:'No verified option chain loaded',error:''};
- let paper={version:1,drafts:[]},loaded=false,committedPaper={version:1,drafts:[]};
+ let paper={version:1,drafts:[]},loaded=false,committedPaper={version:1,drafts:[]},paperIdCounter=0;
+ const nextPaperId=()=>{let id;do{id='paper-'+Date.now()+'-'+(++paperIdCounter);}while(paper.drafts.some(d=>d.id===id));return id;};
  const copy=x=>JSON.parse(JSON.stringify(x));
  function save(skipPrevious=false){
   const data=E.paperDoc(paper),serialized=JSON.stringify(data),native=root.HALNative;
@@ -138,7 +139,7 @@ root.createHalOptionsLab=function(api){
     if(!state.legs.length)throw Error('Add a paper leg before saving.');
     const now=new Date().toISOString(),current=paper.drafts.find(d=>d.id===state.editing);
     if(current&&current.status!=='draft')throw Error('Opened PAPER trade is immutable. Clone it as a new draft.');
-    const d={id:current?.id||'paper-'+Date.now(),name:current?.name||'HAL strategy '+now.slice(0,16).replace('T',' '),status:current?.status||'draft',legs:state.legs.map(E.leg),fees:Number(state.fees)||0,createdAt:current?.createdAt||now,closedAt:current?.closedAt||'',exits:current?.exits||[],note:current?.note||''};
+    const d={id:current?.id||nextPaperId(),name:current?.name||'HAL strategy '+now.slice(0,16).replace('T',' '),status:current?.status||'draft',legs:state.legs.map(E.leg),fees:Number(state.fees)||0,createdAt:current?.createdAt||now,closedAt:current?.closedAt||'',exits:current?.exits||[],note:current?.note||''};
     if(current)paper=E.paperReplaceDraft(paper,d.id,d.legs,d.fees);
     else paper=E.paperDoc({version:1,drafts:[...paper.drafts,d]});
     save();state.editing=d.id;state.view='paper';
