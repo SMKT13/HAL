@@ -5,7 +5,8 @@ root.createHalOptionsLab=function(api){
  const E=root.HALOptionsLab,esc=api.esc,money=api.money,num=api.num,card=api.card,btn=api.btn,row=api.row,empty=api.empty;
  const key='research:optionslab_paper',previous='research:optionslab_previous';
  const state={view:'chain',legs:[],editing:null,editIndex:null,mode:'expiry',fees:0,spot:null,horizon:'',iv:30,rate:6,dividend:0,basis:0,template:'long-call',overlay1:'',overlay2:'',closeId:null,chainSearch:'',minOI:0,maxSpread:100,onlyQuoted:false,source:'No verified option chain loaded',error:''};
- let paper={version:1,drafts:[]},loaded=false;
+ let paper={version:1,drafts:[]},loaded=false,committedPaper={version:1,drafts:[]};
+ const copy=x=>JSON.parse(JSON.stringify(x));
  function save(skipPrevious=false){
   const data=E.paperDoc(paper),serialized=JSON.stringify(data),native=root.HALNative;
   let persisted=null;
@@ -22,16 +23,16 @@ root.createHalOptionsLab=function(api){
     if(!skipPrevious&&persisted)localStorage.setItem('hal_paper_previous_v1',JSON.stringify(E.paperDoc(persisted)));
     localStorage.setItem('hal_paper_v1',serialized);
    }
-   paper=data;
+   paper=data;committedPaper=copy(data);
   }catch(e){
-   // Revert unsaved in-memory changes rather than showing false successful paper exits.
-   try{paper=persisted?E.paperDoc(persisted):{version:1,drafts:[]};}catch(_){}
+   // Revert to the last verified successful write, even if the latest cache read failed.
+   paper=copy(committedPaper);
    throw e;
   }
  }
  function load(){
   if(loaded)return;loaded=true;
-  try{const native=root.HALNative,reply=native?.cacheGet?JSON.parse(native.cacheGet(key)):null,raw=reply?(reply.ok?reply.data:null):JSON.parse(localStorage.getItem('hal_paper_v1')||'null');paper=raw?E.paperDoc(raw):{version:1,drafts:[]};}
+  try{const native=root.HALNative,reply=native?.cacheGet?JSON.parse(native.cacheGet(key)):null,raw=reply?(reply.ok?reply.data:null):JSON.parse(localStorage.getItem('hal_paper_v1')||'null');paper=raw?E.paperDoc(raw):{version:1,drafts:[]};committedPaper=copy(paper);}
   catch(e){paper={version:1,drafts:[]};state.error='Paper drafts unavailable: '+e.message+'. Existing actual holdings are unaffected.';}
  }
  const get=()=>api.labContext();
