@@ -4,7 +4,7 @@
 root.createHalOptionsLab=function(api){
  const E=root.HALOptionsLab,esc=api.esc,money=api.money,num=api.num,card=api.card,btn=api.btn,row=api.row,empty=api.empty;
  const key='research:optionslab_paper',previous='research:optionslab_previous';
- const state={view:'chain',legs:[],editing:null,editIndex:null,mode:'expiry',fees:0,spot:null,horizon:'',iv:30,rate:6,dividend:0,basis:0,template:'long-call',overlay1:'',overlay2:'',closeId:null,chainSearch:'',minOI:0,maxSpread:100,onlyQuoted:false,source:'No verified option chain loaded',error:''};
+ const state={view:'chain',legs:[],editing:null,editIndex:null,spotManuallySet:false,mode:'expiry',fees:0,spot:null,horizon:'',iv:30,rate:6,dividend:0,basis:0,template:'long-call',overlay1:'',overlay2:'',closeId:null,chainSearch:'',minOI:0,maxSpread:100,onlyQuoted:false,source:'No verified option chain loaded',error:''};
  let paper={version:1,drafts:[]},loaded=false,committedPaper={version:1,drafts:[]};
  const copy=x=>JSON.parse(JSON.stringify(x));
  function save(skipPrevious=false){
@@ -111,7 +111,7 @@ root.createHalOptionsLab=function(api){
   const closing=paper.drafts.find(d=>d.id===state.closeId),exit=closing?'<div class="card"><h3>Record hypothetical closing prices · '+esc(closing.name)+'</h3><div class="form-grid">'+closing.legs.map((l,i)=>'<label>'+esc(l.side+' '+l.type+' '+(l.strike||''))+' exit price (₹)<input type="number" id="lab-exit-'+i+'" min="0" step="any"></label>').join('')+'<label>Total PAPER trade fees (opening + closing, ₹)<input type="number" id="lab-exit-fees" value="'+closing.fees+'" min="0" step="any"></label></div>'+btn('lab-close-confirm','Record PAPER exit','class="primary"')+'</div>':'';
   return card('Virtual paper trading','<p class="fine">PAPER — NO BROKER ORDERS. Opened and closed paper-trade legs and entry prices are locked; clone a trade to simulate a change. The separate PAPER ledger never alters actual Position or History.</p>'+drafts+exit+'<div class="toolbar">'+btn('lab-paper-save','Save current draft','class="primary"')+btn('lab-export','Export PAPER JSON')+btn('lab-recover','Restore previous PAPER snapshot')+'</div><details><summary>Import separate PAPER JSON (replace drafts)</summary><textarea id="lab-import-json" rows="5" placeholder="Paste exported PAPER JSON"></textarea><label><input id="lab-import-confirm" type="checkbox">Replace my paper drafts only</label>'+btn('lab-import','Import PAPER data')+'</details>');
  }
- function view(){load();const c=context();if(state.spot===null)state.spot=c.market?.spot?.price||c.snapshot?.spot?.last_price||null;
+ function view(){load();const c=context();if(!state.spotManuallySet)state.spot=c.market?.spot?.price||c.snapshot?.spot?.last_price||null;
   return '<section class="lab-shell"><p class="eyebrow">HAL OPTIONS LAB · Paper / Analysis only</p><p class="fine">Sensibull-inspired, independently implemented. No order placement. Real positions/history are unchanged.</p>'+tools()+(state.error?'<p class="warning" role="alert">'+esc(state.error)+'</p>':'')+
   ({chain:()=>chain(c),builder:()=>builder(c),payoff:()=>payoff(c),oi:()=>oi(c),paper:paperView}[state.view]||(()=>''))()+'</section>';
  }
@@ -187,7 +187,7 @@ root.createHalOptionsLab=function(api){
   for(const [suffix,field]of [['chain-search','chainSearch'],['chain-minOI','minOI'],['chain-maxSpread','maxSpread']])if(k===suffix){state[field]=el.value;api.render();return true;}
   if(k==='chain-onlyQuoted'){state.onlyQuoted=el.checked;api.render();return true;}
   const fields={template:'template',mode:'mode',spot:'spot',fees:'fees',horizon:'horizon',iv:'iv',rate:'rate',dividend:'dividend',basis:'basis',overlay1:'overlay1',overlay2:'overlay2'};
-  if(fields[k]){state[fields[k]]=el.value;api.render();return true;}
+  if(fields[k]){state[fields[k]]=el.value;if(k==='spot')state.spotManuallySet=el.value!=='';api.render();return true;}
   return false;
  }
  const actions={};for(const name of ['tab','refresh','add','use-template','import-actual','clear','remove','edit','duplicate','paper-rename','paper-clone','manual','recalc','paper-save','load','open','close-start','close-confirm','delete','export','recover','import']){const k='lab-'+name;actions[k]=b=>action(k,b);}
