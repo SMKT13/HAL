@@ -66,3 +66,8 @@ test('OI/IV samples are ordered by real time across mixed ISO offsets',()=>{
  const dedup=E.appendHistory(sorted,duplicate);
  A.equal(dedup.samples.length,2);A.equal(dedup.samples[1].iv,32);
 });
+
+test('theoretical profit probability applies charges once and goes to zero when fees exceed credit',()=>{
+ const ls=[leg('CE','SHORT',100,5)];const raw=E.pop(ls,100,25,6,0,NOW,0),net=E.pop(ls,100,25,6,0,NOW,1000);
+ A.ok(raw.probability>0);A.equal(net.probability,0);
+});
