@@ -62,7 +62,9 @@ export function createApp({
       // Reverse proxies may terminate HTTPS; only the configured/same host origin is accepted.
       let match = false;
       try {
-        match = new URL(req.get("Origin")!).host === new URL(allowed).host;
+        // Reject an HTTP origin pretending to be the configured HTTPS host.
+        // Deployments behind reverse proxies should set HAL_PUBLIC_ORIGIN.
+        match = new URL(req.get("Origin")!).origin === new URL(allowed).origin;
       } catch {}
       if (!match) return error(res, 403, "Cross-origin request rejected.");
     }
