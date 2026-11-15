@@ -30,7 +30,11 @@ await check('HAL Desk 5 Monte Carlo stress does not modify real trade book',asyn
  await qp.locator('#sc-horizon').fill('2026-11-15');
  await qp.locator('#mc-vol').fill('30');
  await click(qp,'mc-run');
- A.match(await qp.locator('main').innerText(),/Conditional model distribution/);
+ A.match(await qp.locator('#toast').innerText(),/IV unavailable|IV assumption|Scenario model unavailable/);
+ await qp.locator('#scenario-advanced summary').click();
+ await qp.locator('#sc-iv').fill('30');
+ await click(qp,'mc-run');
+ A.match(await qp.locator('main').innerText(),/Conditional model distribution/,await qp.locator('#toast').innerText());
  A.match(await qp.locator('main').innerText(),/Worst 5% mean/);
  A.equal(await qp.evaluate(()=>JSON.stringify(saved)),before);
  A.deepEqual(qe,[]);
