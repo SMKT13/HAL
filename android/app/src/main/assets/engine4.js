@@ -66,7 +66,7 @@ function validateBook(input) {
   if (!j || !['close','fee','settlement','funding'].includes(j.kind) || !validDate(j.date)) fail('Invalid journal entry '+(i+1)+'.');
   const r = {id:safeText(j.id,100)||'journal-'+i,kind:j.kind,date:j.date,note:safeText(j.note,10000)};
   if (j.kind === 'close') {
-   r.leg = validateLeg(j.leg,i); if (!finite(j.exit) || j.exit < 0 || !finite(j.fees) || j.fees < 0) fail('Invalid close price or charges.');
+   r.leg = validateLeg(j.leg,i); if (!finite(j.exit) || j.exit < 0 || (r.leg.type === 'FUT' && j.exit === 0) || !finite(j.fees) || j.fees < 0) fail('Invalid close price or charges.');
    Object.assign(r,{exit:j.exit,fees:j.fees,gross:(j.exit-r.leg.entry)*units(r.leg)});
   } else { if (!finite(j.amount) || (j.kind === 'fee' && j.amount < 0)) fail('Invalid journal cash amount.'); r.amount=j.amount; }
   return r;
