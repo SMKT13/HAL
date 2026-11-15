@@ -54,6 +54,31 @@ test('conflicting same-key lot sizes remove contract from eligible marks',()=>{
  A.equal(m.contracts.some(c=>c.instrumentKey==='F1'),false);
  A.deepEqual(m.contractConflicts,['F1']);
 });
+test('conflicting contract lot specifications reject a matching manual mark and basket P&L',()=>{
+ const snap={spot:{last_price:4700,quote_as_of:at,last_trade_at:at,retrieved_at:at},
+  futures:[{instrument_key:'F1',expiry:'2026-12-29',lot_size:150,quote:{last_price:5000,quote_as_of:at,last_trade_at:at,retrieved_at:at}}]};
+ let s=D.ingest(D.empty(),'snapshot',snap,at);
+ s=D.ingest(s,'research',{section:'contracts',frame:'D',data:{contracts:[{
+  type:'FUT',expiry:'2026-12-29',instrument_key:'F1',lot_size:125,verified:true
+ }]}},at);
+ const m=D.market(s),l={id:'f',type:'FUT',expiry:'2026-12-29',
+  instrumentKey:'F1',lots:1,lotSize:150,entry:4900,manual:5010};
+ const mark=E.resolveMark(l,m,{now:Date.parse(at)});
+ A.equal(mark.price,null);A.equal(mark.mismatch,true);
+ const v=E.ledger({...E.emptyBook(),legs:[l]},m,{now:Date.parse(at)});
+ A.equal(v.complete,false);A.equal(v.open,null);
+});
+test('contract identity mismatch also rejects an unkeyed manual mark',()=>{
+ const snap={spot:{last_price:4700,quote_as_of:at,last_trade_at:at,retrieved_at:at},
+  futures:[{instrument_key:'F1',expiry:'2026-12-29',lot_size:150,quote:{last_price:5000,quote_as_of:at,last_trade_at:at,retrieved_at:at}}]};
+ let s=D.ingest(D.empty(),'snapshot',snap,at);
+ s=D.ingest(s,'research',{section:'contracts',frame:'D',data:{contracts:[{
+  type:'FUT',expiry:'2026-12-29',instrument_key:'F1',lot_size:125,verified:true
+ }]}},at);
+ const mark=E.resolveMark({id:'unkeyed',type:'FUT',expiry:'2026-12-29',
+  lots:1,lotSize:150,entry:4800,manual:5000},D.market(s),{now:Date.parse(at)});
+ A.equal(mark.price,null);A.equal(mark.mismatch,true);
+});
 test('data audit retains independent clocks and counts',()=>{
  const m={spot:q(4700),quotes:{a:q(50,later),b:{...q(60),source:'CACHE'}},
  contractConflicts:['F2']};
