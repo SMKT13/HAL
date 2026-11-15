@@ -3,7 +3,7 @@
   "version": "5.0.0-alpha.1",
   "private": true,
   "scripts": {
-    "test": "node --test tests/data4.test.js tests/engine4.test.js tests/insights4.test.js tests/workflow4.test.js tests/history5.test.js tests/recovery5.test.js tests/optionslab5.test.js tests/optionslab-advanced6.test.js tests/optionslab-audit451.test.js tests/paper-ledger460.test.js tests/risk5.test.js tests/quant5.test.js tests/backtest5.test.js tests/hedge5.test.js tests/lenses5.test.js tests/quality5.test.js tests/migrate5.test.js tests/portfolio5.test.js tests/release5.test.js tests/expiry5.test.js tests/reconcile5.test.js tests/path5.test.js",
+    "test": "node --test tests/data4.test.js tests/engine4.test.js tests/insights4.test.js tests/workflow4.test.js tests/history5.test.js tests/recovery5.test.js tests/optionslab5.test.js tests/optionslab-advanced6.test.js tests/optionslab-audit451.test.js tests/paper-ledger460.test.js tests/risk5.test.js tests/quant5.test.js tests/backtest5.test.js tests/hedge5.test.js tests/lenses5.test.js tests/quality5.test.js tests/continuity5.test.js tests/migrate5.test.js tests/portfolio5.test.js tests/release5.test.js tests/expiry5.test.js tests/reconcile5.test.js tests/path5.test.js",
     "test:ui": "node tests/ui4.test.js",
     "assets": "node scripts/build-assets.js",
     "pretest:ui": "npm run assets"
