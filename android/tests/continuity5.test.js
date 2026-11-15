@@ -57,6 +57,29 @@ test('same instrument key but different lot size is recorded as contract conflic
  A.equal(r.packet.futures[0].quote.last_price,null);
  A.equal(r.contractConflictSpecs.length,2);
 });
+test('future-clock quarantine is resolved by a valid later clock without waiting for the bogus future hour',()=>{
+ const old=snap(),bad=snap('2026-11-15T10:00:00Z');
+ const first=C.reconcile(old,bad,now).packet;
+ A.equal(first.spot.last_price,null);
+ A.equal(first.spot.quote_as_of,start);
+ const good=snap(late);good.spot.last_price=4800;
+ const recovered=C.reconcile(first,good,now).packet;
+ A.equal(recovered.spot.last_price,4800);
+ A.equal(recovered.spot.failure,undefined);
+});
+test('a same-clock verified contract result cannot erase quarantined snapshot prices',()=>{
+ const prior=snap(),contradict=snap();contradict.futures[0].quote.last_price=6000;
+ let s=D.ingest(D.empty(),'snapshot',prior,start);
+ s=D.ingest(s,'snapshot',contradict,late);
+ const before=D.market(s);
+ A.equal(before.quotes.F1.price,null);
+ s=D.ingest(s,'research',{section:'contracts',frame:'D',fetched_at_iso:late,
+  data:{contracts:[{type:'FUT',instrument_key:'F1',expiry:'2026-12-29',
+   lot_size:150,verified:true,quote:q(5000,start)}]}},late);
+ const after=D.market(s);
+ A.equal(after.quotes.F1.price,null);
+ A.equal(after.quotes.F1.failure.startsWith('HAL5 quote integrity:'),true);
+});
 test('failure cannot modify prior or incoming source packets',()=>{
  const old=snap(),incoming=snap(early),before=JSON.stringify([old,incoming]);
  C.reconcile(old,incoming,now);
