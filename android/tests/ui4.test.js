@@ -322,6 +322,55 @@ await browser.close();browser=await launch();await check('wrong saved expiry sta
 await browser.close();browser=await launch();await check('obsolete chain selection resets to listed expiry and exposes failure inline',async()=>{x=await pageFor();p=x.page;await emit(p,'snapshot',{...snap,option_expiry:'2026-10-27',available_expiries:['2026-10-27']});await emit(p,'connection',{configured:true});await emit(p,'snapshot',{...snap,option_expiry:'2026-10-27',option_rows:[],chain_error:'expiry_not_listed'});await nav(p,'technicals','markets');A.equal(await p.locator('#chain-expiry').inputValue(),PUT.expiry);const calls=await p.evaluate(()=>window.calls.filter(c=>c[0]==='research').map(c=>JSON.parse(c[1])));A.ok(calls.some(r=>r.section==='hedges'&&r.frame===PUT.expiry));await emit(p,'research_error',{key:'hedges:'+PUT.expiry+':consolidated',code:'upstox_permission_denied'});const card=p.locator('section.card').filter({has:p.getByRole('heading',{name:'Option chain',exact:true})});A.match(await card.innerText(),/cannot access this feed/);A.deepEqual(x.errors,[]);await x.context.close();});
 
 await browser.close();browser=await launch();
+await check('same-book daily review explains futures and put price moves without recording trades',async()=>{
+ const I=require('../app/src/main/assets/insights4.js');
+ const b=E.validateBook({...E.emptyBook(),legs:[FUT,PUT]});
+ const oldTime=new Date(now-60000).toISOString();
+ const oldQ=p=>({...q(p),quote_as_of:oldTime,last_trade_at:oldTime,retrieved_at:oldTime});
+ const older={...snap,spot:{...oldQ(4900),prev_close:4870},fetched_at_iso:oldTime,
+  futures:[{instrument_key:'SYNTH_F',expiry:FUT.expiry,lot_size:150,quote:oldQ(4990)}],
+  option_rows:[{strike:4500,put:{instrument_key:'SYNTH_P',lot_size:150,quote:oldQ(55)}}]};
+ const oldMarket=E.normalizeMarket(older),at=now-59000;
+ const previous=I.checkpoint({book:b,market:oldMarket,valuation:E.ledger(b,oldMarket,{now:at}),
+  risk:E.risk(b,oldMarket,at)},at);
+ const x=await pageFor({book:b,cache:{'snapshot:review':{version:1,current:previous}}});
+ await emit(x.page,'connection',{configured:true});await emit(x.page,'snapshot',snap);
+ const review=x.page.locator('section.card').filter({has:x.page.getByRole('heading',{name:'Since your last visit',exact:true})});
+ A.match(await review.innerText(),/2,250.00/);
+ await review.locator('summary').filter({hasText:'Per-leg P&L change'}).click();
+ const output=await review.innerText();
+ A.match(output,/3,000.00/);A.match(output,/750.00/);
+ A.match(output,/not realised P&L, fees or causation/i);
+ A.equal(await x.page.evaluate(()=>saved.journal.length),0);
+ A.deepEqual(x.errors,[]);
+ await x.context.close();
+});
+await check('HAL Desk 5 rollover compares exact fresh futures quotes without changing saved book',async()=>{
+ const near={...FUT,expiry:'2026-11-23',instrumentKey:'SYNTH_NEAR'};
+ const seed={...E.emptyBook(),legs:[near,PUT]};
+ const x=await pageFor({book:seed});
+ const packet={...snap,futures:[
+  {instrument_key:'SYNTH_NEAR',expiry:'2026-11-23',lot_size:150,quote:q(5000)},
+  {instrument_key:'SYNTH_FAR',expiry:'2026-12-29',lot_size:150,quote:q(5030)}]};
+ await emit(x.page,'connection',{configured:true});
+ await emit(x.page,'snapshot',packet);
+ await nav(x.page,'position','risk');
+ const original=await x.page.evaluate(()=>JSON.stringify(saved));
+ await click(x.page,'v5-rollover');
+ await x.page.locator('#ro-next').selectOption('SYNTH_FAR');
+ await x.page.locator('#ro-exit').fill('100');
+ await x.page.locator('#ro-entry').fill('200');
+ await x.page.locator('#ro-slip').fill('1');
+ await save(x.page);
+ const preview=await x.page.locator('[data-calculation-output]').last().innerText();
+ A.match(preview,/Hypothetical futures rollover/);
+ A.match(preview,/New futures notional/);
+ A.match(preview,/minimum unmatched/i);
+ A.match(preview,/margin/i);
+ A.equal(await x.page.evaluate(()=>JSON.stringify(saved)),original);
+ A.deepEqual(x.errors,[]);
+ await x.context.close();
+});
 await check('daily review saves fresh observations separately and keeps the prior visit fixed',async()=>{
  const I=require('../app/src/main/assets/insights4.js');const b=E.validateBook({...E.emptyBook(),legs:[FUT,PUT]});
  const previous={version:4,savedAt:new Date(now-3600000).toISOString(),quoteAsOf:new Date(now-3601000).toISOString(),bookRevision:I.materialFingerprint(b),spot:4900,open:22000,complete:true,newsURLs:[]};
