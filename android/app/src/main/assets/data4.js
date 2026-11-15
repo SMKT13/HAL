@@ -65,7 +65,7 @@ function market(s){
  result.contractConflicts=[...new Set([...contractConflicts,...(s.snapshot?._continuityContractConflicts||[])])];
  result.contractConflictSpecs=[...contractConflictSpecs,...(s.snapshot?._continuityContractSpecs||[])];
  if(result.contractConflicts.length){
-  result.contracts=result.contracts.filter(c=>!contractConflicts.has(c.instrumentKey));
+  result.contracts=result.contracts.filter(c=>!result.contractConflicts.includes(c.instrumentKey));
   for(const id of result.contractConflicts)result.quotes[id]=Q5.errorQuote(
    result.quotes[id]||E.normQuote({}), 'Conflicting instrument type, expiry, strike or lot size for the same key');
  }
