@@ -21,7 +21,9 @@ Status: **initial implementation, not a completed application**. Existing 4.6 re
 ## Implemented on this branch (first vertical slice)
 - `android/app/src/main/assets/risk5.js`: strict civil-date validation, lot-to-share conversion, protective-put coverage through expiry, dated protection ladder, explicit per-expiry hypothetical settlement P&L, and mark-to-mark incremental risk.
 - `android/app/src/main/assets/quant5.js`: seeded, reproducible illustrative lognormal spot-scenario distribution; accepts a supplied portfolio-pricing callback, refuses missing values.
-- `android/app/src/main/assets/ui4.js`: Risk tab shows the protection ladder, read-only multiple-expiry settlement input, and hypothetical lifetime net using actual recorded closed gross P&L and costs. Stress tab can simulate additional P&L relative to complete current marks using user-specified annual stock volatility.
+- `android/app/src/main/assets/backtest5.js`: independent daily-bar SMA-cross research engine; next-bar-open PAPER fills only after completed close signals, explicit two-sided fee/slippage inputs, marked unrealised versus closed gains, drawdown tracking and descriptive 20/50 SMA + realised-volatility regime.
+- `android/tests/backtest5.test.js` plus Playwright coverage: rejects invalid/missing candles, same-bar look-ahead and invalid window assumptions; confirms the real trade ledger is never modified.
+- `android/app/src/main/assets/ui4.js`: Risk tab shows the protection ladder, read-only multiple-expiry settlement input, and hypothetical lifetime net using actual recorded closed gross P&L and costs. Stress tab can simulate additional P&L relative to complete current marks using user-specified annual stock volatility. Technicals → Backtest provides a long-only cash-equity reference using verified completed daily candles.
 - `android/scripts/build-assets.js`: includes the two new modules in the pinned esbuild/Chrome 61 WebView bundle, subject to asset hash checks.
 - `android/tests/risk5.test.js`, `quant5.test.js` and additions to `ui4.test.js`: formula, safety and UI/book-isolation regressions; now included in `npm test` and `npm run test:ui`.
 - `rebuild5/risk-core.mjs`: compatibility re-export from the Android source of truth. No duplicate financial implementation.
@@ -32,7 +34,7 @@ Status: **initial implementation, not a completed application**. Existing 4.6 re
 - It has **not** been installed on a physical phone, authenticated against real Upstox quotes or signed with the original certificate.
 - Monte Carlo fractions are **conditional model samples**, not real-world loss probabilities, historical backtests, guarantees or entry signals.
 - The multi-expiry calculator needs explicit settlement values for every option/futures expiry. It is not a substitute for physical-settlement funding/margin calculations, actual broker account records or commission reconciliation.
-- Next: independently rebuilt data/position adapters, richer hedge comparison, historical strategy backtesting, six-perspective AI workflow and source-validated release testing.
+- Next: independently rebuilt data/position adapters, richer hedge comparison, advanced regime diagnostics, historical put/futures P&L backtesting once historical contract data is available, six-perspective AI workflow and source-validated release testing.
 
 ## Licensing
 Implement independent mathematical algorithms; do not copy AGPL Fincept source or proprietary Sensibull resources without a separate compatibility and license review.
