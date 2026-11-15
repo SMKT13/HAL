@@ -37,6 +37,12 @@ test('integrity quarantine persists across other feeds with the same source cloc
  A.equal(Q.chooseQuote(first,same).price,null);
  A.equal(Q.chooseQuote(first,q(5100,later)).price,5100);
 });
+test('cached and failed feeds cannot repair a quarantined quote even with newer provider clock',()=>{
+ const old={...q(5000),price:null,failure:'HAL5 quote integrity: conflicting traded prices'};
+ A.equal(Q.chooseQuote(old,{...q(5100,later),source:'CACHE'}).price,null);
+ A.equal(Q.chooseQuote(old,{...q(5100,later),source:'REST',failure:'provider unavailable'}).price,null);
+ A.equal(Q.chooseQuote(old,q(5100,later)).price,5100);
+});
 test('market aggregation with conflicting same-time option quote fails closed',()=>{
  const now=at,snap={spot:{last_price:4700,quote_as_of:at,last_trade_at:at,retrieved_at:at},
   futures:[{instrument_key:'F1',expiry:'2026-12-29',lot_size:150,quote:{last_price:5000,quote_as_of:at,last_trade_at:at,retrieved_at:at}}]};
