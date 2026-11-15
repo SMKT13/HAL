@@ -35,3 +35,31 @@ test('existing offline data, cleartext and order-routing restrictions remain exp
  A.doesNotMatch(manifest,/android\.permission\.READ_SMS|android\.permission\.SEND_SMS/);
  A.match(read('README.md'),/read-only, no orders/i);
 });
+
+test('new independently audited risk modules are in the Android WebView source bundle',()=>{
+ const script=read('scripts/build-assets.js');
+ for(const name of ['attribution5.js','rollover5.js','path5.js','continuity5.js','reconcile5.js']){
+  A.ok(script.includes("'"+name+"'"),'Unbundled source module '+name);
+ }
+ const pkg=JSON.parse(read('package.json'));
+ for(const name of ['attribution5.test.js','rollover5.test.js']){
+  A.ok(pkg.scripts.test.includes(name),'Missing calculation regression '+name);
+ }
+});
+test('free Windows local verifier defaults to unsigned, requires full checks before original-key signing',()=>{
+ const script=read('scripts/local-windows-release.ps1');
+ A.match(script,/\[switch\]\$Sign/);
+ A.match(script,/\$Sign\s+-and\s+\$SkipBrowser/);
+ A.match(script,/npm\.cmd/);
+ A.match(script,/test:ui/);
+ A.match(script,/:app:testReleaseUnitTest/);
+ A.match(script,/:app:lintRelease/);
+ A.match(script,/:app:assembleRelease/);
+ A.match(script,/zipalign\.exe/);
+ A.match(script,/apksigner\.bat/);
+ A.match(script,/HAL_SIGNING_KEY_FILE/);
+ A.match(script,/HAL_SIGNING_PASSWORD_FILE/);
+ A.match(script,/a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382/);
+ A.match(script,/Remove-Item -LiteralPath \$signed/);
+ A.doesNotMatch(script,/adb\s+uninstall|pm\s+clear|gh\s+workflow\s+run/);
+});
