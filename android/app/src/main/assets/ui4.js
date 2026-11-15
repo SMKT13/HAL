@@ -1,7 +1,7 @@
 /* HAL Desk 4 presentation. Finance, persistence, transport and AI policy are separate modules. */
 (function(){'use strict';
 const V5=HAL5Risk,Q5=HAL5Quant,B5=HAL5Backtest,H5=HAL5Hedge,L5=HAL5Lenses,P5=HAL5Portfolio,X5=HAL5Expiry,C5=HAL5Reconcile,Z5=HAL5ScenarioPath,M5=HAL5MigrationGuard;
-const E=HAL4Engine,D=HAL4Data,I=HAL4Insights,W=HAL4Workflow,N=window.HALNative,$=id=>document.getElementById(id),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const E=HAL4Engine,D=HAL4Data,I=HAL4Insights,A5=HAL5Attribution,W=HAL4Workflow,N=window.HALNative,$=id=>document.getElementById(id),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=(v,d=2)=>E.finite(v)?v.toLocaleString('en-IN',{maximumFractionDigits:d}):'—',money=v=>E.finite(v)?(v<0?'−':'')+'₹'+Math.abs(v).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable',pct=v=>E.finite(v)?num(v)+'%':'—';
 const when=v=>v&&Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' IST':'Time unavailable',date=v=>E.validDate(v)?new Date(v+'T00:00:00Z').toLocaleDateString('en-IN',{timeZone:'UTC',day:'2-digit',month:'short',year:'numeric'}):'—',stamp=()=>new Date().toISOString(),clone=v=>JSON.parse(JSON.stringify(v)),color=v=>E.finite(v)?v<0?'negative':'positive':'muted';
 const btn=(a,t,x='')=>`<button data-action="${a}" ${x}>${t}</button>`,badge=(t,c='')=>`<span class="badge ${esc(c)}">${esc(t)}</span>`,row=(a,b)=>`<div class="row"><span>${esc(a)}</span><strong>${esc(b)}</strong></div>`,tile=(a,b,c='')=>`<div class="metric"><small>${esc(a)}</small><strong>${esc(b)}</strong><span>${esc(c)}</span></div>`,empty=(a,b='')=>`<div class="empty"><strong>${esc(a)}</strong>${esc(b)}</div>`,card=(a,b,c='')=>`<section class="card"><div class="section-heading"><h2>${esc(a)}</h2>${c}</div>${b}</section>`;
@@ -64,9 +64,17 @@ const subnav=(group,items)=>`<div class="subnav">${items.map(([k,t])=>`<button d
 function clocks(q){const z=E.quoteQuality(q);return row('Provider quote',when(q?.quoteAt))+row('Last exchange trade',when(q?.tradeAt))+row('HTTP retrieved',when(q?.retrievedAt))+row('Last successful refresh',when(s.lastSuccess))+row('Last failed refresh',when(s.lastFailure))+`<p class="fine">${esc([...z.reasons,...z.warnings].join(' · ')||'A recent HTTP retrieval does not establish a recent exchange trade.')}</p>`;}
 
 function changeView(){
- const c=changes();
+ const current=checkpoint(),c=I.changes(reviewBaseline,current,news());
  if(!c.ready)return `<p class="fine">${reviewCaptured?'Your first review is saved. Your next visit will compare with this observation.':'Load current prices for every leg to begin. Reviews save automatically while Today is open.'}</p>`;
- return `<p class="fine">Compared with ${esc(when(c.from))}</p><div class="metrics">${tile('HAL price change',money(c.spot))}${tile('Open P&L change',money(c.open),c.sameBook?'Same recorded position':'Position changed')}</div><p class="fine">${esc(c.reason)}</p>`;
+ const attribution=A5.compare(reviewBaseline,current);
+ return `<p class="fine">Compared with ${esc(when(c.from))}</p><div class="metrics">${tile('HAL spot difference',money(c.spot))}${tile('Open P&L change',money(c.open),attribution.available?'Reconciled exact REST marks':c.sameBook?'Indicative · attribution unavailable':'Position changed')}</div><p class="fine">${esc(c.reason)}</p>`+
+  (attribution.available?'<details><summary>Per-leg P&amp;L change from verified market marks</summary>'+
+   table(['Contract','Earlier mark','Latest mark','Change'],attribution.items.map(r=>[
+    r.type+' '+date(r.expiry)+(r.type==='PE'?' '+num(r.strike,0)+' PE':'')+' · '+num(r.units,0)+' units',
+    money(r.from),money(r.to),money(r.pnl)]))+
+   row('Reconciled change in open P&L',money(attribution.total))+
+   '<p class="fine">'+esc(attribution.scope)+' Quote timestamps are checked for each open contract. This comparison excludes transaction fees and cannot explain why a price moved.</p></details>':
+   '<p class="fine">Per-leg change withheld: '+esc(attribution.reason)+' Older review checkpoints remain readable but need a second complete observation for a reliable contract-level comparison.</p>');
 }
 function articleCards(list,limit=30){return list.slice(0,limit).map(n=>`<article class="news-item"><div class="news-meta"><span>${esc(n.source||'Unknown source')}${n.official?' · Official filing':''}</span><span>${esc(when(n.publishedAt))}</span></div><h3>${esc(n.title)}</h3>${n.summary?'<p>'+esc(n.summary)+'</p>':''}${n.duplicates?.length?badge(n.duplicates.length+' duplicates grouped'):''}${ui.sentiments[n.url]?badge('FinBERT '+ui.sentiments[n.url].label+' '+pct(ui.sentiments[n.url].confidence*100)):''}<div class="toolbar">${n.url?btn('link','Read source',`data-url="${esc(n.url)}" class="text-button"`)+btn('explain-news','Explain',`data-url="${esc(n.url)}" class="text-button"`)+btn('bookmark',book.bookmarks.some(b=>b.url===n.url)?'Saved':'Save',`data-url="${esc(n.url)}" class="text-button"`):badge('Link unavailable')}</div><p class="fine">Retrieved ${esc(when(n.retrievedAt))}</p></article>`).join('')||empty('No verified news loaded','Refresh when connected. Absence from a feed does not prove that no event occurred.');}
 
