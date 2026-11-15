@@ -18,7 +18,7 @@ await check('HAL Desk 5 risk ladder and mixed-expiry modal preserve real book',a
  await rp.locator('#v5-opt-2026-11-23').fill('4300');
  await rp.locator('#v5-fut-2026-12-29').fill('5000');
  await save(rp);
- A.match(await rp.locator('main').innerText(),/Combined expiry P&L after entered costs/);
+ A.match(await rp.locator('main').innerText(),/Lifetime net under scenario/);
  A.equal(await rp.evaluate(()=>JSON.stringify(saved)),before);
  A.deepEqual(re,[]);
  await rc.close();
