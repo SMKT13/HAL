@@ -7,7 +7,7 @@ const errors={credential_missing:'Add an Upstox Analytics Token in Connection.',
 function message(code){return errors[code]||String(code||'Data unavailable').replace(/_/g,' ');}
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const errorSummary=data=>{const e={...(object(data?.data?.errors)?data.data.errors:{}),...(object(data?.errors)?data.errors:{})};if(data?.chain_error)e.chain=data.chain_error;return Object.keys(e).length?Object.entries(e).map(([k,v])=>k+': '+message(v)).join('; '):null;};
-function empty(){return {snapshot:null,research:{},health:{},lastSuccess:null,lastFailure:null,failure:null,loading:false,cached:false,stream:null};}
+function empty(){return {snapshot:null,research:{},health:{},lastSuccess:null,lastFailure:null,failure:null,loading:false,cached:false,stream:null,integrityHistory:[]};}
 function key(section,frame='D',type='consolidated'){return section+':'+frame+(section==='fundamentals'?':'+type:'');}
 function ingest(state,event,data,now=stamp()){
  const s={...state,research:{...state.research},health:{...state.health}};
@@ -21,6 +21,10 @@ function ingest(state,event,data,now=stamp()){
    code:'unresolved_contract_identity',instrument:id,
    detail:'Instrument identity conflict remains blocked pending verified contract recheck.'}));
   const outstanding=[...check.issues,...identityWarnings];
+  // Keep only bounded, source-free incident metadata; never store quote values,
+  // broker tokens or actual portfolio entries in the market integrity trail.
+  s.integrityHistory=[...(Array.isArray(s.integrityHistory)?s.integrityHistory:[]),
+   ...check.issues.map(x=>({at:now,code:x.code,instrument:x.instrument,detail:x.detail}))].slice(-25);
   s.lastSuccess=now;s.failure=outstanding.length?'market_integrity_review':null;
   s.cached=false;s.loading=false;
   s.health.market={...s.health.market,pending:null,lastSuccess:now,
@@ -95,7 +99,8 @@ function loadBook(native,storage){
  return {book:E.emptyBook(),revision:0,migrated:false};
 }
 function saveBook(native,storage,book,revision){const clean=E.validateBook(book);if(native?.saveBook){const r=JSON.parse(native.saveBook(JSON.stringify(clean),revision));if(!r.ok)throw Error(r.message||'Book save failed; changes not committed.');return {book:clean,revision:r.revision};}const old=storage.getItem('hal_desk_v4');if(old)storage.setItem('hal_previous_v4',old);storage.setItem('hal_desk_v4',JSON.stringify(clean));return {book:clean,revision:revision+1};}
-function cache(s){return {version:4,snapshot:s.snapshot,research:s.research,health:s.health,lastSuccess:s.lastSuccess,lastFailure:s.lastFailure,failure:s.failure};}
-function restoreCache(raw){if(!raw||typeof raw!=='object')return empty();const s={...empty(),...raw,loading:false,cached:true,stream:null};s.health=object(s.health)?clone(s.health):{};if(s.snapshot)s.snapshot={...s.snapshot,_cache:true};s.research={...(s.research||{})};for(const [k,p]of Object.entries(s.research))s.research[k]={...p,_cache:true};for(const [k,h]of Object.entries(s.health)){if(object(h))h.pending=null;else delete s.health[k];}return s;}
+function cache(s){return {version:4,snapshot:s.snapshot,research:s.research,health:s.health,lastSuccess:s.lastSuccess,lastFailure:s.lastFailure,failure:s.failure,integrityHistory:(s.integrityHistory||[]).slice(-25)};}
+function restoreCache(raw){if(!raw||typeof raw!=='object')return empty();const s={...empty(),...raw,loading:false,cached:true,stream:null};s.health=object(s.health)?clone(s.health):{};
+ s.integrityHistory=Array.isArray(s.integrityHistory)?s.integrityHistory.filter(x=>object(x)&&typeof x.code==='string'&&typeof x.at==='string').slice(-25).map(x=>({at:String(x.at).slice(0,40),code:String(x.code).slice(0,80),instrument:String(x.instrument||'').slice(0,100),detail:String(x.detail||'').slice(0,240)})):[];if(s.snapshot)s.snapshot={...s.snapshot,_cache:true};s.research={...(s.research||{})};for(const [k,p]of Object.entries(s.research))s.research[k]={...p,_cache:true};for(const [k,h]of Object.entries(s.health)){if(object(h))h.pending=null;else delete s.health[k];}return s;}
 const api={empty,key,ingest,packet,market,rawCandles,news,message,safeBackup,previewImport,loadBook,saveBook,cache,restoreCache};if(typeof module==='object'&&module.exports)module.exports=api;root.HAL4Data=api;
 })(typeof globalThis==='undefined'?this:globalThis);
