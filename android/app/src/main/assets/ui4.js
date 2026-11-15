@@ -134,10 +134,11 @@ function v5ExpiryPanel(large=false){
 }
 function today(m,l,r){
  const audit=P5.audit(book,l),verifiedOpen=audit.consistent?audit.open:null,verifiedNet=audit.consistent?audit.net:null,bookedNet=audit.consistent?audit.bookedNet:null;
- const q=E.quoteQuality(m.spot),daily=E.finite(m.spot.price)&&E.finite(m.spot.previousClose)?m.spot.price-m.spot.previousClose:null;
+ const q=E.quoteQuality(m.spot),integrityBlocked=s.failure==='market_integrity_review',daily=!integrityBlocked&&q.valid&&E.finite(m.spot.price)&&E.finite(m.spot.previousClose)?m.spot.price-m.spot.previousClose:null;
+ const dailyLabel=integrityBlocked?'withheld pending price integrity review':q.status==='current'&&!s.failure?'today':'last recorded change · not live';
  const next=W.priority(evidence(),configured),c=changes(),recent=(c.ready?c.newNews:news()).slice(0,1);
  return ''+
- `<div class="price-ribbon"><div><span class="eyebrow">HAL · NSE</span><strong>${money(m.spot.price)}</strong></div><div class="price-change ${color(daily)}">${money(daily)} today${badge(q.status,q.status)}</div></div>`+
+ `<div class="price-ribbon"><div><span class="eyebrow">HAL · NSE</span><strong>${money(m.spot.price)}</strong></div><div class="price-change ${color(daily)}">${money(daily)} ${esc(dailyLabel)}${badge(q.status,q.status)}</div></div>`+
  (!book.legs.length?card('Start with your actual position',`<p>Connect prices, record your futures and puts, then review them together.</p><ol class="setup-steps"><li>${configured?'Prices connected':btn('connection','Connect Upstox')}</li><li>${btn('add','Add first position','class="primary"')}</li><li>Confirm the entries against your broker.</li></ol><p class="fine">You can record positions offline. No example holdings are added.</p>`):'')+
  `<div class="daily-grid"><section class="card hero daily-position"><span class="eyebrow">Your combined position</span><div class="hero-value ${color(verifiedOpen)}">${book.legs.length?money(verifiedOpen):'No open book'}</div><p class="fine">Indicative open P&L · ${l.manual?'manual marks included':l.stale?'older prices':l.complete?'all marks available':'missing contract prices'}</p><p class="fine">Strategy net <strong>${money(verifiedNet)}</strong> · includes recorded realised P&amp;L and charges</p>${btn('go-book','View my position →','class="text-button"')}</section>`+
  `<section class="card next-review"><span class="eyebrow">Next review</span><h2>${esc(next.title)}</h2><p>${esc(next.detail)}</p>${btn(next.action,next.label,'class="primary"')}${book.legs.length?btn('explain-position','Explain my protection','class="text-button"'):''}</section></div>`+
@@ -387,8 +388,9 @@ function v5DataQualityPanel(a){
   '<p class="fine">A contradictory contract or same-clock traded price is unavailable for portfolio valuation until a valid subsequent observation resolves it.</p>';
 }
 function health(){
- const m=market(),quality=v5DataQualityPanel(m.dataQuality);
+ const m=market(),quality=v5DataQualityPanel(m.dataQuality),warnings=s.health.market?.integrityWarnings||[];
  modal('Data readiness & connection health',quality+
+  (warnings.length?'<h3>Latest refresh continuity notices</h3>'+table(['Instrument','Issue'],warnings.map(x=>[x.instrument,x.detail])):'')+
   Object.entries(s.health).map(([k,h])=>
    `<div class="health-row"><div><strong>${esc(k)}</strong><small>Success ${when(h.lastSuccess)}<br>Failure ${when(h.lastFailure)}</small><small>${esc(h.error?D.message(h.error):'')}</small></div>${badge(h.pending?'Loading':h.error?'Needs review':h.lastSuccess?'Retrieved':'Unavailable',h.error?'stale':'')}</div>`).join(''),null,null);
 }
