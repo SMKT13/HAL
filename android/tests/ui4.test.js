@@ -310,6 +310,8 @@ await check('4.6 PAPER immutable opening, clone and explicit close preserve orig
 });
 
 
+// A new Chromium process isolates Quant Lab from the preceding long PAPER suite.
+await browser.close();browser=await launch();
 await check('4.7 Quant Lab integrates with both Position and Technicals, remains read only',async()=>{
  const seeded=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT]}}),p=seeded.page;
  try{
