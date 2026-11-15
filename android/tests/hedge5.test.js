@@ -41,6 +41,11 @@ test('cannot accept unlisted candidate or insufficient whole lots',()=>{
  const x=base();A.throws(()=>H.auditHedge(x.book,x.result,'FAKE','2026-12-29'),/not eligible/);
  x.result.candidates[0].lots=1;A.throws(()=>run(x),/fully cover/);
 });
+test('cash-releasing rollover keeps signed negative net requirement',()=>{
+ const x=base(),c=x.result.candidates[0];
+ c.saleProceeds=35000;c.netCashRequired=c.grossCost+c.exitFees-c.saleProceeds;
+ const v=run(x);A.equal(v.accounting.netCashRequired,-4820);
+});
 test('reject net cash accounting mismatch',()=>{
  const x=base();x.result.candidates[0].netCashRequired++;
  A.throws(()=>run(x),/Inconsistent/);
