@@ -104,7 +104,9 @@ function normQuote(q={}, fallback={}) {
  return {price:num(q.price,q.last_price,q.ltp),bid:num(q.bid,q.bid_price,buy.price),ask:num(q.ask,q.ask_price,sell.price),bidQty:num(q.bidQty,q.bid_qty,q.bid_quantity,buy.quantity),askQty:num(q.askQty,q.ask_qty,q.ask_quantity,sell.quantity),quoteAt:iso(q.quoteAt??q.quote_as_of??q.timestamp??fallback.quoteAt),tradeAt:iso(q.tradeAt??q.last_trade_at??q.last_trade_time??q.ltt),retrievedAt:iso(q.retrievedAt??q.retrieved_at??q.fetched_at_iso??fallback.retrievedAt),source:q.source||fallback.source||'REST',delta:num(q.delta,g.delta),theta:num(q.theta,g.theta),iv:num(q.iv,g.iv),greeksAt:iso(q.greeksAt??q.greeks_timestamp),thetaPerDayVerified:q.thetaPerDayVerified===true||q.theta_unit_verified===true,volume:num(q.volume,q.volume_traded),oi:num(q.oi,q.open_interest),previousOi:num(q.previousOi,q.previous_oi),previousClose:num(q.previousClose,q.prev_close,q.prev_close_price,q.ohlc?.close),lastSuccess:iso(q.lastSuccess??fallback.lastSuccess),lastFailure:iso(q.lastFailure??fallback.lastFailure),failure:safeText(q.failure||fallback.failure,500)||null};
 }
 function normalizeMarket(input={}) {
- const out={contracts:[],quotes:{},spot:normQuote(input.spot||{}, {retrievedAt:input.fetched_at_iso}),marketOpen:input.marketOpen??null,lastSuccess:iso(input.lastSuccess??input.fetched_at_iso),lastFailure:iso(input.lastFailure),failure:input.failure||null};
+ const out={contracts:[],quotes:{},spot:normQuote(input.spot||{}, {retrievedAt:input.fetched_at_iso}),marketOpen:input.marketOpen??null,lastSuccess:iso(input.lastSuccess??input.fetched_at_iso),lastFailure:iso(input.lastFailure),failure:input.failure||null,
+  contractConflicts:Array.isArray(input.contractConflicts)?input.contractConflicts.filter(x=>typeof x==='string'):[],
+  contractConflictSpecs:Array.isArray(input.contractConflictSpecs)?input.contractConflictSpecs.map(normContract):[]};
  const seen=new Set(); const add=(raw,quote) => {const c=normContract(raw);if(!c.instrumentKey)c.instrumentKey=[c.type,c.expiry,c.strike??''].join('|');if(!seen.has(c.instrumentKey)){out.contracts.push(c);seen.add(c.instrumentKey);}if(quote)out.quotes[c.instrumentKey]=normQuote(quote,{retrievedAt:input.fetched_at_iso,lastSuccess:out.lastSuccess,lastFailure:out.lastFailure,failure:out.failure});};
  for(const c of input.contracts||[])add(c,input.quotes?.[contractKey(c)]||c.quote);
  for(const [key,q] of Object.entries(input.quotes||{}))out.quotes[key]=normQuote(q,{retrievedAt:input.fetched_at_iso,lastSuccess:out.lastSuccess,lastFailure:out.lastFailure,failure:out.failure});
@@ -146,7 +148,14 @@ function quoteQuality(q, opts={}) {
  return {valid:reasons.length===0,fresh:reasons.length===0&&!quoteStale&&!tradeStale&&Number.isFinite(tradeAt),status:reasons.length?'unavailable':quoteStale||tradeStale||q?.source==='CACHE'||failed?'stale':'current',reasons,warnings,quoteAge:Number.isFinite(quoteAt)?now-quoteAt:null,tradeAge:Number.isFinite(tradeAt)?now-tradeAt:null,quoteAt:iso(quoteAt),tradeAt:iso(tradeAt),retrievedAt:iso(retrievedAt)};
 }
 function matchContract(leg, market) {
- const m=market?.contracts?market:normalizeMarket(market),exact=m.contracts.filter(c=>c.type===leg.type&&c.expiry===leg.expiry&&(leg.type!=='PE'||c.strike===leg.strike));
+ const m=market?.contracts?market:normalizeMarket(market);
+ const conflicts=Array.isArray(m.contractConflicts)?m.contractConflicts:[],
+  conflictSpecs=Array.isArray(m.contractConflictSpecs)?m.contractConflictSpecs:[],
+  conflictByKey=!!leg.instrumentKey&&conflicts.includes(leg.instrumentKey),
+  conflictBySpec=conflictSpecs.some(c=>c.type===leg.type&&c.expiry===leg.expiry&&(leg.type==='FUT'||c.strike===leg.strike));
+ if(conflictByKey||conflictBySpec)
+  return {contract:null,error:'Conflicting provider contract identity; reverify exact instrument, expiry, strike and lot size before manual or automatic valuation',mismatch:true};
+ const exact=m.contracts.filter(c=>c.type===leg.type&&c.expiry===leg.expiry&&(leg.type!=='PE'||c.strike===leg.strike));
  const chosen=leg.instrumentKey?exact.find(c=>c.instrumentKey===leg.instrumentKey):exact.length===1?exact[0]:null;
  if(!chosen)return {contract:null,error:leg.instrumentKey?'Saved instrument key does not match an exact listed contract':exact.length>1?'Ambiguous contract; save its exact instrument key':'Exact listed contract unavailable',mismatch:false};
  if(chosen.lotSize!==leg.lotSize)return {contract:chosen,error:'Saved lot size differs from the provider contract',mismatch:true};
