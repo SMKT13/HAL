@@ -108,6 +108,22 @@ test('data boundary preserves newer held mark after an out-of-order later HTTP r
  A.equal(m.quotes.F1.failure.includes('HAL5 quote integrity'),true);
  A.equal(m.dataQuality.provenanceFailures>0,true);
 });
+test('integrity incident trail survives cache recovery without changing saved ledger',()=>{
+ const old=snap(),older=snap(early);
+ let s=D.ingest(D.empty(),'snapshot',old,start);
+ s=D.ingest(s,'snapshot',older,late);
+ A.equal(s.integrityHistory.length,3);
+ const cached=D.cache(s),restored=D.restoreCache(cached);
+ A.deepEqual(restored.integrityHistory,s.integrityHistory);
+ A.equal(D.market(restored).quotes.F1.price,5000);
+ A.equal(restored.integrityHistory[0].code,'provider_clock_regression');
+});
+test('integrity incident history is bounded to 25 records and contains no raw quote values',()=>{
+ let s=D.ingest(D.empty(),'snapshot',snap(),start);
+ for(let i=0;i<12;i++)s=D.ingest(s,'snapshot',snap(early),late);
+ A.equal(s.integrityHistory.length,25);
+ A.ok(s.integrityHistory.every(x=>!Object.hasOwn(x,'price')&&!Object.hasOwn(x,'quote')));
+});
 test('contract identity conflict remains visible across later ordinary refreshes',()=>{
  const old=snap(),changed=snap(late);changed.futures[0].lot_size=125;
  let s=D.ingest(D.empty(),'snapshot',old,start);
