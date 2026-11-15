@@ -28,14 +28,15 @@ function build(input={},now=Date.now(),confirmed=false){
   'Futures/put entries exist, but current marks, source clocks or net Greeks need review.',
   'Check contract identifiers, bid/ask quality, quantity and expiry mismatch.',dated(spot.quoteAt));
  const metrics=arr(f.metrics).filter(x=>finite(x?.value)&&typeof x.label==='string'&&x.label.length&&x.kind==='provider');
- const fundamentals=state('fundamentals','Fundamentals',metrics.length?'available':'unavailable',
-  metrics.length?metrics.length+' provider-reported numerical metrics loaded; periods/units require review.':
+ const financeDated=dated(f.profile?.retrievedAt)!=null;
+ const fundamentals=state('fundamentals','Fundamentals',metrics.length?(financeDated?'available':'review'):'unavailable',
+  metrics.length?metrics.length+' provider-reported numerical metrics loaded; periods/units and retrieval timestamp require review.':
   'No verified numerical financial statement metrics loaded.',
   'Compare reported periods, standalone/consolidated basis and original HAL filings.',
   dated(f.profile?.retrievedAt));
  const verifiedNews=news.filter(x=>typeof x?.title==='string'&&/^https:\/\/[^/\s]+/i.test(x.url||'')&&
     dated(x.publishedAt)!=null);
- const recent=verifiedNews.filter(x=>now-Date.parse(x.publishedAt)<=30*86400000);
+ const recent=verifiedNews.filter(x=>now-Date.parse(x.publishedAt)>=0&&now-Date.parse(x.publishedAt)<=30*86400000);
  const newsLens=state('news','News',recent.length?'available':'review',
   recent.length?recent.length+' dated, source-linked item(s) in the last 30 days.':
   'No recent source-linked headline in the loaded feed; this does not imply that no HAL event occurred.',
