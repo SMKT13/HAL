@@ -4,6 +4,20 @@ const now=Date.parse('2026-11-01T06:30:00Z'),ts=new Date(now).toISOString(),old=
 const mem=()=>{const m=new Map();return {getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v)}};
 test('partial snapshot without spot retains actual futures',()=>{const x=D.ingest(D.empty(),'snapshot',{...snap(),spot:null},ts),m=D.market(x);A.equal(m.spot.price,null);A.equal(m.quotes.SYNTH_F.price,5000)});
 test('invalid snapshot preserves previous observation and failure',()=>{let s=D.ingest(D.empty(),'snapshot',snap(),old);s=D.ingest(s,'snapshot',{spot:4},ts);A.equal(D.market(s).quotes.SYNTH_F.price,5000);A.equal(s.lastFailure,ts);A.equal(s.failure,'bad_response')});
+test('cached snapshot disguised as live refresh is refused without rewriting positions or prices',()=>{
+ let s=D.ingest(D.empty(),'snapshot',snap(),ts);
+ const suspect={...snap(9000,old),_cache:true};
+ s=D.ingest(s,'snapshot',suspect,ts);
+ A.equal(s.failure,'bad_response');
+ A.equal(D.market(s).quotes.SYNTH_F.price,5000);
+});
+test('cached research cannot promote itself into a live provider result',()=>{
+ let s=D.ingest(D.empty(),'snapshot',snap(),ts);
+ s=D.ingest(s,'research',{section:'contracts',frame:'D',_cache:true,
+  data:{contracts:[{...leg,instrument_key:'SYNTH_F',lot_size:150,verified:true,quote:q(9900,ts)}]}},ts);
+ A.equal(s.health['contracts:D'].error,'bad_response');
+ A.equal(D.market(s).quotes.SYNTH_F.price,5000);
+});
 test('research error keys match native section frame type',()=>{const s=D.ingest(D.empty(),'research_error',{key:'contracts:D:consolidated',code:'upstox_permission_denied'},ts);A.equal(s.health['contracts:D'].error,'upstox_permission_denied')});
 test('failed refresh retained but later success clears failure status',()=>{let s=D.ingest(D.empty(),'snapshot',snap(),old);s=D.ingest(s,'error',{code:'network_unavailable'},old);s=D.ingest(s,'snapshot',snap(),ts);A.equal(E.quoteQuality(D.market(s).spot,{now}).status,'current')});
 test('older held quote cannot replace newer REST quote',()=>{let s=D.ingest(D.empty(),'snapshot',snap(),ts);s=D.ingest(s,'research',{section:'contracts',frame:'D',fetched_at_iso:old,data:{contracts:[{...leg,instrument_key:'SYNTH_F',lot_size:150,verified:true,quote:q(4000,old)}]}},ts);A.equal(D.market(s).quotes.SYNTH_F.price,5000)});
