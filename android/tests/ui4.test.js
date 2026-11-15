@@ -30,6 +30,21 @@ await check('HAL Desk 5 data health shows a same-timestamp provider conflict and
  A.deepEqual(de,[]);
  await dc.close();
 });
+await check('older HTTP price packets remain flagged and do not rewrite the real position',async()=>{
+ const {page:rp,context:rc,errors:re}=await pageFor({book:{...E.emptyBook(),legs:[FUT]}});
+ await emit(rp,'snapshot',snap);
+ const before=await rp.evaluate(()=>JSON.stringify(saved));
+ const older=new Date(now-90000).toISOString(),oldQuote=q(3500);oldQuote.quote_as_of=older;oldQuote.last_trade_at=older;oldQuote.retrieved_at=ts;
+ await emit(rp,'snapshot',{...snap,spot:oldQuote,fetched_at_iso:ts});
+ A.match(await rp.locator('#notice').innerText(),/market price|Provider quote clocks|integrity/i);
+ await nav(rp,'technicals','markets');
+ await click(rp,'health');
+ A.match(await rp.locator('#modal-body').innerText(),/Market data integrity/);
+ A.match(await rp.locator('#modal-body').innerText(),/provider quote clock moved backward/i);
+ A.equal(await rp.evaluate(()=>JSON.stringify(saved)),before);
+ A.deepEqual(re,[]);
+ await rc.close();
+});
 await check('HAL Desk 5 lifetime recovery reconciles closed October puts, charges and open legs',async()=>{
  const b={...E.emptyBook(),legs:[FUT,PUT],journal:[
   {id:'oct-put',kind:'close',date:'2026-10-27',
