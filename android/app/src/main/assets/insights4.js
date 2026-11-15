@@ -118,6 +118,16 @@ function checkpoint(input={},now=Date.now()){
  const legs=array(input.book?.legs).map(contract);
  return {
   version:4,savedAt:iso(now),bookRevision:materialFingerprint(input.book),legs,markMode:input.book?.preferences?.markMode||'ltp',
+  // Saved locally in the review cache only. Exact contract mark snapshots make
+  // future per-leg comparisons possible; old version-4 checkpoints stay valid.
+  positionMarks:array(v.rows).length===legs.length?array(v.rows).slice(0,100).map(r=>({
+   id:text(r?.leg?.id,100),type:text(r?.leg?.type,10),expiry:text(r?.leg?.expiry,20),
+   strike:number(r?.leg?.strike),instrumentKey:text(r?.leg?.instrumentKey,180),
+   units:number(r?.units),entry:number(r?.leg?.entry),price:number(r?.mark?.price),
+   source:text(r?.mark?.source,40),status:text(r?.mark?.status,30),
+   quoteAt:stamp(r?.mark?.quoteAt),tradeAt:stamp(r?.mark?.tradeAt),
+   retrievedAt:stamp(r?.mark?.retrievedAt)
+  })):[],
   quoteAsOf:stamp(spot.quoteAt),spot:number(spot.price??spot.last_price),open:number(v.open),complete:v.complete===true,
   realized:number(v.realized),charges:number(v.charges),net:number(v.net),bookedNet:finite(v.realized)&&finite(v.charges)?v.realized-v.charges:null,
   marksManual:v.manual===true,marksStale:v.stale===true,spotSource:text(spot.source,40),tradeAt:stamp(spot.tradeAt),
