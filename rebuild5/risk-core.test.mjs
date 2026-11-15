@@ -5,7 +5,7 @@ const future={type:"FUT",side:"long",quantity:300,entry:4927.35,expiry:"2026-12-
 const put1={type:"PE",side:"long",quantity:150,entry:38.9,strike:4500,expiry:"2026-11-23"};
 const put2={type:"PE",side:"long",quantity:150,entry:24.1,strike:4400,expiry:"2026-11-23"};
 test("expiry intrinsic handles zero",()=>assert.equal(intrinsic("PE",4500,4600),0));
-test("single expiry payoff",()=>assert.equal(expiryPayoff([future],5000,"2026-12-29"),21795));
+test("single expiry payoff",()=>assert.ok(Math.abs(expiryPayoff([future],5000,"2026-12-29")-21795)<1e-6));
 test("mixed expiry rejected",()=>assert.throws(()=>expiryPayoff([future,put1],4500,"2026-12-29"),/mixed expiry/));
 test("coverage at put expiry",()=>assert.deepEqual(protectionCoverage([future,put1,put2],"2026-11-23"),{futures:300,puts:300,covered:300,uncovered:0,ratio:1}));
 test("coverage after put expiry",()=>assert.deepEqual(protectionCoverage([future,put1,put2],"2026-11-24"),{futures:300,puts:0,covered:0,uncovered:300,ratio:0}));
