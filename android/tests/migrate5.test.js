@@ -56,6 +56,46 @@ test('bad version and corrupt ledger refuse any migration acceptance',()=>{
  A.throws(()=>G.audit({...before,version:99},before),/schema-4/);
  A.throws(()=>G.audit(before,{...before,legs:[{bad:true}]}));
 });
+test('replacement preview exposes lost October journal and changed charges before import',()=>{
+ const before=book(),after=E.validateBook(before);
+ after.journal=[];after.legs=[after.legs[0]];
+ const prior=JSON.stringify(before),incoming=JSON.stringify(after);
+ const report=G.replacement(before,after);
+ A.equal(report.destructive,true);A.equal(report.requiresTypedConfirmation,true);
+ A.ok(report.changes.some(x=>x.section==='Completed journal entries'&&x.removed===2));
+ A.ok(report.changes.some(x=>x.section==='Open positions'&&x.removed===1));
+ A.ok(report.warnings.some(x=>x.includes('realized P&L')));
+ A.equal(JSON.stringify(before),prior);A.equal(JSON.stringify(after),incoming);
+});
+test('replacement preview reports no loss when records are unchanged',()=>{
+ const before=book(),after=E.validateBook(before);
+ const report=G.replacement(before,after);
+ A.equal(report.destructive,false);
+ A.equal(report.requiresTypedConfirmation,false);
+ A.ok(report.changes.every(x=>x.removed===0&&x.modified===0));
+});
+test('reused journal ID with altered closed price is flagged as modified',()=>{
+ const before=book(),after=E.validateBook(before);
+ after.journal[0].exit=10;
+ const report=G.replacement(before,after);
+ const journal=report.changes.find(x=>x.section==='Completed journal entries');
+ A.equal(journal.removed,0);A.equal(journal.modified,1);
+ A.equal(report.destructive,true);
+});
+test('removed notes are counted, but private content is not exposed in the impact report',()=>{
+ const before=book(),after=E.validateBook(before);after.notes=[];
+ const impact=G.replacement(before,after);
+ A.equal(impact.destructive,true);
+ A.equal(impact.changes.find(x=>x.section==='Private notes').removed,1);
+ A.equal(JSON.stringify(impact).includes('Private note'),false);
+});
+test('changed cumulative charge coverage requires destructive-import confirmation',()=>{
+ const before=book(),after=E.validateBook(before);
+ after.history={...after.history,charges:{asOf:'2026-10-31',amount:100,source:'Broker statement',coversExisting:true}};
+ const impact=G.replacement(before,after);
+ A.equal(impact.destructive,true);
+ A.ok(impact.warnings.some(x=>x.includes('Cumulative')));
+});
 test('readonly migration report leaves both inputs unchanged',()=>{
  const before=book(),after=E.validateBook(before),payload=JSON.stringify([before,after]);
  G.audit(before,after);A.equal(JSON.stringify([before,after]),payload);
