@@ -14,7 +14,7 @@ Actual-book accounting and recovery remain schema 4 in SQLite, with revision che
 
 ## HAL Desk 5 alpha research additions
 
-Read-only modules: `risk5.js` (separate expiries), `quant5.js` (seeded conditional Monte Carlo), `backtest5.js` (next-bar-open paper SMA backtest), `hedge5.js` (eligible hedge comparison audit), `lenses5.js` (six local evidence perspectives), `quality5.js` (quote/contract conflicts), `migrate5.js` (saved-book upgrade acceptance), and `portfolio5.js` (reconciled lifetime recovery) and `expiry5.js` (offline dated expiry/funding-risk review). The Today and Performance screens withhold portfolio figures when reconciliation fails. These are compatible vertical slices in the existing app, **not yet a full independent rewrite**.
+Read-only modules: `risk5.js` (separate expiries), `quant5.js` (seeded conditional Monte Carlo), `backtest5.js` (next-bar-open paper SMA backtest), `hedge5.js` (eligible hedge comparison audit), `lenses5.js` (six local evidence perspectives), `quality5.js` (quote/contract conflicts), `migrate5.js` (saved-book upgrade acceptance), and `portfolio5.js` (reconciled lifetime recovery) `expiry5.js` (offline dated expiry/funding-risk review), and `reconcile5.js` (read-only broker-reported completed-close accounting preview). The preview does not write any journal records; actual close recording remains in Position → Book. The Today and Performance screens withhold portfolio figures when reconciliation fails. These are compatible vertical slices in the existing app, **not yet a full independent rewrite**.
 
 ## Architecture
 
