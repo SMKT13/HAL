@@ -24,7 +24,7 @@ function ingest(state,event,data,now=stamp()){
 }
 function packet(s,section,frame='D',type='consolidated'){return s.research[key(section,frame,type)]||s.research[section+':'+frame]||null;}
 function market(s){
- const result={contracts:[],quotes:{},spot:E.normQuote({}),lastSuccess:s.lastSuccess,lastFailure:s.lastFailure,failure:s.failure};const contracts=new Map(),contractConflicts=new Set();
+ const result={contracts:[],quotes:{},spot:E.normQuote({}),lastSuccess:s.lastSuccess,lastFailure:s.lastFailure,failure:s.failure};const contracts=new Map(),contractConflicts=new Set(),contractConflictSpecs=[];
  const tag=(q,p,h,option=false)=>{
   const errors={...(object(p?.data?.errors)?p.data.errors:{}),...(object(p?.errors)?p.errors:{})};
   const failedRefresh=!!h?.lastFailure&&(!h.lastSuccess||Date.parse(h.lastFailure)>=Date.parse(h.lastSuccess));
@@ -39,7 +39,9 @@ function market(s){
    if(contractConflicts.has(c.instrumentKey))continue;
    const previous=contracts.get(c.instrumentKey);
    if(previous&&!Q5.sameContract(previous,c)){
-    contractConflicts.add(c.instrumentKey);contracts.delete(c.instrumentKey);
+    contractConflicts.add(c.instrumentKey);
+    contractConflictSpecs.push({...previous},{...c});
+    contracts.delete(c.instrumentKey);
    }else contracts.set(c.instrumentKey,c);
   }
   for(const [k,q]of Object.entries(m.quotes)){
@@ -54,6 +56,7 @@ function market(s){
  const status=packet(s,'status')?.data?.market;result.status=status||{};result.marketOpen=status?.status==='NORMAL_OPEN';
  const context=packet(s,'context');for(const [k,q]of Object.entries(context?.data?.indices||{})){const name=(q.symbol||q.instrument_token||k).toLowerCase(),n=tag(E.normQuote(q),context,s.health[key('context')]);if(name.includes('vix'))result.vix=n;else if(name.includes('nifty')&&name.includes('50'))result.nifty=n;}
  result.contractConflicts=[...contractConflicts];
+ result.contractConflictSpecs=contractConflictSpecs;
  if(result.contractConflicts.length){
   result.contracts=result.contracts.filter(c=>!contractConflicts.has(c.instrumentKey));
   for(const id of result.contractConflicts)result.quotes[id]=Q5.errorQuote(
