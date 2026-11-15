@@ -30,6 +30,26 @@ await check('HAL Desk 5 data health shows a same-timestamp provider conflict and
  A.deepEqual(de,[]);
  await dc.close();
 });
+await check('HAL Desk 5 lifetime recovery reconciles closed October puts, charges and open legs',async()=>{
+ const b={...E.emptyBook(),legs:[FUT,PUT],journal:[
+  {id:'oct-put',kind:'close',date:'2026-10-27',
+   leg:{id:'old',type:'PE',expiry:'2026-10-27',strike:4500,lots:1,lotSize:150,entry:57.4},
+   exit:.3,fees:100},
+  {id:'extra-fee',kind:'fee',date:'2026-10-27',amount:50}]};
+ const {page:ap,context:ac,errors:ae}=await pageFor({book:b});
+ const before=await ap.evaluate(()=>JSON.stringify(saved));
+ await nav(ap,'position','performance');
+ A.match(await ap.locator('main').innerText(),/Lifetime accounting/);
+ A.match(await ap.locator('main').innerText(),/Open-trade P&L needed to offset booked loss/);
+ A.match(await ap.locator('main').innerText(),/8,715\.00/);
+ A.match(await ap.locator('main').innerText(),/Withheld until all marks are valid/);
+ await emit(ap,'snapshot',snap);
+ A.match(await ap.locator('main').innerText(),/Lifetime net/);
+ A.match(await ap.locator('main').innerText(),/14,745\.00/);
+ A.equal(await ap.evaluate(()=>JSON.stringify(saved)),before);
+ A.deepEqual(ae,[]);
+ await ac.close();
+});
 await check('HAL Desk 5 risk ladder and mixed-expiry modal preserve real book',async()=>{
  const savedBook={...E.emptyBook(),legs:[FUT,PUT]};
  const {page:rp,context:rc,errors:re}=await pageFor({book:savedBook});
