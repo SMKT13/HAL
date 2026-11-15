@@ -14,7 +14,7 @@ final class BookValidator {
   for(int i=0;i<legs.length();i++){JSONObject l=legs.getJSONObject(i);leg(l);if(!ids.add(l.getString("id")))throw new Exception("duplicate_leg_id");}
   ids.clear();
   for(int i=0;i<journal.length();i++){JSONObject j=journal.getJSONObject(i);if(j.optString("id").isEmpty()||!ids.add(j.getString("id")))throw new Exception("duplicate_journal_id");LocalDate.parse(j.getString("date"));String k=j.getString("kind");
-   if(k.equals("close")){leg(j.getJSONObject("leg"));number(j,"exit",0,1e7);number(j,"fees",0,1e10);}
+   if(k.equals("close")){JSONObject closedLeg=j.getJSONObject("leg");leg(closedLeg);number(j,"exit",closedLeg.getString("type").equals("FUT")?Double.MIN_VALUE:0,1e7);number(j,"fees",0,1e10);}
    else if(k.equals("fee"))number(j,"amount",0,1e12);
    else if(k.equals("settlement")||k.equals("funding"))number(j,"amount",-1e12,1e12);
    else throw new Exception("invalid_journal_kind");}
