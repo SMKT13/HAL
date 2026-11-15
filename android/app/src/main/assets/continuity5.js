@@ -27,7 +27,7 @@ function reconcileQuote(prior,next,instrument,now,issues){
  };
  // A quarantined conflicting quote cannot be replaced by a same-clock reread.
  if(typeof old.failure==='string'&&old.failure.startsWith(tag)&&
-   (o===null||n===null||n<=o)){
+   (n===null||(o!==null&&n<=o))){
   return issue('unresolved_conflict','A previously quarantined price still needs a strictly newer provider quote.',copy(prior));
  }
  if(n!==null&&finite(now)&&n>now+5000){
