@@ -12,7 +12,7 @@ function audit(book,valuation){
  const journal=b.journal.filter(j=>j.kind==='close'),
   completedLots=journal.reduce((n,j)=>n+j.leg.lots,0),
   historyRecords=b.history?.records||[];
- const errors=[],rows=[];
+ const errors=[],rows=[];let rawOpenSum=0;
  if(!v||!Array.isArray(v.rows)||v.rows.length!==b.legs.length)
   errors.push('Incomplete portfolio leg valuation rows');
  if(!finite(v?.realized)||Math.abs(v.realized-history.realized)>.005)errors.push('Recorded realized P&L does not reconcile');
@@ -22,7 +22,10 @@ function audit(book,valuation){
   const leg=b.legs[i],r=v.rows[i],qty=leg.lots*leg.lotSize;
   if(!r||r.leg?.id!==leg.id||r.units!==qty){errors.push('Open leg quantity or identity mismatch');continue;}
   const mark=finite(r.mark?.price)?r.mark.price:null;
-  const expected=mark===null?null:rupees(cents((mark-leg.entry)*qty));
+  const rawPnl=mark===null?null:(mark-leg.entry)*qty;
+  const expected=rawPnl===null?null:rupees(cents(rawPnl));
+  if(rawPnl!==null)rawOpenSum+=rawPnl;
+  if(mark!==null&&(mark<0||leg.type==='FUT'&&mark===0))errors.push('Invalid open contract mark');
   if((expected===null)!==(r.pnl===null)||expected!==null&&(!finite(r.pnl)||Math.abs(expected-r.pnl)>.005))
    errors.push('Open-leg mark/P&L mismatch');
   const expired=r.mark?.status==='expired_unreconciled';
@@ -32,7 +35,7 @@ function audit(book,valuation){
  }
  const allMarked=valued&&rows.length===b.legs.length&&rows.every(r=>finite(r.openPnl));
  let computedOpen=null;
- if(allMarked)computedOpen=rupees(rows.reduce((n,r)=>n+cents(r.openPnl),0));
+ if(allMarked)computedOpen=rupees(cents(rawOpenSum));
  if(v.complete!==allMarked)errors.push('Basket completion flag disagrees with per-leg marks');
  if(allMarked&&(!finite(v.open)||Math.abs(v.open-computedOpen)>.005))
   errors.push('Basket open P&L does not reconcile');
@@ -57,7 +60,7 @@ function audit(book,valuation){
   completedLots,completedCloseRecords:journal.length,historyRecordCount:historyRecords.length,
   realizedByType:consistent?history.byType:null,unallocatedLegacyGross:consistent?history.legacyGross:null,
   chargesAsOf:b.history?.charges?.asOf||null,
-  markQuality:!consistent?'unverifiable':!complete?'incomplete':v.manual?'manual':v.stale?'stale':'provider',
+  markQuality:!consistent?'unverifiable':!b.legs.length?'no open positions':!complete?'incomplete':v.manual?'manual':v.stale?'stale':'provider',
   settlementCash:b.journal.filter(j=>j.kind==='settlement').reduce((n,j)=>n+j.amount,0),
   fundingCash:b.journal.filter(j=>j.kind==='funding').reduce((n,j)=>n+j.amount,0),
   notes:[
