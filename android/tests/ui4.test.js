@@ -37,6 +37,7 @@ await check('older HTTP price packets remain flagged and do not rewrite the real
  const older=new Date(now-90000).toISOString(),oldQuote=q(3500);oldQuote.quote_as_of=older;oldQuote.last_trade_at=older;oldQuote.retrieved_at=ts;
  await emit(rp,'snapshot',{...snap,spot:oldQuote,fetched_at_iso:ts});
  A.match(await rp.locator('#notice').innerText(),/market price|Provider quote clocks|integrity/i);
+ A.match(await rp.locator('main').innerText(),/withheld pending price integrity review/i);
  await nav(rp,'technicals','markets');
  await click(rp,'health');
  A.match(await rp.locator('#modal-body').innerText(),/Market data integrity/);
