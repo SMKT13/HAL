@@ -23,6 +23,20 @@ test('recorded losses and costs define booked recovery requirement',()=>{
  near(result.realizedGross,-8565);near(result.recordedCharges,150);
  near(result.bookedRecoveryRequirement,8715);near(result.net,result.open-8715);
 });
+test('cumulative lifetime charges do not double-count older fees and do include later fees',()=>{
+ const H=require('../app/src/main/assets/history5.js');
+ const b=book();
+ b.journal=[{id:'oct-put',kind:'close',date:'2026-10-27',
+ leg:{id:'oct',type:'PE',expiry:'2026-10-27',strike:4500,lots:1,lotSize:150,entry:57.4},
+ exit:.3,fees:100},{id:'oct-fee',kind:'fee',date:'2026-10-28',amount:25},
+ {id:'later-fee',kind:'fee',date:'2026-11-10',amount:200}];
+ const withCharges=H.setCharges(b,{amount:34720.5,asOf:'2026-11-01',source:'Synthetic cumulative HAL ledger'},true);
+ const r=P.audit(withCharges,valuation(withCharges));
+ A.equal(r.consistent,true);near(r.recordedCharges,34920.5);
+ near(r.realizedGross,-8565);
+ near(r.bookedRecoveryRequirement,43485.5);
+ A.equal(r.chargesAsOf,'2026-11-01');
+});
 test('missing leg mark withholds basket and live shortfall but retains booked net',()=>{
  const b=book();b.legs[1].manual=null;
  const result=P.audit(b,valuation(b));
