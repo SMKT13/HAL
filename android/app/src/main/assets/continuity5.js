@@ -32,7 +32,7 @@ function reconcileQuote(prior,next,instrument,now,issues){
  }
  if(n!==null&&finite(now)&&n>now+5000){
   return issue('future_quote','New provider quote timestamp is in the future.',
-   markUnavailable(next,'future-dated provider quote'));
+   markUnavailable(prior,'future-dated provider quote received; last retained source quote quarantined'));
  }
  if(o!==null&&n===null)
   return issue('missing_provider_clock','New observation has no source quote timestamp.',
