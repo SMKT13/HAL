@@ -17,11 +17,15 @@ function ingest(state,event,data,now=stamp()){
   if(!data||!Array.isArray(data.futures)||(data.spot!=null&&typeof data.spot!=='object'))return ingest(s,'error',{code:'bad_response'},now);
   const check=C5.reconcile(s.snapshot,data,Date.parse(now));
   s.snapshot={...check.packet,_received_at:now,_cache:false};
-  s.lastSuccess=now;s.failure=check.issues.length?'market_integrity_review':null;
+  const identityWarnings=(check.contractConflicts||[]).map(id=>({
+   code:'unresolved_contract_identity',instrument:id,
+   detail:'Instrument identity conflict remains blocked pending verified contract recheck.'}));
+  const outstanding=[...check.issues,...identityWarnings];
+  s.lastSuccess=now;s.failure=outstanding.length?'market_integrity_review':null;
   s.cached=false;s.loading=false;
   s.health.market={...s.health.market,pending:null,lastSuccess:now,
-   error:check.issues.length?check.issues.map(x=>x.instrument+': '+x.detail).join('; '):errorSummary(data),
-   integrityWarnings:check.issues};
+   error:outstanding.length?outstanding.map(x=>x.instrument+': '+x.detail).join('; '):errorSummary(data),
+   integrityWarnings:outstanding};
  }
  if(event==='error'){s.lastFailure=now;s.failure=data.code||'network_unavailable';s.loading=false;s.health.market={...s.health.market,pending:null,lastFailure:now,error:s.failure};}
  if(event==='research'){if(!object(data)||typeof data.section!=='string'||!object(data.data))return ingest(s,'research_error',{key:object(data)&&data.section?key(data.section,data.frame,data.type):'research:D',code:'bad_response'},now);const k=key(data.section,data.frame,data.type);s.research[k]={...clone(data),_received_at:now,_cache:false};s.health[k]={...s.health[k],pending:null,lastSuccess:now,error:errorSummary(data)};}
