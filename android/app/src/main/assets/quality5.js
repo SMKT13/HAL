@@ -31,8 +31,9 @@ function chooseQuote(a,b){
  // can re-establish a valuation mark. An identical-clock reread cannot erase it.
  const holdA=a.provenanceFailure||typeof a.failure==='string'&&a.failure.startsWith('HAL5 quote integrity: ');
  const holdB=b.provenanceFailure||typeof b.failure==='string'&&b.failure.startsWith('HAL5 quote integrity: ');
- if(holdA&&(!(bq!==null&&aq!==null&&bq>aq)))return a;
- if(holdB&&(!(aq!==null&&bq!==null&&aq>bq)))return b;
+ const cleanRest=q=>['REST','upstox_rest_v3'].includes(q.source)&&!q.failure&&!q.provenanceFailure;
+ if(holdA&&!(bq!==null&&aq!==null&&bq>aq&&cleanRest(b)))return a;
+ if(holdB&&!(aq!==null&&bq!==null&&aq>bq&&cleanRest(a)))return b;
  if(aq!==null&&bq===null)return a;
  if(bq!==null&&aq===null)return b;
  if(at!==null&&bt!==null&&bt<at)return a;
