@@ -16,6 +16,20 @@ await check('local six-perspective evidence map does not call AI or change holdi
  A.equal(await p.evaluate(()=>saved?.legs?.length||0),0);
  A.deepEqual(x.errors,[]);
 });
+await check('HAL Desk 5 data health shows a same-timestamp provider conflict and leaves saved book unchanged',async()=>{
+ const {page:dp,context:dc,errors:de}=await pageFor({book:{...E.emptyBook(),legs:[FUT]}});
+ await emit(dp,'snapshot',snap);
+ const before=await dp.evaluate(()=>JSON.stringify(saved));
+ await emit(dp,'research',{section:'contracts',frame:'D',fetched_at_iso:ts,
+  data:{contracts:[{type:'FUT',expiry:'2026-12-29',lot_size:150,instrument_key:'SYNTH_F',
+   verified:true,quote:q(4990)}]}});
+ await nav(dp,'technicals','markets');await click(dp,'health');
+ A.match(await dp.locator('#modal-body').innerText(),/Market data integrity/);
+ A.match(await dp.locator('#modal-body').innerText(),/Conflicting prices for identical provider quote/);
+ A.equal(await dp.evaluate(()=>JSON.stringify(saved)),before);
+ A.deepEqual(de,[]);
+ await dc.close();
+});
 await check('HAL Desk 5 risk ladder and mixed-expiry modal preserve real book',async()=>{
  const savedBook={...E.emptyBook(),legs:[FUT,PUT]};
  const {page:rp,context:rc,errors:re}=await pageFor({book:savedBook});
