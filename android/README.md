@@ -1,4 +1,6 @@
-# HAL Desk Android — 4.6.0 (versionCode 31)
+# HAL Desk Android — 5.0.0-alpha.1 rebuild branch (versionCode 32)
+
+**Development preview only: not a signed or tested installation release.** The existing 4.6.0 (versionCode 31) installed app and the repository's main branch remain unchanged. This branch retains the same Android package and SQLite schema-4 book.
 
 Personal offline-capable HAL research, risk, history and PAPER option strategies. Android **8.0+**, applicationId `in.smkt.haldesk`, target SDK 35. Direct Upstox Analytics Token and optional Gemini/FinBERT; **read-only, no orders**.
 
@@ -9,6 +11,10 @@ The five primary tabs remain **Position, History, Technicals, Research and AI De
 **PAPER ledger v1 is now a state machine.** A draft can be edited. Marking it OPEN freezes its validated entry legs, quantity, price and opening charges. An open trade can be closed with explicit hypothetical prices and cumulative fees, but cannot be retroactively edited; clone to create another draft. Old 4.4/4.5 records load with unchanged schema 1 and establish a read-only opening snapshot on migration. This is not an executed order ledger.
 
 Actual-book accounting and recovery remain schema 4 in SQLite, with revision checks, checksums, previous-book recovery, cost accounting and confirmed-broker-history reconciliation. No migrations delete legacy `hal_desk_v2`/`hal_positions_v1` browser data. Credentials continue using the original Android Keystore alias `hal-upstox-secrets-v1` and app package identity.
+
+## HAL Desk 5 alpha research additions
+
+Read-only modules: `risk5.js` (separate expiries), `quant5.js` (seeded conditional Monte Carlo), `backtest5.js` (next-bar-open paper SMA backtest), `hedge5.js` (eligible hedge comparison audit), `lenses5.js` (six local evidence perspectives), `quality5.js` (quote/contract conflicts), `migrate5.js` (saved-book upgrade acceptance), and `portfolio5.js` (reconciled lifetime recovery). The Today and Performance screens withhold portfolio figures when reconciliation fails. These are compatible vertical slices in the existing app, **not yet a full independent rewrite**.
 
 ## Architecture
 
