@@ -57,7 +57,7 @@ test('conflicting same-key lot sizes remove contract from eligible marks',()=>{
 test('data audit retains independent clocks and counts',()=>{
  const m={spot:q(4700),quotes:{a:q(50,later),b:{...q(60),source:'CACHE'}},
  contractConflicts:['F2']};
- const a=Q.audit(m,Date.parse(at)+200000);
+ const a=Q.audit(m,Date.parse(at)+150000);
  A.equal(a.total,3);A.equal(a.cached,1);A.equal(a.contractConflicts,1);
  A.equal(a.stale,2);A.ok(a.problems.some(x=>x.instrument==='F2'));
 });
