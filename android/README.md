@@ -14,7 +14,7 @@ Actual-book accounting and recovery remain schema 4 in SQLite, with revision che
 
 ## HAL Desk 5 alpha research additions
 
-Read-only HAL Desk 5 modules include `risk5.js` (dated option and future settlements), `quant5.js` (conditional Monte Carlo), `backtest5.js` (next-bar-open PAPER strategy research), `hedge5.js` (hedge replacement audit), `lenses5.js` (local evidence readiness), `quality5.js` and `continuity5.js` (market-data identity, clock and refresh safeguards), `migrate5.js` (book-upgrade preservation), `portfolio5.js` (lifetime P&L reconciliation), `expiry5.js` (dated protection gaps), `reconcile5.js` (read-only broker-close preview), and `path5.js` (expiry-specific hypothetical P&L, never a forecast of delivery cash). The close preview cannot write to the real journal; actual completed transactions are recorded separately in Position → Book. Today and Performance withhold inconsistent totals. These are compatible vertical slices of the existing architecture, **not yet a fully independent rebuild**.
+Read-only HAL Desk 5 modules include `risk5.js` (dated option and future settlements), `quant5.js` (conditional Monte Carlo), `backtest5.js` (next-bar-open PAPER strategy research), `hedge5.js` (hedge replacement audit), `lenses5.js` (local evidence readiness), `quality5.js` and `continuity5.js` (market-data identity, clock and refresh safeguards), `attribution5.js` (reconciled contract-by-contract last-visit market movement), `migrate5.js` (book-upgrade preservation), `portfolio5.js` (lifetime P&L reconciliation), `expiry5.js` (dated protection gaps), `reconcile5.js` (read-only broker-close preview), `path5.js` (expiry-specific hypothetical P&L, never a forecast of delivery cash), and `rollover5.js` (read-only, exact-contract bid/ask and fee comparison of later-dated futures). The close preview cannot write to the real journal; actual completed transactions are recorded separately in Position → Book. Today and Performance withhold inconsistent totals. These are compatible vertical slices of the existing architecture, **not yet a fully independent rebuild**.
 
 ## Architecture
 
@@ -29,6 +29,8 @@ Read-only HAL Desk 5 modules include `risk5.js` (dated option and future settlem
 | UI | `ui4.js`, modular history/review/recovery views, `style4.css` and Lightweight Charts |
 
 Web sources live in `app/src/main/assets/`. The pinned esbuild transformation (Chrome 61 target) produces `desk4.js` and the SHA-256 asset manifest. **These are build outputs and are intentionally excluded from git.** `npm run assets` produces them; `npm run test:ui` produces them automatically; `gradlew ...` regenerates them before verifying/package. Run `npm ci` first to install pinned esbuild.
+
+For Windows PC users avoiding the exhausted GitHub Actions allowance, a separate [local verification and optional original-key signing guide](docs/LOCAL-RELEASE.md) provides `scripts/local-windows-release.ps1`. Its full default run executes JavaScript, browser, native Android tests, lint, unsigned APK assembly and zip alignment. Actual signing requires the original keystore and no browser tests may be skipped.
 
 ## Build and regression tests
 
