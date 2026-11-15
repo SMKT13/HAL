@@ -32,4 +32,10 @@ test('negative option settlement and negative charges rejected',()=>{
 test('incremental risk uses current marks, not entries',()=>near(R.incrementalRisk({currentMarks:[100,25],scenarioMarks:[90,40],quantities:[300,150],sides:['long','long']}),-750));
 test('explicit zero mark is valid',()=>near(R.incrementalRisk({currentMarks:[0],scenarioMarks:[5],quantities:[150],sides:['long']}),750));
 test('missing mark cannot become zero',()=>A.throws(()=>R.incrementalRisk({currentMarks:[null],scenarioMarks:[5],quantities:[150],sides:['long']}),/mark/));
+test('lifetime scenario includes booked realized and costs once',()=>{
+ const hypothetical=R.settlementScenario([F,P,P2],{spotAtExpiry:{'2026-11-23':4300},futureAtExpiry:{'2026-12-29':5000},charges:100});
+ A.equal(R.lifetimeNet(hypothetical,-15000,34720.5),7524.5);
+ A.equal(R.lifetimeNet({complete:false,total:null},-15000,34720.5),null);
+ A.equal(R.lifetimeNet(hypothetical,null,34720.5),null);
+});
 test('dates before valuation date rejected',()=>A.throws(()=>R.protectionCoverage([F], '2026-11-14','2026-11-15'),/before/));
