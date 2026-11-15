@@ -1,6 +1,6 @@
 /* HAL Desk 4 presentation. Finance, persistence, transport and AI policy are separate modules. */
 (function(){'use strict';
-const V5=HAL5Risk,Q5=HAL5Quant,B5=HAL5Backtest;
+const V5=HAL5Risk,Q5=HAL5Quant,B5=HAL5Backtest,H5=HAL5Hedge;
 const E=HAL4Engine,D=HAL4Data,I=HAL4Insights,W=HAL4Workflow,N=window.HALNative,$=id=>document.getElementById(id),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=(v,d=2)=>E.finite(v)?v.toLocaleString('en-IN',{maximumFractionDigits:d}):'—',money=v=>E.finite(v)?(v<0?'−':'')+'₹'+Math.abs(v).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable',pct=v=>E.finite(v)?num(v)+'%':'—';
 const when=v=>v&&Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' IST':'Time unavailable',date=v=>E.validDate(v)?new Date(v+'T00:00:00Z').toLocaleDateString('en-IN',{timeZone:'UTC',day:'2-digit',month:'short',year:'numeric'}):'—',stamp=()=>new Date().toISOString(),clone=v=>JSON.parse(JSON.stringify(v)),color=v=>E.finite(v)?v<0?'negative':'positive':'muted';
@@ -255,7 +255,33 @@ function health(){modal('Data readiness & connection health',Object.entries(s.he
 function scenarioParams(){const p=ui.scenario;return {spot:E.value(p.spot)??market().spot.price,horizon:p.horizon||undefined,fallbackIV:E.value(p.iv),ivShift:E.value(p.shift),rate:E.value(p.rate),dividend:E.value(p.dividend),basis:p.basis,baseSpot:E.value(p.base)};}
 function readScenario(){for(const [k,id]of Object.entries({spot:'spot',horizon:'horizon',iv:'iv',shift:'shift',rate:'rate',dividend:'dividend',basis:'basis',base:'base'}))if($('sc-'+id))ui.scenario[k]=text('sc-'+id);}
 function hedgeSettings(){return E.hedgePreferences({budget:value('hg-budget'),maxLoss:value('hg-loss'),protectThrough:text('hg-through')||null,maxSpread:value('hg-spread'),buyFees:value('hg-buy'),exitFees:value('hg-exit'),slippage:value('hg-slip'),ivShift:value('hg-iv'),fallbackIV:value('hg-iv-assumption'),rate:value('hg-rate'),dividend:value('hg-dividend'),minVolume:value('hg-volume'),minOI:value('hg-oi')});}
-function compareHedge(id){const c=ui.hedges.candidates.find(c=>c.contract.instrumentKey===id);if(!c)return;const cur=new Map(ui.hedges.current.map(x=>[x.horizon+'|'+x.shock,x.additionalPnl]));modal('Current protection vs replacement',`<h3>${c.contract.strike} PE · ${date(c.contract.expiry)} · ${c.lots} lots</h3>${row('New premium',money(c.newPremium))}${row('Buy / exit charges',money(c.buyFees)+' / '+money(c.exitFees))}${row('Existing-put sale proceeds',money(c.saleProceeds))}${row('Net cash required',money(c.netCashRequired))}${row('Spread / slippage',pct(c.spread)+' / '+pct(c.slippage))}${row('Model IV source',c.ivSource==='user-assumed'?'User-assumed '+num(c.ivAssumption)+'% · not provider Greeks':'Timestamp-verified provider IV')}${table(['Horizon','Shock','Current hedge ΔP&L','Replacement ΔP&L'],c.scenarios.map(x=>[when(x.horizon),pct(x.shock*100),money(cur.get(x.horizon+'|'+x.shock)),money(x.additionalPnl)]))}<p class="fine">Sale proceeds reduce cash required; they are not new investment profit. Sampled worst loss is not guaranteed. Current-hedge comparisons after earlier put expiry are withheld.</p><details><summary>Missing current comparisons</summary>${table(['Horizon','Reason'],ui.hedges.currentErrors.map(x=>[when(x.horizon),x.reason]))}</details>`,null,null);}
+function compareHedge(id){
+ const c=ui.hedges?.candidates?.find(c=>c.contract.instrumentKey===id);if(!c)return;
+ const audit=H5.auditHedge(book,ui.hedges,id,book.hedge.protectThrough);
+ modal('Current protection vs replacement',
+  '<h3>'+esc(c.contract.strike)+' PE · '+date(c.contract.expiry)+' · '+esc(c.lots)+' lots</h3>'+
+  row('Futures quantity covered',num(audit.contract.units,0)+' shares · '+num(audit.contract.lots,0)+' candidate lots')+
+  row('Candidate put expires',date(audit.contract.expiry))+
+  row('Latest futures expiry',date(audit.latestFutureExpiry))+
+  (audit.coverageGapAfter?'<p class="warning fine">Replacement protection ends on '+esc(date(audit.coverageGapAfter))+' before the latest futures expiry. A hedge gap remains.</p>':'')+
+  (audit.putContinuesAfterFutures?'<p class="warning fine">The replacement put lasts beyond the latest futures expiry and may become a separate unhedged position.</p>':'')+
+  row('Gross new purchase incl. buy fees',money(audit.accounting.grossPurchase))+
+  row('Old-put sale proceeds',money(audit.accounting.oldPutSaleProceeds))+
+  row('Old-put exit fees',money(audit.accounting.additionalExitFees))+
+  row('Indicative net cash required (+) / released (−)',money(audit.accounting.netCashRequired))+
+  row('Old-put sale slippage',money(audit.accounting.existingExitSlippage))+
+  row('Worst additional loss in sampled shocks',money(audit.accounting.sampledWorstLoss))+
+  row('Scenario IV source',audit.accounting.modelIVSource==='user-assumed'?'Explicit user-assumed IV · not verified Greeks':audit.accounting.modelIVSource)+
+  row('Comparable scenarios',audit.comparable+' of '+audit.comparisons.length)+
+  table(['Horizon','Shock','Current ΔP&L','Replacement ΔP&L','Difference'],
+   audit.comparisons.map(x=>[when(x.horizon),pct(x.shock*100),money(x.existingAdditionalPnl),
+    money(x.replacementAdditionalPnl),money(x.replacementMinusExisting)]))+
+  (audit.unavailable?'<details><summary>Why some comparisons are unavailable</summary>'+
+    table(['Horizon','Reason'],audit.comparisons.filter(x=>x.reason).map(x=>[when(x.horizon),x.reason]))+'</details>':'')+
+  '<details><summary>Pricing and settlement limitations</summary>'+
+   audit.assumptions.map(x=>'<p class="fine">'+esc(x)+'</p>').join('')+'</details>',
+  null,null);
+}
 function aiReview(context){if(storageError&&(context?.mode||ui.aiMode)!=='research')throw Error('Recover the saved book before sharing position evidence.');if(context?.question){ui.question=context.question;ui.aiMode=context.mode;ui.share=context.mode!=='research';}else{ui.question=text('ai-question');ui.share=$('ai-share').checked;}const input=evidence();if(context?.news)input.news=context.news;const packet=I.evidencePacket(input,{mode:ui.aiMode,includePortfolio:ui.share}),question=ui.question;if(!question.trim())throw Error('Enter a question.');modal('Review evidence sent to Gemini',`<p>${packet.portfolioIncluded?'Includes the shown positions, valuations, risk and funding snapshot.':'Your portfolio is excluded.'} Private journal memos, credentials and private notes are excluded.</p><p class="fine">Provider API charges or quota limits may apply. Evidence timestamp ${when(packet.generatedAt)}.</p><pre>${esc(JSON.stringify({question,evidence:packet},null,2))}</pre><label><input id="ai-consent" type="checkbox">Send this question and exact evidence to Google Gemini.</label>`,'Send to Gemini',()=>{if(!$('ai-consent').checked)throw Error('Explicit evidence-sharing consent is required.');const id='review-'+Date.now();ui.aiError='';ui.ai=null;ui.pendingAI={id,evidence:packet};native('ai',JSON.stringify({id,mode:ui.aiMode,message:question,evidence:packet,consent:true}));ui.screen='ai';ui.aiPage='assistant';render();});}
 
 function quickScenario(kind){
