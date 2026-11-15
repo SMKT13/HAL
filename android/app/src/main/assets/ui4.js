@@ -262,7 +262,30 @@ function noteEditor(id){const n=book.notes.find(n=>n.id===id)||{title:'',text:''
 function importPreview(raw){const b=D.previewImport(raw);modal('Review backup import',`<p>This backup contains <b>${b.legs.length} open legs</b>, <b>${b.journal.length} journal entries</b>, ${b.notes.length} notes and ${b.bookmarks.length} bookmarks.</p><p>The current book will be replaced. A previous-book recovery copy is retained. Credentials are neither imported nor exported.</p><label><input id="import-confirm" type="checkbox">I reviewed this backup and want to replace the local book.</label>`,'Replace book',()=>{if(!$('import-confirm').checked)throw Error('Confirm the reviewed replacement.');commit(b);ui.hedgeDraft=null;invalidateCalculations();render();toast('Backup imported. Confirm the restored book against your broker.');});}
 function recovery(){let r;const reviewedRevision=revision;if(N?.previousBook){r=JSON.parse(N.previousBook());if(!r.ok)throw Error(r.message);if(!r.book)throw Error('No previous-book recovery copy exists.');}else{const raw=localStorage.getItem('hal_previous_v4')||localStorage.getItem('hal_before_import_v2');if(!raw)throw Error('No recovery copy exists.');r={book:JSON.parse(raw)};}const b=E.validateBook(r.book);modal('Previous-book recovery',`<p>Restore ${b.legs.length} open legs and ${b.journal.length} journal records from the previous saved book.</p><p>The current native bytes are retained in a recovery quarantine when supported. Legacy WebView storage is not erased.</p>`,'Restore previous book',()=>{if(N?.restorePreviousBook){const x=JSON.parse(N.restorePreviousBook(reviewedRevision));if(!x.ok)throw Error(x.message);book=E.validateBook(x.book);revision=x.revision;storageError='';ui.ai=null;invalidateCalculations();ui.hedgeDraft=null;ui.pattern=null;if(ui.pendingAI)native('aiCancel',ui.pendingAI.id);ui.pendingAI=null;theme();render();}else{storageError='';commit(b);}});}
 function settings(){modal('HAL Desk 4.5.1 · Settings',`<p class="fine">Personal read-only research. Android 8+. Credentials stay encrypted natively; market and AI calls use fixed HTTPS destinations.</p><div class="toolbar">${btn('connection','Upstox connection')}${btn('ai-settings','Gemini settings')}${btn('token-page','Get Analytics Token')}</div>${select('theme','Appearance',[['dark','Graphite dark'],['light','Paper light'],['system','Follow device']],book.preferences.theme)}${select('mark-mode','Put valuation marks',[['ltp','Last traded price'],['bid','Quoted bid']],book.preferences.markMode)}<label><input id="auto-refresh" type="checkbox" ${book.preferences.auto?'checked':''}>Refresh roughly every 60 seconds while foreground</label><p class="fine">Android background monitoring is not guaranteed. No automatic paid AI requests occur.</p><div class="toolbar">${btn('export','Export JSON')}${btn('csv','Journal CSV')}${btn('import','Import backup')}${btn('recovery','Recovery')}${btn('health','Data health')}</div>`,'Save preferences',()=>commit({...book,preferences:{theme:text('theme'),markMode:text('mark-mode'),auto:$('auto-refresh').checked}}));}
-function health(){modal('Data readiness & connection health',Object.entries(s.health).map(([k,h])=>`<div class="health-row"><div><strong>${esc(k)}</strong><small>Success ${when(h.lastSuccess)}<br>Failure ${when(h.lastFailure)}</small><small>${esc(h.error?D.message(h.error):'')}</small></div>${badge(h.pending?'Loading':h.error?'Needs review':h.lastSuccess?'Retrieved':'Unavailable',h.error?'stale':'')}</div>`).join('')||empty('No feeds requested'),null,null);}
+function v5DataQualityPanel(a){
+ if(!a)return '<p class="fine">No normalized market quality report available.</p>';
+ const warnings=a.problems||[];
+ return '<h3>HAL Desk 5 · Market data integrity</h3>'+
+  '<p class="fine">Independent provider and exchange clocks are never replaced by HTTP retrieval time. Cache observations cannot become streaming valuation marks. Quality counts overlap and are not a number of affected positions.</p>'+
+  row('Quotes observed (including HAL spot)',num(a.total,0))+
+  row('Missing or invalid prices',num(a.missingPrice,0))+
+  row('Provider quote clocks missing',num(a.missingProviderTime,0))+
+  row('Exchange trade clocks missing',num(a.missingTradeTime,0))+
+  row('Cached quotes',num(a.cached,0))+
+  row('Quotes older than 2 minutes',num(a.stale,0))+
+  row('Future-dated clocks',num(a.futureClock,0))+
+  row('Provider/provenance failures',num(a.provenanceFailures,0))+
+  row('Conflicting contract identities',num(a.contractConflicts,0))+
+  (warnings.length?table(['Instrument','Reason'],warnings.map(x=>[x.instrument,x.issue])):
+    '<p class="fine">No explicit provider conflicts detected in loaded observations; quote quality still requires individual inspection.</p>')+
+  '<p class="fine">A contradictory contract or same-clock traded price is unavailable for portfolio valuation until a valid subsequent observation resolves it.</p>';
+}
+function health(){
+ const m=market(),quality=v5DataQualityPanel(m.dataQuality);
+ modal('Data readiness & connection health',quality+
+  Object.entries(s.health).map(([k,h])=>
+   `<div class="health-row"><div><strong>${esc(k)}</strong><small>Success ${when(h.lastSuccess)}<br>Failure ${when(h.lastFailure)}</small><small>${esc(h.error?D.message(h.error):'')}</small></div>${badge(h.pending?'Loading':h.error?'Needs review':h.lastSuccess?'Retrieved':'Unavailable',h.error?'stale':'')}</div>`).join(''),null,null);
+}
 function scenarioParams(){const p=ui.scenario;return {spot:E.value(p.spot)??market().spot.price,horizon:p.horizon||undefined,fallbackIV:E.value(p.iv),ivShift:E.value(p.shift),rate:E.value(p.rate),dividend:E.value(p.dividend),basis:p.basis,baseSpot:E.value(p.base)};}
 function readScenario(){for(const [k,id]of Object.entries({spot:'spot',horizon:'horizon',iv:'iv',shift:'shift',rate:'rate',dividend:'dividend',basis:'basis',base:'base'}))if($('sc-'+id))ui.scenario[k]=text('sc-'+id);}
 function hedgeSettings(){return E.hedgePreferences({budget:value('hg-budget'),maxLoss:value('hg-loss'),protectThrough:text('hg-through')||null,maxSpread:value('hg-spread'),buyFees:value('hg-buy'),exitFees:value('hg-exit'),slippage:value('hg-slip'),ivShift:value('hg-iv'),fallbackIV:value('hg-iv-assumption'),rate:value('hg-rate'),dividend:value('hg-dividend'),minVolume:value('hg-volume'),minOI:value('hg-oi')});}
