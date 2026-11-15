@@ -29,8 +29,10 @@ function chooseQuote(a,b){
  }
  // Once a conflict is detected, only a strictly newer provider timestamp
  // can re-establish a valuation mark. An identical-clock reread cannot erase it.
- if(a.provenanceFailure&&(!(bq!==null&&aq!==null&&bq>aq)))return a;
- if(b.provenanceFailure&&(!(aq!==null&&bq!==null&&aq>bq)))return b;
+ const holdA=a.provenanceFailure||typeof a.failure==='string'&&a.failure.startsWith('HAL5 quote integrity: ');
+ const holdB=b.provenanceFailure||typeof b.failure==='string'&&b.failure.startsWith('HAL5 quote integrity: ');
+ if(holdA&&(!(bq!==null&&aq!==null&&bq>aq)))return a;
+ if(holdB&&(!(aq!==null&&bq!==null&&aq>bq)))return b;
  if(aq!==null&&bq===null)return a;
  if(bq!==null&&aq===null)return b;
  if(at!==null&&bt!==null&&bt<at)return a;
