@@ -117,7 +117,7 @@ function v5RiskPanel(savedBook,valuation){
  const gap=relevant.find(x=>x.afterExpiry&&x.uncovered>0);
  const expiryDetail=gap?'After '+date(gap.afterExpiry)+', '+num(gap.uncovered,0)+' futures units lack put quantity protection.':'No additional uncovered futures shown in the dated expiry ladder.';
  const settle=ui.settlementResult;
- const lifetimeScenario=settle?.complete&&E.finite(valuation.realized)&&E.finite(valuation.charges)?settle.total+valuation.realized-valuation.charges:null;
+ const lifetimeScenario=V5.lifetimeNet(settle,valuation.realized,valuation.charges);
  return card('HAL Desk 5 · Protection by date',
   '<p class="fine">Read-only expiry ladder · dates use IST. It does not change your recorded book.</p>'+
   (relevant.length?table(['From date','Futures units','Put units','Uncovered'],relevant.map(x=>[date(x.onDate),x.futures,x.puts,x.uncovered])):empty('No unexpired futures','Any expired contracts still require broker reconciliation.'))+
