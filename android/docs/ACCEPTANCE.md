@@ -2,6 +2,8 @@
 
 | Requirement | Measurable check |
 |---|---|
+| Checkpoint attribution | Unchanged book/mark mode only, two exact fresh REST marks per contract, price-change contributions reconcile to basket, booked fees unchanged, stale/manual/cached/future timestamps rejected, no causal claims |
+| Futures rollover preview | Exact old/far futures contract and lot validation, bid-side exit/ask-side entry, explicit slippage and fees, earlier-expiring put gap, notional never labeled cash, never create trades |
 | Exact multi-leg accounting | Synthetic quantities, zero manual mark, missing-mark basket withheld, fees/settlement separation, partial and full closes |
 | Risk integrity | Exact expiry/strike/key, lot mismatch, quantity gaps, earlier protection expiry, incomplete Greek provenance |
 | Scenarios | Black–Scholes known values, expiry payoff, horizon before all expiries, rate/dividend/IV validation |
