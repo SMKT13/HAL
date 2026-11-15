@@ -13,6 +13,13 @@ const bars=(n=240)=>Array.from({length:n},(_,i)=>{const c=4000+i*2+Math.sin(i/5)
 
 test('fresh book contains no automatic holdings',()=>{const b=E.emptyBook(),v=E.ledger(b,{},opts);A.equal(b.legs.length,0);A.equal(v.complete,true);A.equal(v.net,0);});
 test('explicit historical fixture multi-contract quantity accounting',()=>{const l=E.ledger(B([F(),P(),P({id:'p2',strike:4400,entry:24.1,instrumentKey:'P2'})]),M(),opts);near(l.open,(5000-4927.35)*300+(50-38.9)*150+(30-24.1)*150);near(l.openPutPremium,(38.9+24.1)*150);});
+test('new futures close must have a strictly positive broker execution price',()=>{
+ const before=B(),snapshot=JSON.stringify(before);
+ A.throws(()=>E.closeLeg(before,'f',1,0,0,'2026-10-27',{now:NOW,id:'zero-future'}),/Check closed lots/);
+ A.equal(JSON.stringify(before),snapshot);
+ const zeroPut=E.closeLeg(before,'p',1,0,0,'2026-10-27',{now:NOW,id:'zero-put'});
+ A.equal(zeroPut.journal[0].exit,0);
+});
 test('partial close immutable ledger and charges',()=>{const b=B(),c=E.closeLeg(b,'f',1,5100,100,'2026-10-27',{now:NOW,id:'close1'}),v=E.ledger(c,M(),opts);A.equal(b.legs[0].lots,2);A.equal(c.legs[0].lots,1);A.equal(c.journal[0].leg.lots,1);near(v.realized,(5100-4927.35)*150);near(v.net,v.realized+v.open-100);A.equal(c.riskProfile.confirmedAt,null);});
 test('complete close preserved as completed trade',()=>{const b=E.closeLeg(B([F()]),0,2,5100,120,'2026-10-27',opts);A.equal(b.legs.length,0);A.equal(b.journal.length,1);near(E.ledger(b,{},opts).net,(5100-4927.35)*300-120);});
 for(const [name,args]of [['overclose',[0,3,5000,0,'2026-10-27']],['future close',[0,1,5000,0,'2026-10-29']],['negative exit',[0,1,-1,0,'2026-10-27']],['fractional lots',[0,1.2,5000,0,'2026-10-27']]])test(name+' rejected',()=>A.throws(()=>E.closeLeg(B(),...args,opts)));
