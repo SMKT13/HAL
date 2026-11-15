@@ -34,8 +34,8 @@ function auditHedge(book,engineResult,instrumentKey,throughDate){
     c.lots*c.contract.lotSize!==futureUnits||c.units!==futureUnits)
   throw Error('Candidate does not fully cover futures quantity in whole lots');
  const amounts=['newPremium','grossCost','buyFees','exitFees','saleProceeds',
-  'netCashRequired','existingExitSlippage','worstLoss'];
- if(amounts.some(k=>!finite(c[k])||c[k]<0))throw Error('Missing or negative hedge accounting input');
+  'existingExitSlippage','worstLoss'];
+ if(amounts.some(k=>!finite(c[k])||c[k]<0)||!finite(c.netCashRequired))throw Error('Missing or negative hedge accounting input');
  const tol=.02;
  if(Math.abs(c.grossCost-(c.newPremium+c.buyFees))>tol||
     Math.abs(c.netCashRequired-(c.grossCost+c.exitFees-c.saleProceeds))>tol)
