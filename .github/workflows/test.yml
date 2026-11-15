@@ -81,9 +81,9 @@ jobs:
       - name: Upload unsigned candidate and test reports
         uses: actions/upload-artifact@v4
         with:
-          name: HAL-Desk-v4.6.0-unsigned-and-reports
+          name: HAL-Desk-v5.0.0-alpha.1-unsigned-and-reports
           path: |
-            android/build/HAL-Desk-v4.6.0-unsigned.apk
+            android/build/HAL-Desk-v5.0.0-alpha.1-unsigned.apk
             android/app/build/reports/tests/testReleaseUnitTest/
             android/app/build/reports/lint-results-release.html
           retention-days: 7
