@@ -50,6 +50,27 @@ await check('HAL Desk 5 lifetime recovery reconciles closed October puts, charge
  A.deepEqual(ae,[]);
  await ac.close();
 });
+await check('HAL Desk 5 expiry agenda warns ahead of a put/future gap without changing real positions',async()=>{
+ const start=Date.parse(E.istDate()+'T00:00:00Z'),
+  putExpiry=new Date(start+8*E.DAY).toISOString().slice(0,10),
+  futureExpiry=new Date(start+45*E.DAY).toISOString().slice(0,10),
+  b={...E.emptyBook(),legs:[
+   {...FUT,id:'future-agenda',expiry:futureExpiry},
+   {...PUT,id:'put-agenda',expiry:putExpiry}
+  ]};
+ const {page:ep,context:ec,errors:ee}=await pageFor({book:b});
+ const before=await ep.evaluate(()=>JSON.stringify(saved));
+ await nav(ep,'position','overview');
+ const overview=await ep.locator('main').innerText();
+ A.match(overview,/Expiry & settlement review/);
+ A.match(overview,/Upcoming protective puts expiry/);
+ A.match(overview,/Protection gap after put expiry/);
+ await nav(ep,'position','risk');
+ A.match(await ep.locator('main').innerText(),/Expiry & settlement review/);
+ A.equal(await ep.evaluate(()=>JSON.stringify(saved)),before);
+ A.deepEqual(ee,[]);
+ await ec.close();
+});
 await check('HAL Desk 5 risk ladder and mixed-expiry modal preserve real book',async()=>{
  const savedBook={...E.emptyBook(),legs:[FUT,PUT]};
  const {page:rp,context:rc,errors:re}=await pageFor({book:savedBook});
