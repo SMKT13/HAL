@@ -1,8 +1,9 @@
 /* Native-only data boundary and lossless legacy migration. */
 (function(root){'use strict';
 const Q5=typeof module==='object'?require('./quality5.js'):root.HAL5Quality;
+const C5=typeof module==='object'?require('./continuity5.js'):root.HAL5Continuity;
 const E=typeof module==='object'?require('./engine4.js'):root.HAL4Engine,clone=x=>JSON.parse(JSON.stringify(x)),stamp=()=>new Date().toISOString();
-const errors={credential_missing:'Add an Upstox Analytics Token in Connection.',token_expired_or_unauthorized:'Upstox rejected or expired the token. Replace it in Connection.',upstox_permission_denied:'This token cannot access this feed.',upstox_rate_limited:'Upstox rate limit reached. Wait before refreshing.',network_unavailable:'Network unavailable. Saved observations are retained.',bad_response:'Provider response could not be validated.',expiry_not_listed:'This exact expiry is no longer listed.',no_hal_option_contracts:'No eligible HAL option contracts were returned.',redirect_blocked:'An unexpected provider redirect was blocked.',cancelled:'Request cancelled when leaving the foreground.'};
+const errors={credential_missing:'Add an Upstox Analytics Token in Connection.',token_expired_or_unauthorized:'Upstox rejected or expired the token. Replace it in Connection.',upstox_permission_denied:'This token cannot access this feed.',upstox_rate_limited:'Upstox rate limit reached. Wait before refreshing.',network_unavailable:'Network unavailable. Saved observations are retained.',market_integrity_review:'Provider quote clocks or contract identity changed unexpectedly. Review Market Data Health before relying on price comparisons.',bad_response:'Provider response could not be validated.',expiry_not_listed:'This exact expiry is no longer listed.',no_hal_option_contracts:'No eligible HAL option contracts were returned.',redirect_blocked:'An unexpected provider redirect was blocked.',cancelled:'Request cancelled when leaving the foreground.'};
 function message(code){return errors[code]||String(code||'Data unavailable').replace(/_/g,' ');}
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const errorSummary=data=>{const e={...(object(data?.data?.errors)?data.data.errors:{}),...(object(data?.errors)?data.errors:{})};if(data?.chain_error)e.chain=data.chain_error;return Object.keys(e).length?Object.entries(e).map(([k,v])=>k+': '+message(v)).join('; '):null;};
@@ -14,7 +15,13 @@ function ingest(state,event,data,now=stamp()){
  if(event==='idle')s.loading=false;
  if(event==='snapshot'){
   if(!data||!Array.isArray(data.futures)||(data.spot!=null&&typeof data.spot!=='object'))return ingest(s,'error',{code:'bad_response'},now);
-  s.snapshot={...clone(data),_received_at:now,_cache:false};s.lastSuccess=now;s.failure=null;s.cached=false;s.loading=false;s.health.market={...s.health.market,pending:null,lastSuccess:now,error:errorSummary(data)};
+  const check=C5.reconcile(s.snapshot,data,Date.parse(now));
+  s.snapshot={...check.packet,_received_at:now,_cache:false};
+  s.lastSuccess=now;s.failure=check.issues.length?'market_integrity_review':null;
+  s.cached=false;s.loading=false;
+  s.health.market={...s.health.market,pending:null,lastSuccess:now,
+   error:check.issues.length?check.issues.map(x=>x.instrument+': '+x.detail).join('; '):errorSummary(data),
+   integrityWarnings:check.issues};
  }
  if(event==='error'){s.lastFailure=now;s.failure=data.code||'network_unavailable';s.loading=false;s.health.market={...s.health.market,pending:null,lastFailure:now,error:s.failure};}
  if(event==='research'){if(!object(data)||typeof data.section!=='string'||!object(data.data))return ingest(s,'research_error',{key:object(data)&&data.section?key(data.section,data.frame,data.type):'research:D',code:'bad_response'},now);const k=key(data.section,data.frame,data.type);s.research[k]={...clone(data),_received_at:now,_cache:false};s.health[k]={...s.health[k],pending:null,lastSuccess:now,error:errorSummary(data)};}
@@ -55,8 +62,8 @@ function market(s){
  result.contracts=[...contracts.values()];const held=packet(s,'contracts');if(held)for(const c of held.data?.contracts||[])if(!c.verified&&!['lot_size_mismatch','instrument_key_mismatch'].includes(c.reason)){const type=c.type==='PUT'?'PE':c.type;result.contracts=result.contracts.filter(x=>!(x.type===type&&x.expiry===c.expiry&&(type!=='PE'||x.strike===c.strike)));}
  const status=packet(s,'status')?.data?.market;result.status=status||{};result.marketOpen=status?.status==='NORMAL_OPEN';
  const context=packet(s,'context');for(const [k,q]of Object.entries(context?.data?.indices||{})){const name=(q.symbol||q.instrument_token||k).toLowerCase(),n=tag(E.normQuote(q),context,s.health[key('context')]);if(name.includes('vix'))result.vix=n;else if(name.includes('nifty')&&name.includes('50'))result.nifty=n;}
- result.contractConflicts=[...contractConflicts];
- result.contractConflictSpecs=contractConflictSpecs;
+ result.contractConflicts=[...new Set([...contractConflicts,...(s.snapshot?._continuityContractConflicts||[])])];
+ result.contractConflictSpecs=[...contractConflictSpecs,...(s.snapshot?._continuityContractSpecs||[])];
  if(result.contractConflicts.length){
   result.contracts=result.contracts.filter(c=>!contractConflicts.has(c.instrumentKey));
   for(const id of result.contractConflicts)result.quotes[id]=Q5.errorQuote(
