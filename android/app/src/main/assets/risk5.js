@@ -96,6 +96,11 @@ function settlementScenario(legs,inputs={}){
    'Economic P&L includes entry costs, and excludes brokerage unless charges are supplied.',
    'This is a hypothetical expiry outcome, not a future market quote or a margin forecast.']};
 }
+function lifetimeNet(scenario,realizedGross,recordedCharges){
+ if(!scenario||scenario.complete!==true||!finite(scenario.total)||
+   !finite(realizedGross)||!finite(recordedCharges)||recordedCharges<0)return null;
+ return scenario.total+realizedGross-recordedCharges;
+}
 function incrementalRisk({currentMarks,scenarioMarks,quantities,sides}){
  if(![currentMarks,scenarioMarks,quantities,sides].every(Array.isArray)||
     !currentMarks.length||![scenarioMarks,quantities,sides].every(x=>x.length===currentMarks.length))
@@ -108,7 +113,7 @@ function incrementalRisk({currentMarks,scenarioMarks,quantities,sides}){
  },0);
 }
 const api={validDate,validateLeg,intrinsic,expiryPayoff,protectionCoverage,
- protectionTimeline,settlementScenario,incrementalRisk};
+ protectionTimeline,settlementScenario,lifetimeNet,incrementalRisk};
 if(typeof module==='object'&&module.exports)module.exports=api;
 root.HAL5Risk=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
