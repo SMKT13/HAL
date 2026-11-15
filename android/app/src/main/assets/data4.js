@@ -14,7 +14,7 @@ function ingest(state,event,data,now=stamp()){
  if(event==='loading'){s.loading=true;s.health.market={...s.health.market,pending:now};}
  if(event==='idle')s.loading=false;
  if(event==='snapshot'){
-  if(!data||!Array.isArray(data.futures)||(data.spot!=null&&typeof data.spot!=='object'))return ingest(s,'error',{code:'bad_response'},now);
+  if(!data||data._cache===true||!Array.isArray(data.futures)||(data.spot!=null&&typeof data.spot!=='object'))return ingest(s,'error',{code:'bad_response'},now);
   const check=C5.reconcile(s.snapshot,data,Date.parse(now));
   s.snapshot={...check.packet,_received_at:now,_cache:false};
   const identityWarnings=(check.contractConflicts||[]).map(id=>({
@@ -28,7 +28,7 @@ function ingest(state,event,data,now=stamp()){
    integrityWarnings:outstanding};
  }
  if(event==='error'){s.lastFailure=now;s.failure=data.code||'network_unavailable';s.loading=false;s.health.market={...s.health.market,pending:null,lastFailure:now,error:s.failure};}
- if(event==='research'){if(!object(data)||typeof data.section!=='string'||!object(data.data))return ingest(s,'research_error',{key:object(data)&&data.section?key(data.section,data.frame,data.type):'research:D',code:'bad_response'},now);const k=key(data.section,data.frame,data.type);s.research[k]={...clone(data),_received_at:now,_cache:false};s.health[k]={...s.health[k],pending:null,lastSuccess:now,error:errorSummary(data)};}
+ if(event==='research'){if(!object(data)||data._cache===true||typeof data.section!=='string'||!object(data.data))return ingest(s,'research_error',{key:object(data)&&data.section?key(data.section,data.frame,data.type):'research:D',code:'bad_response'},now);const k=key(data.section,data.frame,data.type);s.research[k]={...clone(data),_received_at:now,_cache:false};s.health[k]={...s.health[k],pending:null,lastSuccess:now,error:errorSummary(data)};}
  if(event==='research_error'){const rawKey=data.key||key(data.section,data.frame,data.type),k=rawKey.startsWith('fundamentals:')?rawKey:rawKey.replace(/:(consolidated|standalone)$/,'');s.health[k]={...s.health[k],pending:null,lastFailure:now,error:data.code||'network_unavailable'};}
  if(event==='stream')s.stream=clone(data); // Observation only: never valuation marks.
  return s;
