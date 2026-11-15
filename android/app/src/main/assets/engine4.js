@@ -191,7 +191,7 @@ function ledger(book,input={},opts={}) {
 }
 function closeLeg(book, idOrIndex, lots, exit, fees, date, options={}) {
  const b=validateBook(book),index=typeof idOrIndex==='number'?idOrIndex:b.legs.findIndex(l=>l.id===idOrIndex),leg=b.legs[index],now=options.now==null?Date.now():time(options.now);
- if(!leg||!Number.isInteger(lots)||lots<1||lots>leg.lots||!finite(exit)||exit<0||!finite(fees)||fees<0||!validDate(date)||date>istDate(now))fail('Check closed lots, actual exit price, charges and completed trade date.');
+ if(!leg||!Number.isInteger(lots)||lots<1||lots>leg.lots||!finite(exit)||exit<0||leg?.type==='FUT'&&exit===0||!finite(fees)||fees<0||!validDate(date)||date>istDate(now))fail('Check closed lots, actual exit price, charges and completed trade date.');
  const id=options.id||'close-'+now+'-'+b.journal.length;if(b.journal.some(j=>j.id===id))fail('Duplicate close transaction identifier.');
  const record={id,kind:'close',date,note:safeText(options.note,10000),leg:{...leg,lots},exit,fees,gross:(exit-leg.entry)*lots*leg.lotSize};
  b.journal.push(record);if(lots===leg.lots)b.legs.splice(index,1);else b.legs[index].lots-=lots;
