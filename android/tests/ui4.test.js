@@ -23,6 +23,19 @@ await check('HAL Desk 5 risk ladder and mixed-expiry modal preserve real book',a
  A.deepEqual(re,[]);
  await rc.close();
 });
+await check('HAL Desk 5 Monte Carlo stress does not modify real trade book',async()=>{
+ const {page:qp,context:qc,errors:qe}=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT]}});
+ await emit(qp,'snapshot',snap);await nav(qp,'position','stress');
+ const before=await qp.evaluate(()=>JSON.stringify(saved));
+ await qp.locator('#sc-horizon').fill('2026-11-15');
+ await qp.locator('#mc-vol').fill('30');
+ await click(qp,'mc-run');
+ A.match(await qp.locator('main').innerText(),/Conditional model distribution/);
+ A.match(await qp.locator('main').innerText(),/Worst 5% mean/);
+ A.equal(await qp.evaluate(()=>JSON.stringify(saved)),before);
+ A.deepEqual(qe,[]);
+ await qc.close();
+});
 await check('Options Lab paper chain, payoff and actual-book isolation',async()=>{
  await emit(p,'snapshot',snap);
  await nav(p,'technicals','lab');
