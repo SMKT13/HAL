@@ -10,7 +10,7 @@ The five primary tabs remain **Position, History, Technicals, Research and AI De
 
 **PAPER ledger v1 is now a state machine.** A draft can be edited. Marking it OPEN freezes its validated entry legs, quantity, price and opening charges. An open trade can be closed with explicit hypothetical prices and cumulative fees, but cannot be retroactively edited; clone to create another draft. Old 4.4/4.5 records load with unchanged schema 1 and establish a read-only opening snapshot on migration. This is not an executed order ledger.
 
-Actual-book accounting and recovery remain schema 4 in SQLite, with revision checks, checksums, previous-book recovery, cost accounting and confirmed-broker-history reconciliation. No migrations delete legacy `hal_desk_v2`/`hal_positions_v1` browser data. Credentials continue using the original Android Keystore alias `hal-upstox-secrets-v1` and app package identity.
+Actual-book accounting and recovery remain schema 4 in SQLite, with revision checks, checksums, previous-book recovery, cost accounting and confirmed-broker-history reconciliation. In the 5.0 alpha, JSON backup import first previews the existing-versus-imported open legs, journal, lifetime history, notes, recorded charges and booked net; destructive replacement requires a checkbox plus typing `REPLACE`. Failed native book saves leave the saved book and current calculation state unchanged. Import is a full replacement, not an automatic merge. No migrations delete legacy `hal_desk_v2`/`hal_positions_v1` browser data. Credentials continue using the original Android Keystore alias `hal-upstox-secrets-v1` and app package identity.
 
 ## HAL Desk 5 alpha research additions
 
