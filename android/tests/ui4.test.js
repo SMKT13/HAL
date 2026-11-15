@@ -49,6 +49,31 @@ await check('HAL Desk 5 Monte Carlo stress does not modify real trade book',asyn
  A.deepEqual(qe,[]);
  await qc.close();
 });
+await check('eligible protective-put comparison audits cash and December coverage without altering real positions',async()=>{
+ const {page:hp,context:hc,errors:he}=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT]}});
+ await emit(hp,'snapshot',snap);
+ await emit(hp,'research',{section:'hedges',frame:'2026-12-29',fetched_at_iso:ts,
+   data:{option_expiry:'2026-12-29',option_rows:[{strike:4500,put:{
+     instrument_key:'SYNTH_DEC_P',lot_size:150,iv:30,delta:-.4,theta:-.2,
+     quote:q(110)}}]}});
+ await nav(hp,'position','book');await click(hp,'confirm');
+ await hp.locator('#confirm-check').check();await save(hp);
+ const before=await hp.evaluate(()=>JSON.stringify(saved));
+ await nav(hp,'position','hedge');
+ await hp.locator('#hg-budget').fill('1000000');
+ await hp.locator('#hg-loss').fill('100000000');
+ await hp.locator('#hg-through').fill('2026-12-29');
+ await hp.locator('#hg-iv-assumption').fill('30');
+ await click(hp,'hedge-rank');
+ const detail=hp.locator('[data-action="hedge-detail"]').first();
+ A.ok(await detail.count(),await hp.locator('main').innerText());
+ await detail.click();
+ A.match(await hp.locator('#modal-body').innerText(),/Futures quantity covered/);
+ A.match(await hp.locator('#modal-body').innerText(),/Net cash required/);
+ A.equal(await hp.evaluate(()=>JSON.stringify(saved)),before);
+ A.deepEqual(he,[]);
+ await hc.close();
+});
 await check('Options Lab paper chain, payoff and actual-book isolation',async()=>{
  await emit(p,'snapshot',snap);
  await nav(p,'technicals','lab');
