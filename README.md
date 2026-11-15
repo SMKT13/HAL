@@ -6,7 +6,7 @@ Personal research, derivatives risk and portfolio accounting for **Hindustan Aer
 
 | Application | Source | Version | Storage |
 | --- | --- | --- | --- |
-| Android HAL Desk | `android/` | **4.6.0**, versionCode **31** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
+| Android HAL Desk | `android/` | **4.7.0**, versionCode **32** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
 | Desktop/web HAL viewer | `src/`, `backend/`, `server.ts`, `server.py` | Separate web product | Browser-origin-local portfolio, optional local Python market feed |
 
 **The two apps do not automatically share positions, history, model outputs or subscriptions.** Export/import only through documented, validated formats. The web viewer is not the canonical Android portfolio.
@@ -36,7 +36,7 @@ npm run test:ui
 HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash build.sh
 ```
 
-**4.6 change:** `app/src/main/assets/desk4.js` and `web-assets-sha256.json` are generated artifacts, **not committed files**. The pinned build script `scripts/build-assets.js` regenerates them for browser tests, and Gradle automatically regenerates and verifies them before Android packaging. No hand-edited or stale WebView bundle is used as source of truth.
+**4.6+ build invariant:** `app/src/main/assets/desk4.js` and `web-assets-sha256.json` are generated artifacts, **not committed files**. The pinned build script `scripts/build-assets.js` regenerates them for browser tests, and Gradle automatically regenerates and verifies them before Android packaging. No hand-edited or stale WebView bundle is used as source of truth.
 
 Android application ID stays `in.smkt.haldesk`. An upgrade requires the **original HAL signing certificate**, not a new keystore. Use [private local signing instructions](android/INSTALL.md); never commit, paste into issues, or upload the JKS/password to CI.
 
