@@ -1,5 +1,6 @@
 /* Native-only data boundary and lossless legacy migration. */
 (function(root){'use strict';
+const Q5=typeof module==='object'?require('./quality5.js'):root.HAL5Quality;
 const E=typeof module==='object'?require('./engine4.js'):root.HAL4Engine,clone=x=>JSON.parse(JSON.stringify(x)),stamp=()=>new Date().toISOString();
 const errors={credential_missing:'Add an Upstox Analytics Token in Connection.',token_expired_or_unauthorized:'Upstox rejected or expired the token. Replace it in Connection.',upstox_permission_denied:'This token cannot access this feed.',upstox_rate_limited:'Upstox rate limit reached. Wait before refreshing.',network_unavailable:'Network unavailable. Saved observations are retained.',bad_response:'Provider response could not be validated.',expiry_not_listed:'This exact expiry is no longer listed.',no_hal_option_contracts:'No eligible HAL option contracts were returned.',redirect_blocked:'An unexpected provider redirect was blocked.',cancelled:'Request cancelled when leaving the foreground.'};
 function message(code){return errors[code]||String(code||'Data unavailable').replace(/_/g,' ');}
@@ -23,7 +24,7 @@ function ingest(state,event,data,now=stamp()){
 }
 function packet(s,section,frame='D',type='consolidated'){return s.research[key(section,frame,type)]||s.research[section+':'+frame]||null;}
 function market(s){
- const result={contracts:[],quotes:{},spot:E.normQuote({}),lastSuccess:s.lastSuccess,lastFailure:s.lastFailure,failure:s.failure};const contracts=new Map();
+ const result={contracts:[],quotes:{},spot:E.normQuote({}),lastSuccess:s.lastSuccess,lastFailure:s.lastFailure,failure:s.failure};const contracts=new Map(),contractConflicts=new Set();
  const tag=(q,p,h,option=false)=>{
   const errors={...(object(p?.data?.errors)?p.data.errors:{}),...(object(p?.errors)?p.errors:{})};
   const failedRefresh=!!h?.lastFailure&&(!h.lastSuccess||Date.parse(h.lastFailure)>=Date.parse(h.lastSuccess));
@@ -32,13 +33,34 @@ function market(s){
   const quoteError=errors.quotes||(option?errors.option_quotes:null)||(failedRefresh?h.error||'refresh_failed':null);
   return {...q,source:p._cache?'CACHE':q.source,lastSuccess:h?.lastSuccess||p._received_at||p.fetched_at_iso,lastFailure:h?.lastFailure||null,failure:q.failure||quoteError||null};
  };
- const choose=(a,b)=>{if(!a)return b;const av=Date.parse(a.quoteAt),bv=Date.parse(b.quoteAt),at=Date.parse(a.tradeAt),bt=Date.parse(b.tradeAt);if(Number.isFinite(at)&&Number.isFinite(bt)&&bt<at)return a;if(Number.isFinite(av)&&(!Number.isFinite(bv)||bv<av))return a;if(bv===av&&Date.parse(b.retrievedAt)<Date.parse(a.retrievedAt))return a;return b;};
- const add=(raw,p,h)=>{const m=E.normalizeMarket(raw);for(const c of m.contracts)contracts.set(c.instrumentKey,c);for(const [k,q]of Object.entries(m.quotes)){const contract=m.contracts.find(c=>c.instrumentKey===k);result.quotes[k]=choose(result.quotes[k],tag(q,p,h,contract?.type==='PE'||contract?.type==='CE'));}return m;};
+ const add=(raw,p,h)=>{
+  const m=E.normalizeMarket(raw);
+  for(const c of m.contracts){
+   if(contractConflicts.has(c.instrumentKey))continue;
+   const previous=contracts.get(c.instrumentKey);
+   if(previous&&!Q5.sameContract(previous,c)){
+    contractConflicts.add(c.instrumentKey);contracts.delete(c.instrumentKey);
+   }else contracts.set(c.instrumentKey,c);
+  }
+  for(const [k,q]of Object.entries(m.quotes)){
+   const contract=m.contracts.find(c=>c.instrumentKey===k);
+   result.quotes[k]=Q5.chooseQuote(result.quotes[k],tag(q,p,h,contract?.type==='PE'||contract?.type==='CE'));
+  }
+  return m;
+ };
  if(s.snapshot){const m=add(s.snapshot,s.snapshot,s.health.market);result.spot=tag(m.spot,s.snapshot,s.health.market);}
  for(const p of Object.values(s.research)){const d=p?.data;if(!d)continue;const h=s.health[key(p.section,p.frame,p.type)];if(['chain','hedges'].includes(p.section))add(d,p,h);if(p.section==='contracts')add({held_contracts:(d.contracts||[]).filter(c=>c.verified||c.reason==='lot_size_mismatch').map(c=>({...c,type:c.type==='PUT'?'PE':c.type})),fetched_at_iso:p.fetched_at_iso},p,h);}
  result.contracts=[...contracts.values()];const held=packet(s,'contracts');if(held)for(const c of held.data?.contracts||[])if(!c.verified&&!['lot_size_mismatch','instrument_key_mismatch'].includes(c.reason)){const type=c.type==='PUT'?'PE':c.type;result.contracts=result.contracts.filter(x=>!(x.type===type&&x.expiry===c.expiry&&(type!=='PE'||x.strike===c.strike)));}
  const status=packet(s,'status')?.data?.market;result.status=status||{};result.marketOpen=status?.status==='NORMAL_OPEN';
- const context=packet(s,'context');for(const [k,q]of Object.entries(context?.data?.indices||{})){const name=(q.symbol||q.instrument_token||k).toLowerCase(),n=tag(E.normQuote(q),context,s.health[key('context')]);if(name.includes('vix'))result.vix=n;else if(name.includes('nifty')&&name.includes('50'))result.nifty=n;}return result;
+ const context=packet(s,'context');for(const [k,q]of Object.entries(context?.data?.indices||{})){const name=(q.symbol||q.instrument_token||k).toLowerCase(),n=tag(E.normQuote(q),context,s.health[key('context')]);if(name.includes('vix'))result.vix=n;else if(name.includes('nifty')&&name.includes('50'))result.nifty=n;}
+ result.contractConflicts=[...contractConflicts];
+ if(result.contractConflicts.length){
+  result.contracts=result.contracts.filter(c=>!contractConflicts.has(c.instrumentKey));
+  for(const id of result.contractConflicts)result.quotes[id]=Q5.errorQuote(
+   result.quotes[id]||E.normQuote({}), 'Conflicting instrument type, expiry, strike or lot size for the same key');
+ }
+ result.dataQuality=Q5.audit(result);
+ return result;
 }
 function rawCandles(s,frame='D',section='candles'){const p=packet(s,section,frame),d=p?.data||{};const malformed=[d.history?.candles,d.intraday?.candles].some(x=>x!=null&&!Array.isArray(x));return {raw:[...(Array.isArray(d.history?.candles)?d.history.candles:[]),...(Array.isArray(d.intraday?.candles)?d.intraday.candles:[])],retrievedAt:p?.fetched_at_iso||null,error:malformed?'bad_response':s.health[key(section,frame)]?.error||null};}
 function news(s){const result=[];const flatten=x=>{
