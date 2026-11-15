@@ -420,6 +420,7 @@ function health(){
  const m=market(),quality=v5DataQualityPanel(m.dataQuality),warnings=s.health.market?.integrityWarnings||[];
  modal('Data readiness & connection health',quality+
   (warnings.length?'<h3>Latest refresh continuity notices</h3>'+table(['Instrument','Issue'],warnings.map(x=>[x.instrument,x.detail])):'')+
+  ((s.integrityHistory||[]).length?'<h3>Recent integrity incidents (up to 25)</h3>'+table(['Observed','Instrument','Issue'],s.integrityHistory.slice().reverse().map(x=>[when(x.at),x.instrument,x.detail])):'')+
   Object.entries(s.health).map(([k,h])=>
    `<div class="health-row"><div><strong>${esc(k)}</strong><small>Success ${when(h.lastSuccess)}<br>Failure ${when(h.lastFailure)}</small><small>${esc(h.error?D.message(h.error):'')}</small></div>${badge(h.pending?'Loading':h.error?'Needs review':h.lastSuccess?'Retrieved':'Unavailable',h.error?'stale':'')}</div>`).join(''),null,null);
 }
