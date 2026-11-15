@@ -112,7 +112,7 @@ function stressGrid(book,market,params={}) {
  return {rows,days,fallbackIV:iv,assumptions:'Spot and IV shocks relative to explicitly assumed inputs. Model P&L relative to entry, before realised trades and charges. Withheld when earliest contract expires first.'};
 }
 function headlineSignals(items,now=Date.now()) {
- if(!Array.isArray(items))return {ready:false,reason:'Headlines not available'};
+ if(!Array.isArray(items)||items.length===0)return {ready:false,reason:'No dated headlines available; do not infer that no HAL news occurred'};
  const valid=items.filter(x=>x&&typeof x.title==='string'&&Number.isFinite(Date.parse(x.publishedAt||''))&&
  Date.parse(x.publishedAt)<=now+5000&&Date.parse(x.publishedAt)>=now-7*86400000);
  const distinct=[],seen=new Set();
@@ -131,7 +131,7 @@ function sixPerspectives(ctx={}) {
  out.push({desk:'Technical',evidence:t.ready&&!t.stale?t.bias:'Current completed technical evidence unavailable',confidence:t.ready&&!t.stale?'observed':'withheld'});
  out.push({desk:'Derivatives',evidence:r.futureUnits===undefined?'Validated risk totals unavailable':r.futureUnits+' future units; '+r.putUnits+' put units; '+r.uncoveredUnits+' uncovered',confidence:r.futureUnits===undefined?'withheld':'recorded'});
  out.push({desk:'Portfolio',evidence:l.complete&&!l.stale&&!l.manual?'Indicative lifetime net '+l.net:'Live complete portfolio mark unavailable or manually valued',confidence:l.complete&&!l.stale&&!l.manual?'estimated':'withheld'});
- out.push({desk:'Fundamental',evidence:ctx.fundamentals?'Company data supplied; review original period and source':'Current verified company filings unavailable',confidence:'review'});
+ out.push({desk:'Fundamental',evidence:'Check dated consolidated results, order backlog and official filings in Research; model does not verify unstamped financial assertions',confidence:'source-review-required'});
  out.push({desk:'News',evidence:headlines.ready?headlines.count+' distinct recent headlines; '+headlines.officialCount+' official':'Dated headline feed unavailable',confidence:headlines.ready?'coverage-limited':'withheld'});
  out.push({desk:'Risk control',evidence:(r.warnings||[]).map(w=>w.title).slice(0,3).join('; ')||'Verify contract expiry, margin and physical settlement',confidence:'action-required'});
  return {perspectives:out,headlines,kind:'Local evidence checklist; no LLM forecast, autonomous orders or investment recommendation.'};
