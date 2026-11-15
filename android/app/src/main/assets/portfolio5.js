@@ -57,7 +57,7 @@ function audit(book,valuation){
   completedLots,completedCloseRecords:journal.length,historyRecordCount:historyRecords.length,
   realizedByType:consistent?history.byType:null,unallocatedLegacyGross:consistent?history.legacyGross:null,
   chargesAsOf:b.history?.charges?.asOf||null,
-  markQuality:!consistent?'unverifiable':!complete?'incomplete':v.manual?'manual':'stale'===String(v.stale?'stale':'')?'stale':'provider',
+  markQuality:!consistent?'unverifiable':!complete?'incomplete':v.manual?'manual':v.stale?'stale':'provider',
   settlementCash:b.journal.filter(j=>j.kind==='settlement').reduce((n,j)=>n+j.amount,0),
   fundingCash:b.journal.filter(j=>j.kind==='funding').reduce((n,j)=>n+j.amount,0),
   notes:[
