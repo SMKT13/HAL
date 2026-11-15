@@ -263,7 +263,32 @@ await check('offline futures editor blocks zero mark and accepts positive manual
 await check('partial close retains realised history and fees',async()=>{await click(p,'close');await p.locator('#close-lots').fill('1');await p.locator('#close-exit').fill('5000');await p.locator('#close-fees').fill('10');await p.locator('#close-note').fill('PRIVATE_MEMO');await save(p);const b=await p.evaluate(()=>saved);A.equal(b.legs[0].lots,1);A.equal(b.journal[0].fees,10)});
 await check('explicit book confirmation then edit invalidation',async()=>{await click(p,'confirm');await p.locator('#confirm-check').check();await save(p);A.ok(await p.evaluate(()=>saved.riskProfile.confirmedAt));await click(p,'edit');await p.locator('#leg-manual').fill('4900');await save(p);A.equal(await p.evaluate(()=>saved.riskProfile.confirmedAt),null)});
 await check('backup export and previous-book recovery',async()=>{await nav(p,'position','journal');await click(p,'export');const b=await p.evaluate(()=>JSON.parse(calls.find(c=>c[0]==='exportBackup')[1]));A.equal(b.schema,4);A.equal(b.book.journal.length,1);await click(p,'recovery');await save(p);A.equal(await p.evaluate(()=>saved.legs[0].manual),5000)});
-await check('import preview requires explicit replacement and rejects corruption',async()=>{await emit(p,'import_preview',{schema:4,book:{...E.emptyBook(),legs:[FUT,PUT]}});await p.locator('#modal-save').click();A.match(await p.locator('#modal-error').innerText(),/Confirm/);await p.locator('#import-confirm').check();await save(p);A.equal(await p.evaluate(()=>saved.legs.length),2);await emit(p,'import_preview',{schema:999,book:{}});A.match(await p.locator('#toast').innerText(),/rejected/)});
+await check('import preview requires explicit replacement and rejects corruption',async()=>{await emit(p,'import_preview',{schema:4,book:{...E.emptyBook(),legs:[FUT,PUT]}});await p.locator('#modal-save').click();A.match(await p.locator('#modal-error').innerText(),/Confirm/);await p.locator('#import-confirm').check();if(await p.locator('#import-phrase').count())await p.locator('#import-phrase').fill('REPLACE');await save(p);A.equal(await p.evaluate(()=>saved.legs.length),2);await emit(p,'import_preview',{schema:999,book:{}});A.match(await p.locator('#toast').innerText(),/rejected/)});
+await check('destructive import previews ledger loss and failed native save never commits replacement',async()=>{
+ const existing={...E.emptyBook(),legs:[FUT,PUT],
+  journal:[{id:'legacy-cost',kind:'fee',date:'2026-10-27',amount:250}]};
+ const {page:ip,context:ic,errors:ie}=await pageFor({book:existing});
+ const before=await ip.evaluate(()=>JSON.stringify(saved));
+ await emit(ip,'import_preview',{schema:4,book:E.emptyBook()});
+ A.match(await ip.locator('#modal-body').innerText(),/Completed journal entries/);
+ A.match(await ip.locator('#modal-body').innerText(),/Existing saved records would be removed or changed/);
+ A.match(await ip.locator('#modal-body').innerText(),/Current recorded charges/);
+ await ip.locator('#import-confirm').check();
+ await ip.locator('#modal-save').click();
+ A.match(await ip.locator('#modal-error').innerText(),/Type REPLACE/);
+ A.equal(await ip.evaluate(()=>JSON.stringify(saved)),before);
+ await ip.locator('#import-phrase').fill('REPLACE');
+ await ip.evaluate(()=>window.forceSaveFailure=true);
+ await ip.locator('#modal-save').click();
+ A.match(await ip.locator('#modal-error').innerText(),/synthetic disk failure/);
+ A.equal(await ip.evaluate(()=>JSON.stringify(saved)),before);
+ await ip.evaluate(()=>window.forceSaveFailure=false);
+ await save(ip);
+ A.equal(await ip.evaluate(()=>saved.journal.length),0);
+ A.equal(await ip.evaluate(()=>saved.legs.length),0);
+ A.deepEqual(ie,[]);
+ await ic.close();
+});
 await check('REST multi-leg accounting and missing data state',async()=>{await emit(p,'snapshot',snap);await nav(p,'position','overview');A.match(await p.locator('main').innerText(),/23,460/);await emit(p,'snapshot',{...snap,option_rows:[]});A.match(await p.locator('main').innerText(),/Unavailable/);await emit(p,'snapshot',snap)});
 await check('mixed-expiry scenario rejects later horizon, zero spot remains zero',async()=>{await nav(p,'position','stress');await p.locator('#sc-horizon').fill('2026-12-01');await p.locator('#scenario-advanced').evaluate(el=>el.open=true);await p.locator('#sc-iv').fill('30');await click(p,'scenario');A.match(await p.locator('main').innerText(),/Scenario unavailable/);await p.locator('#sc-horizon').fill('');await p.locator('#sc-spot').fill('0');await click(p,'scenario');A.ok(!(await p.locator('main').innerText()).includes('23,460.00'))});
 await check('failed refresh visibly retains observations',async()=>{await emit(p,'error',{code:'network_unavailable'});A.match(await p.locator('#notice').innerText(),/Network unavailable/)});
