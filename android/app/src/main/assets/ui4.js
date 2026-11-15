@@ -1,18 +1,18 @@
 /* HAL Desk 4 presentation. Finance, persistence, transport and AI policy are separate modules. */
 (function(){'use strict';
-const V5=HAL5Risk,Q5=HAL5Quant,B5=HAL5Backtest,H5=HAL5Hedge,L5=HAL5Lenses,P5=HAL5Portfolio,X5=HAL5Expiry,C5=HAL5Reconcile;
+const V5=HAL5Risk,Q5=HAL5Quant,B5=HAL5Backtest,H5=HAL5Hedge,L5=HAL5Lenses,P5=HAL5Portfolio,X5=HAL5Expiry,C5=HAL5Reconcile,Z5=HAL5ScenarioPath;
 const E=HAL4Engine,D=HAL4Data,I=HAL4Insights,W=HAL4Workflow,N=window.HALNative,$=id=>document.getElementById(id),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=(v,d=2)=>E.finite(v)?v.toLocaleString('en-IN',{maximumFractionDigits:d}):'—',money=v=>E.finite(v)?(v<0?'−':'')+'₹'+Math.abs(v).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}):'Unavailable',pct=v=>E.finite(v)?num(v)+'%':'—';
 const when=v=>v&&Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' IST':'Time unavailable',date=v=>E.validDate(v)?new Date(v+'T00:00:00Z').toLocaleDateString('en-IN',{timeZone:'UTC',day:'2-digit',month:'short',year:'numeric'}):'—',stamp=()=>new Date().toISOString(),clone=v=>JSON.parse(JSON.stringify(v)),color=v=>E.finite(v)?v<0?'negative':'positive':'muted';
 const btn=(a,t,x='')=>`<button data-action="${a}" ${x}>${t}</button>`,badge=(t,c='')=>`<span class="badge ${esc(c)}">${esc(t)}</span>`,row=(a,b)=>`<div class="row"><span>${esc(a)}</span><strong>${esc(b)}</strong></div>`,tile=(a,b,c='')=>`<div class="metric"><small>${esc(a)}</small><strong>${esc(b)}</strong><span>${esc(c)}</span></div>`,empty=(a,b='')=>`<div class="empty"><strong>${esc(a)}</strong>${esc(b)}</div>`,card=(a,b,c='')=>`<section class="card"><div class="section-heading"><h2>${esc(a)}</h2>${c}</div>${b}</section>`;
 const table=(h,rs)=>`<div class="table-wrap"><table><thead><tr>${h.map(x=>'<th>'+esc(x)+'</th>').join('')}</tr></thead><tbody>${rs.map(r=>'<tr>'+r.map(x=>'<td>'+esc(x)+'</td>').join('')+'</tr>').join('')}</tbody></table></div>`,input=(id,label,v='',type='number')=>`<label>${esc(label)}<input id="${id}" type="${type}" ${type==='number'?'step="any" inputmode="decimal"':''} value="${esc(v??'')}"></label>`,select=(id,label,opts,v)=>`<label>${esc(label)}<select id="${id}">${opts.map(([k,t])=>`<option value="${esc(k)}" ${k===v?'selected':''}>${esc(t)}</option>`).join('')}</select></label>`,value=id=>E.value($(id)?.value),text=id=>$(id)?.value||'';
 let book=E.emptyBook(),revision=0,s=D.empty(),configured=false,started=false,storageError='',chart=null,saveModal=null,returnFocus=null,toastTimer;
-const ui={screen:'position',position:'overview',plan:'stress',research:'company',technicals:'markets',aiPage:'assistant',reviewOpen:false,frame:'D',expiry:'',side:'PE',filter:'all',search:'',statement:'consolidated',scenario:{spot:'',horizon:'',iv:'',shift:0,rate:6,dividend:0,basis:'constant',base:''},result:null,resultAt:null,settlementResult:null,settlementAt:null,mcResult:null,mcAt:null,mcVol:'',mcDrift:0,btParams:{fast:20,slow:50,fee:0,slip:0},btReport:null,btRegime:null,btAt:null,btSource:null,reduction:null,compare:{leg:'',lots:1,costs:0},advanced:false,hedges:null,hedgesAt:null,hedgeDraft:null,closePreview:null,pattern:null,patternWindow:20,patternForward:10,aiMode:'copilot',question:'Explain the position, expiry gaps, quote reliability and evidence that needs review.',share:true,ai:null,pendingAI:null,aiError:'',aiConfigured:false,model:'',finbert:{state:'not_installed'},sentiments:{}};
+const ui={screen:'position',position:'overview',plan:'stress',research:'company',technicals:'markets',aiPage:'assistant',reviewOpen:false,frame:'D',expiry:'',side:'PE',filter:'all',search:'',statement:'consolidated',scenario:{spot:'',horizon:'',iv:'',shift:0,rate:6,dividend:0,basis:'constant',base:''},result:null,resultAt:null,settlementResult:null,settlementPath:null,settlementAt:null,mcResult:null,mcAt:null,mcVol:'',mcDrift:0,btParams:{fast:20,slow:50,fee:0,slip:0},btReport:null,btRegime:null,btAt:null,btSource:null,reduction:null,compare:{leg:'',lots:1,costs:0},advanced:false,hedges:null,hedgesAt:null,hedgeDraft:null,closePreview:null,pattern:null,patternWindow:20,patternForward:10,aiMode:'copilot',question:'Explain the position, expiry gaps, quote reliability and evidence that needs review.',share:true,ai:null,pendingAI:null,aiError:'',aiConfigured:false,model:'',finbert:{state:'not_installed'},sentiments:{}};
 function native(name,...args){if(typeof N?.[name]==='function')return N[name](...args);if(!['ready','finbertStatus'].includes(name))toast('Available in the installed Android app.');return null;}
 function toast(msg){clearTimeout(toastTimer);$('toast').textContent=msg;$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,6000);}
 function isBookConfirmed(){return I.isBookConfirmed(book);}
 function clearCalculationOutput(){document.querySelectorAll('[data-calculation-output]').forEach(el=>el.remove());}
-function invalidateCalculations(){recoveryView.invalidate();clearCalculationOutput();ui.reduction=null;ui.result=null;ui.resultAt=null;ui.settlementResult=null;ui.settlementAt=null;ui.mcResult=null;ui.mcAt=null;ui.hedges=null;ui.hedgesAt=null;ui.closePreview=null;}
+function invalidateCalculations(){recoveryView.invalidate();clearCalculationOutput();ui.reduction=null;ui.result=null;ui.resultAt=null;ui.settlementResult=null;ui.settlementPath=null;ui.settlementAt=null;ui.mcResult=null;ui.mcAt=null;ui.hedges=null;ui.hedgesAt=null;ui.closePreview=null;}
 function theme(){document.body.classList.toggle('light',book.preferences.theme==='light'||book.preferences.theme==='system'&&matchMedia('(prefers-color-scheme: light)').matches);}
 function commit(b){if(storageError)throw Error('Recover the saved book before editing.');const next=E.validateBook(b);if(I.materialFingerprint(next)!==I.materialFingerprint(book)){if(I.confirmationFingerprint(next)!==I.confirmationFingerprint(book)){next.riskProfile.confirmedAt=null;next.riskProfile.confirmedBook=null;}ui.ai=null;invalidateCalculations();if(ui.pendingAI)native('aiCancel',ui.pendingAI.id);ui.pendingAI=null;}const r=D.saveBook(N,localStorage,next,revision);book=r.book;revision=r.revision;book.revision=revision;theme();render();}
 function cache(){try{const x=JSON.stringify(D.cache(s));if(N?.cachePut){const r=JSON.parse(N.cachePut('snapshot',x));if(!r.ok)throw Error();}else localStorage.setItem('hal_cache_v4',x);}catch(_){toast('Market cache could not be saved; your portfolio is stored separately.');}}
@@ -166,6 +166,7 @@ function v5SettleModal(){
   const fees=value('v5-charges');
   if(fees===null||fees<0)throw Error('Enter valid non-negative additional costs.');
   ui.settlementResult=V5.settlementScenario(book.legs,{spotAtExpiry:opt,futureAtExpiry:fut,charges:fees});
+  ui.settlementPath=Z5.path(book.legs,{spotAtExpiry:opt,futureAtExpiry:fut,charges:fees},E.istDate());
   ui.settlementAt=stamp();render();
  });
 }
@@ -174,7 +175,7 @@ function v5RiskPanel(savedBook,valuation){
  const relevant=timeline.filter(x=>x.futures>0);
  const gap=relevant.find(x=>x.afterExpiry&&x.uncovered>0);
  const expiryDetail=gap?'After '+date(gap.afterExpiry)+', '+num(gap.uncovered,0)+' futures units lack put quantity protection.':'No additional uncovered futures shown in the dated expiry ladder.';
- const settle=ui.settlementResult;
+ const settle=ui.settlementResult,path=ui.settlementPath;
  const lifetimeScenario=V5.lifetimeNet(settle,valuation.realized,valuation.charges);
  return card('HAL Desk 5 · Protection by date',
   '<p class="fine">Read-only expiry ladder · dates use IST. It does not change your recorded book.</p>'+
@@ -185,6 +186,17 @@ function v5RiskPanel(savedBook,valuation){
    row('Open legs · hypothetical expiry P&L',money(settle.total))+
    row('Lifetime net under scenario',money(lifetimeScenario))+
    '<p class="fine">Lifetime result combines actual recorded closed gross P&L with hypothetical open-leg P&L, deducting recorded and entered additional charges once. Funding cash is excluded. Different expiries do not have one universal break-even price.</p>'+
+   (path?'<details><summary>Expiry-by-expiry economic outcome (not a cash forecast)</summary>'+
+     table(['Contract expiry','Put P&L','Futures P&L','Cumulative gross','Uncovered after'],path.events.map(e=>[
+      date(e.expiry),money(e.grossPutPnl),money(e.grossFuturePnl),
+      money(e.cumulativeGrossEconomicPnl),num(e.uncoveredFutureUnitsAfter,0)]))+
+     row('Gross modeled P&L (all expiries)',money(path.totalGrossEconomicPnl))+
+     row('Additional hypothetical costs, deducted only once',money(path.assumedAdditionalCosts))+
+     row('Net modeled P&L (all expiries)',money(path.totalNetEconomicPnl))+
+     row('Broker cash / physical-delivery requirement','Not calculated · requires broker confirmation')+
+     row('Futures daily variation-margin path','Unavailable · settlement history needed')+
+     '<p class="fine">Earlier option exercise value and entry premiums are economic inputs, not spendable cash at expiry. They cannot be used as an inferred funding balance. No trade or ledger entry is recorded.</p>'+
+     '<p class="fine">'+esc(path.assumptions.join(' · '))+'</p></details>':'')+
    (settle.complete?table(['Leg','Expiry','Settlement value','P&L'],settle.rows.map(r=>[r.type,date(r.expiry),money(r.settlement),money(r.pnl)])):
     reviews(settle.errors.map(detail=>({title:'Missing settlement input',detail}))))+
    '<p class="fine">'+esc(settle.assumptions.join(' · '))+'</p></div>':'')
