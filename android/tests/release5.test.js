@@ -24,7 +24,7 @@ test('private original-certificate release signing remains mandatory',()=>{
  A.match(build,/HAL_SIGNING_PASSWORD_FILE/);
  A.match(build,/hal-personal/);
  A.match(build,/a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382/);
- A.match(build,/apksigner verify --verbose --print-certs/);
+ A.match(build,/apksigner["']?\s+verify --verbose --print-certs/);
  A.match(build,/HAL_UNSIGNED_ONLY/);
  A.match(build,/HAL-Desk-v5\.0\.0-alpha\.1-signed\.apk/);
 });
