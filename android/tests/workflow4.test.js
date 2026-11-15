@@ -10,6 +10,30 @@ const market=()=>({spot:quote(4950),contracts:[{...future},{...put}],quotes:{F:q
 const input=()=>{const b=book(),m=market();return {book:b,market:m,risk:E.risk(b,m,NOW),valuation:E.ledger(b,m,{now:NOW})};};
 const near=(a,b)=>A.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
 
+test('real finance ledger checkpoints reconcile per-leg price changes for same saved HAL book',()=>{
+ const A5=require('../app/src/main/assets/attribution5.js');
+ const prior=input(),first=I.checkpoint(prior,NOW);
+ const later=NOW+45000,when=new Date(later-500).toISOString(),m=market();
+ m.quotes.F={...quote(5010),quoteAt:when,tradeAt:when,retrievedAt:when};
+ m.quotes.P={...quote(40),quoteAt:when,tradeAt:when,retrievedAt:when};
+ m.spot={...quote(4960),quoteAt:when,tradeAt:when,retrievedAt:when};
+ const bookNow=prior.book;
+ const last=I.checkpoint({book:bookNow,market:m,valuation:E.ledger(bookNow,m,{now:later}),
+  risk:E.risk(bookNow,m,later)},later);
+ const audit=A5.compare(first,last);
+ A.equal(audit.available,true);
+ near(audit.items[0].pnl,3000);
+ near(audit.items[1].pnl,-1500);
+ near(audit.total,1500);
+ near(audit.total,last.open-first.open);
+ A.equal(I.changes(first,last).open,audit.total);
+});
+test('old reviewed prices lose attribution eligibility when they are stale',()=>{
+ const A5=require('../app/src/main/assets/attribution5.js');
+ const prior=input(),first=I.checkpoint(prior,NOW),late=NOW+300000;
+ const last=I.checkpoint({...prior,valuation:E.ledger(prior.book,prior.market,{now:late})},late);
+ A.equal(A5.compare(first,last).available,false);
+});
 test('combined strategy describes quantity and earliest protection loss without promising a floor',()=>{
  const s=W.strategy(book(),market(),NOW);A.equal(s.risk.coveredUnits,150);A.equal(s.nextPutExpiry,'2026-11-23');
  A.equal(s.afterProtection.uncoveredUnits,300);A.equal(s.valuation.openPutPremium,6000);A.match(s.caveat,/not a guaranteed/);
