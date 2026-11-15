@@ -75,6 +75,15 @@ test('partial future close counts closed quantity and leaves original open units
  near(result.realizedGross,(5100-4927.35)*150);
  A.equal(initial.legs[0].lots,2);
 });
+test('aggregate half-paise mark differences do not trigger a false ledger conflict',()=>{
+ const b={...E.emptyBook(),legs:[
+  {id:'a',type:'PE',expiry:'2026-11-23',strike:100,lots:1,lotSize:1,entry:100.005,manual:100.01},
+  {id:'b',type:'PE',expiry:'2026-11-23',strike:100,lots:1,lotSize:1,entry:100.005,manual:100.01}
+ ]};
+ const v=valuation(b),r=P.audit(b,v);
+ A.equal(r.consistent,true);A.equal(r.complete,true);
+ near(r.open,.01);
+});
 test('no open book has zero net, not fabricated open positions',()=>{
  const b=E.emptyBook(),r=P.audit(b,valuation(b));
  A.equal(r.complete,true);A.equal(r.net,0);
