@@ -190,6 +190,10 @@ function v5RiskPanel(savedBook,valuation){
      table(['Contract expiry','Put P&L','Futures P&L','Cumulative gross','Uncovered after'],path.events.map(e=>[
       date(e.expiry),money(e.grossPutPnl),money(e.grossFuturePnl),
       money(e.cumulativeGrossEconomicPnl),num(e.uncoveredFutureUnitsAfter,0)]))+
+     (path.events.some(e=>e.expiringPutUnits>0)?
+      table(['Put expiry','Intrinsic value (NOT guaranteed cash)','Premium paid at entry'],
+       path.events.filter(e=>e.expiringPutUnits>0).map(e=>[
+        date(e.expiry),money(e.putIntrinsicEconomicValue),money(e.putEntryPremiumPreviouslyPaid)])):'')+
      row('Gross modeled P&L (all expiries)',money(path.totalGrossEconomicPnl))+
      row('Additional hypothetical costs, deducted only once',money(path.assumedAdditionalCosts))+
      row('Net modeled P&L (all expiries)',money(path.totalNetEconomicPnl))+
