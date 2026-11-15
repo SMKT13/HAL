@@ -40,6 +40,7 @@ function resumeReview(awayMs){if(E.finite(awayMs)&&awayMs>=300000||hiddenAt!==nu
 const market=()=>D.market(s),ledger=()=>E.ledger(book,market()),risk=()=>{const r=E.risk(book,market());if(book.legs.length&&!isBookConfirmed()&&!r.warnings.some(w=>w.code==='unconfirmed'))r.warnings.push({code:'unconfirmed',title:'Confirm your book',detail:'Check these positions against your broker records.'});return r;},news=()=>I.newsGroups(D.news(s));
 function technical(frame='D'){const p=D.rawCandles(s,frame),t=E.technicals(p.raw,frame,Date.now(),p.retrievedAt);if(p.error){t.stale=true;t.bias='Refresh failed';}return t;}
 function evidence(){return {book,valuation:ledger(),risk:risk(),market:market(),technical:technical(),fundamentals:I.providerFundamentals(D.packet(s,'fundamentals','D',ui.statement)),news:news(),scenarios:ui.result&&!Array.isArray(ui.result)?[ui.result]:[],funding:book.funding};}
+function quantContext(){const p=D.rawCandles(s,'D');const e=evidence();return {...e,candles:p.raw,now:Date.now()};}
 const checkpoint=()=>I.checkpoint(evidence()),changes=()=>I.changes(reviewBaseline,checkpoint(),news());
 function request(section,frame='D',force=false){if(!configured&&section!=='filings')return;const k=D.key(section,frame,ui.statement),h=s.health[k]||{},ttl=section==='fundamentals'?21600000:['candles','patterns','news','filings'].includes(section)?900000:60000;if(h.pending||!force&&h.lastSuccess&&Date.now()-Date.parse(h.lastSuccess)<ttl)return;if(h.lastAttempt&&Date.now()-Date.parse(h.lastAttempt)<10000)return;s.health[k]={...h,pending:stamp(),lastAttempt:stamp()};native('research',JSON.stringify({section,frame,type:ui.statement,...(section==='contracts'?{legs:book.legs.map(l=>({type:l.type,expiry:l.expiry,strike:l.strike,lotSize:l.lotSize,...(l.instrumentKey?{instrument_key:l.instrumentKey}:{})}))}:{})}));}
 function refresh(force=true){if(s.loading)return;if(!configured){native('settings');return;}native('refresh',ui.expiry||'');request('status','D',force);request('context','D',force);if(book.legs.length)request('contracts','D',force);for(const d of [...new Set(book.legs.filter(l=>l.type==='PE'&&E.expiryTime(l.expiry)>Date.now()).map(l=>l.expiry))])request('hedges',d,force);}
@@ -52,7 +53,8 @@ function navigate(screen,sub){
   ui.screen=screen;
   if(sub)ui[screen==='ai'?'aiPage':screen]=sub;
   if(screen==='position'&&ui.position==='overview')captureReview();
-  if(screen==='technicals'){if(ui.technicals==='lab'&&ui.expiry)request('hedges',ui.expiry);else request('candles',ui.frame);}
+  if(screen==='position'&&ui.position==='quant')request('candles','D');
+  if(screen==='technicals'){if(ui.technicals==='lab'&&ui.expiry)request('hedges',ui.expiry);else request('candles',ui.technicals==='quant'?'D':ui.frame);}
   if(screen==='research'){
     if(ui.research==='company')request('fundamentals');
     if(ui.research==='news'){request('news');request('filings');}
@@ -139,14 +141,15 @@ function workspace(m,l,r){
  if(ui.reviewOpen)return heading+reviewView.view();
  if(ui.screen==='history')return heading+historyView.view()+recoveryView.cards(true);
  if(ui.screen==='position'){
-   const items=[['overview','Overview'],['book','Book'],['risk','Risk'],['stress','What-if'],['break-even','Break-even'],['hedge','Find a hedge'],['compare','Compare'],['performance','Performance'],['journal','Journal & funding']];
+   const items=[['overview','Overview'],['book','Book'],['risk','Risk'],['stress','What-if'],['break-even','Break-even'],['hedge','Find a hedge'],['compare','Compare'],['quant','Quant Lab'],['performance','Performance'],['journal','Journal & funding']];
    const nav=subnav('position',items);
    if(ui.position==='overview')return heading+nav+today(m,l,r)+card('Options Lab',`Build hypothetical HAL option strategies without changing your actual holdings. ${btn('go-lab','Explore HAL Options Lab','class="primary"')}`);
    if(ui.position==='break-even')return heading+nav+recoveryView.form();
+   if(ui.position==='quant')return heading+nav+HAL47Panel.view(quantContext());
    if(['stress','compare','hedge'].includes(ui.position)){ui.plan=ui.position;return heading+nav+plan(m);}
    return heading+nav+position(m,l,r);
  }
- if(ui.screen==='technicals')return heading+subnav('technicals',[['markets','Charts & derivatives'],['lab','Options Lab'],['indicators','Indicators'],['insights','Pattern scanner']])+(ui.technicals==='lab'?optionsLab.view():research(m,ui.technicals));
+ if(ui.screen==='technicals')return heading+subnav('technicals',[['markets','Charts & derivatives'],['lab','Options Lab'],['indicators','Indicators'],['insights','Pattern scanner'],['quant','Quant Lab']])+(ui.technicals==='quant'?HAL47Panel.view(quantContext()):ui.technicals==='lab'?optionsLab.view():research(m,ui.technicals));
  if(ui.screen==='ai')return heading+subnav('aiPage',[['assistant','Assistant'],['coach','Skills coach']])+(ui.aiPage==='coach'?card('Position review',reviews(I.coach(evidence()))):research(m,'ai'));
  return heading+subnav('research',[['company','Business'],['news','News & filings']])+research(m,ui.research);
 }
