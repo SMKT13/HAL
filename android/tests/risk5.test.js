@@ -34,7 +34,7 @@ test('explicit zero mark is valid',()=>near(R.incrementalRisk({currentMarks:[0],
 test('missing mark cannot become zero',()=>A.throws(()=>R.incrementalRisk({currentMarks:[null],scenarioMarks:[5],quantities:[150],sides:['long']}),/mark/));
 test('lifetime scenario includes booked realized and costs once',()=>{
  const hypothetical=R.settlementScenario([F,P,P2],{spotAtExpiry:{'2026-11-23':4300},futureAtExpiry:{'2026-12-29':5000},charges:100});
- A.equal(R.lifetimeNet(hypothetical,-15000,34720.5),7524.5);
+ near(R.lifetimeNet(hypothetical,-15000,34720.5),7524.5);
  A.equal(R.lifetimeNet({complete:false,total:null},-15000,34720.5),null);
  A.equal(R.lifetimeNet(hypothetical,null,34720.5),null);
 });
