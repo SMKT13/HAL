@@ -87,11 +87,11 @@ test('removed notes are counted, but private content is not exposed in the impac
  const impact=G.replacement(before,after);
  A.equal(impact.destructive,true);
  A.equal(impact.changes.find(x=>x.section==='Private notes').removed,1);
- A.equal(JSON.stringify(impact).includes('Private note'),false);
+ A.equal(JSON.stringify(impact).includes('Test content'),false);
 });
 test('changed cumulative charge coverage requires destructive-import confirmation',()=>{
- const before=book(),after=E.validateBook(before);
- after.history={...after.history,charges:{asOf:'2026-10-31',amount:100,source:'Broker statement',coversExisting:true}};
+ const H=require('../app/src/main/assets/history5.js');
+ const before=book(),after=H.setCharges(E.validateBook(before),{asOf:'2026-10-31',amount:100,source:'Broker statement'},true);
  const impact=G.replacement(before,after);
  A.equal(impact.destructive,true);
  A.ok(impact.warnings.some(x=>x.includes('Cumulative')));
