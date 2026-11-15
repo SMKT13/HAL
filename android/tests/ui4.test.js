@@ -309,5 +309,29 @@ await check('4.6 PAPER immutable opening, clone and explicit close preserve orig
  }finally{await fresh.context.close();}
 });
 
+
+// A new Chromium process isolates Quant Lab from the preceding long PAPER suite.
+await browser.close();browser=await launch();
+await check('4.7 Quant Lab integrates with both Position and Technicals, remains read only',async()=>{
+ const seeded=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT]}}),p=seeded.page;
+ try{
+   await emit(p,'snapshot',snap);
+   await nav(p,'position','quant');
+   A.match(await p.locator('main').innerText(),/Six-perspective research checklist/);
+   A.match(await p.locator('main').innerText(),/Historical HAL backtest/);
+   A.match(await p.locator('main').innerText(),/Spot × IV shock matrix/);
+   const before=await p.evaluate(()=>JSON.stringify(saved));
+   await p.locator('input[data-quant-field="days"]').fill('40');
+   await p.locator('[data-quant-action="recalculate"]').click();
+   A.match(await p.locator('main').innerText(),/earliest open expiry/);
+   A.equal(await p.evaluate(()=>JSON.stringify(saved)),before);
+   await nav(p,'technicals','quant');
+   A.match(await p.locator('main').innerText(),/Simulation assumptions/);
+   await p.locator('[data-quant-action="ai"]').click();
+   A.match(await p.locator('main h1').innerText(),/AI Desk/);
+   A.deepEqual(seeded.errors,[]);
+ }finally{await seeded.context.close();}
+});
+
 console.log(`${checks} UI integration checks passed (synthetic bridge, not Android device tests).`)
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

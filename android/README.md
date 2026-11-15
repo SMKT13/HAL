@@ -1,4 +1,4 @@
-# HAL Desk Android — 4.6.0 (versionCode 31)
+# HAL Desk Android — 4.7.0 (versionCode 32)
 
 Personal offline-capable HAL research, risk, history and PAPER option strategies. Android **8.0+**, applicationId `in.smkt.haldesk`, target SDK 35. Direct Upstox Analytics Token and optional Gemini/FinBERT; **read-only, no orders**.
 
@@ -19,6 +19,7 @@ Actual-book accounting and recovery remain schema 4 in SQLite, with revision che
 | Storage | `BookStore`, `BookValidator`, `SecretStore`; SQLite + Keystore |
 | Finance | `engine4.js`, `history5.js`, `workflow4.js`, `recovery5.js` |
 | Options Lab | `optionslab5.js`, `optionslab-advanced6.js`, dedicated UI modules and PAPER cache |
+| Quant research | `quantdesk47.js`, `quantdesk47-ui.js`: tested daily-candle regime, underlying-only long/flat backtest, fixed-assumption risk distributions, portfolio stress matrix and six-perspective checklist |
 | Evidence/AI | `insights4.js`, `AiPolicy`, `AiEvidence`, `AiClient`, opt-in `FinbertClassifier` |
 | UI | `ui4.js`, modular history/review/recovery views, `style4.css` and Lightweight Charts |
 
@@ -52,3 +53,9 @@ To sign an installable upgrade, supply local paths through `HAL_SIGNING_KEY_FILE
 - Android credentials, saved books, paper history and the desktop viewer live in different storage boundaries. Backup and restore explicitly before changing devices.
 
 See [system-level audit](../docs/REFACTOR-4.6.md), [original signing/install](INSTALL.md), [API capabilities](docs/API-CAPABILITIES.md) and [NSE provenance](docs/NSE-MCP-4.3.md).
+
+## 4.7 Quant Lab
+
+Use **Technicals → Quant Lab** or **Position → Quant Lab**. New analyses are read-only and never update real or PAPER holdings. Backtesting operates on completed HAL *underlying* daily bars, enters on the next daily open, and applies explicit flat trading cost assumptions; it is not a historical options backtest. Monte Carlo endpoint prices and model position distributions have explicit seeded, annual-volatility and IV assumptions, and refuse horizons crossing an open expiry. News review uses dated grouped headlines only and is not a price signal. AI Desk retains opt-in Gemini.
+
+The Quant Lab is an incremental, independently implemented analysis module, not a wholesale import of Fincept's AGPL code. See [4.7 scope and limitations](docs/QUANT-LAB-4.7.md). Existing saved-book schema 4, paper cache schema 1, Android package and Keystore identity remain unchanged. CI builds an unsigned candidate; signing still requires the original private HAL keystore.
