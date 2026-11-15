@@ -71,6 +71,26 @@ await check('HAL Desk 5 expiry agenda warns ahead of a put/future gap without ch
  A.deepEqual(ee,[]);
  await ec.close();
 });
+await check('broker-confirmed put close preview is read only and never stores a transaction',async()=>{
+ const {page:bp,context:bc,errors:be}=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT]}});
+ await nav(bp,'position','risk');
+ const before=await bp.evaluate(()=>JSON.stringify(saved));
+ await click(bp,'v5-broker-preview');
+ await bp.locator('#rc-leg').selectOption('p');
+ await bp.locator('#rc-price').fill('0');
+ await bp.locator('#rc-fees').fill('10');
+ await bp.locator('#rc-date').fill('2026-10-27');
+ await bp.locator('#rc-source').fill('Broker statement example');
+ await bp.locator('#rc-confirm').check();
+ await save(bp);
+ const body=await bp.locator('main').innerText();
+ A.match(body,/Read-only broker close preview/);
+ A.match(body,/NOT recorded/);
+ A.match(body,/5,845\.00/);
+ A.equal(await bp.evaluate(()=>JSON.stringify(saved)),before);
+ A.deepEqual(be,[]);
+ await bc.close();
+});
 await check('HAL Desk 5 risk ladder and mixed-expiry modal preserve real book',async()=>{
  const savedBook={...E.emptyBook(),legs:[FUT,PUT]};
  const {page:rp,context:rc,errors:re}=await pageFor({book:savedBook});
