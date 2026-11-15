@@ -31,6 +31,12 @@ test('contract lot or expiry mismatch is a hard identity conflict',()=>{
  A.equal(Q.sameContract(one,{...one,expiry:'2027-01-28'}),false);
  A.equal(Q.sameContract({...one,type:'PE',strike:4500},{...one,type:'PE',strike:4400}),false);
 });
+test('integrity quarantine persists across other feeds with the same source clock',()=>{
+ const first={...q(5000),price:null,failure:'HAL5 quote integrity: source conflict'};
+ const same={...q(5000),retrievedAt:later};
+ A.equal(Q.chooseQuote(first,same).price,null);
+ A.equal(Q.chooseQuote(first,q(5100,later)).price,5100);
+});
 test('market aggregation with conflicting same-time option quote fails closed',()=>{
  const now=at,snap={spot:{last_price:4700,quote_as_of:at,last_trade_at:at,retrieved_at:at},
   futures:[{instrument_key:'F1',expiry:'2026-12-29',lot_size:150,quote:{last_price:5000,quote_as_of:at,last_trade_at:at,retrieved_at:at}}]};
