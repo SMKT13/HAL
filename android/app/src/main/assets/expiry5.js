@@ -83,6 +83,32 @@ function agenda(book,asOfDate){
    excess+' put units have recorded expiry later than at least one futures contract. These may become standalone positions after that future expires; verify expiry-by-expiry.',
    earliestFuture,excess);
  }
+ if(futureUnits){
+  const funds=b.funding||{},r=b.riskProfile||{};
+  if(funds.margin==null||funds.free==null){
+   push('funding-unknown','review','Margin and liquidity snapshot not recorded',
+    'Future positions exist but a manually recorded margin or available-funds figure is missing. Verify the current broker margin and physical-settlement cash requirements; the app does not estimate them.',
+    null,null,'go-book');
+  }else{
+   const at=typeof funds.at==='string'&&funds.at?Date.parse(funds.at):NaN;
+   const fundingDate=Number.isFinite(at)?new Date(at+19800000).toISOString().slice(0,10):null;
+   if(fundingDate!==today){
+    push('funding-stale','review','Recorded funding snapshot needs verification',
+     'The available-funds/margin figures are manual observations from '+(fundingDate||'an unknown date')+'. They are not verified broker balances for '+today+'.',
+     null,null,'go-book');
+   }
+   if(funds.free===0){
+    push('funding-zero','review','No available funds in recorded snapshot',
+     'The manually recorded available-funds balance is zero. Check the broker account before assuming sufficient cash for margin, exercise or physical settlement.',
+     null,null,'go-book');
+   }
+   if(typeof r.reserve==='number'&&Number.isFinite(r.reserve)&&funds.free<r.reserve){
+    push('reserve-below-limit','review','Available funds below your saved reserve',
+     'Recorded available funds are below the user-entered reserve threshold. This is not a broker margin calculation.',
+     null,null,'go-risk');
+   }
+  }
+ }
  const confirmed=!!b.riskProfile?.confirmedAt&&!!b.riskProfile?.confirmedBook;
  if(legs.length&&!confirmed){
   push('broker-confirmation','review','Position book not broker-confirmed',
