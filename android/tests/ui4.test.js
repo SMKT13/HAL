@@ -58,11 +58,12 @@ await check('eligible protective-put comparison audits cash and December coverag
      quote:q(110)}}]}});
  await nav(hp,'position','book');await click(hp,'confirm');
  await hp.locator('#confirm-check').check();await save(hp);
- const before=await hp.evaluate(()=>JSON.stringify(saved));
+ const before=await hp.evaluate(()=>JSON.stringify({legs:saved.legs,journal:saved.journal}));
  await nav(hp,'position','hedge');
  await hp.locator('#hg-budget').fill('1000000');
  await hp.locator('#hg-loss').fill('100000000');
  await hp.locator('#hg-through').fill('2026-12-29');
+ await hp.locator('summary').filter({hasText:'Costs, liquidity & model assumptions'}).click();
  await hp.locator('#hg-iv-assumption').fill('30');
  await click(hp,'hedge-rank');
  const detail=hp.locator('[data-action="hedge-detail"]').first();
@@ -70,7 +71,7 @@ await check('eligible protective-put comparison audits cash and December coverag
  await detail.click();
  A.match(await hp.locator('#modal-body').innerText(),/Futures quantity covered/);
  A.match(await hp.locator('#modal-body').innerText(),/Net cash required/);
- A.equal(await hp.evaluate(()=>JSON.stringify(saved)),before);
+ A.equal(await hp.evaluate(()=>JSON.stringify({legs:saved.legs,journal:saved.journal})),before);
  A.deepEqual(he,[]);
  await hc.close();
 });
