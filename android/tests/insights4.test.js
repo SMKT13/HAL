@@ -60,3 +60,22 @@ test('lifetime corrections invalidate AI evidence while preserving verified brok
  b.history.charges.amount=8;assert.equal(I.canUseAnswer({bookRevision:revision,portfolioIncluded:true},b),false);assert.ok(I.isBookConfirmed(b,NOW));
  b.legs[0].entry++;assert.equal(I.isBookConfirmed(b,NOW),false);
 });
+
+test('checkpoint stores only bounded exact contract mark metadata for later attribution',()=>{
+ const x=input();x.valuation.rows=[{
+  leg:{id:'f',type:'FUT',expiry:'2026-12-29',lots:2,lotSize:150,entry:4927.35,instrumentKey:'NSE_F',secret:'PRIVATE LEG'},
+  units:300,mark:{price:5000,source:'REST LTP',status:'current',
+   quoteAt:'2026-10-28T09:59:30Z',tradeAt:'2026-10-28T09:59:29Z',
+   retrievedAt:'2026-10-28T09:59:40Z',credential:'SECRET',note:'PRIVATE MARK'}
+ }];
+ const c=I.checkpoint(x,NOW),v=c.positionMarks[0],serialized=JSON.stringify(c);
+ assert.equal(v.id,'f');assert.equal(v.units,300);
+ assert.equal(v.price,5000);assert.equal(v.source,'REST LTP');
+ assert.equal(v.quoteAt,'2026-10-28T09:59:30.000Z');
+ assert.ok(!/SECRET|PRIVATE|credential/.test(serialized));
+});
+test('legacy version-4 checkpoint remains readable with no contract mark data',()=>{
+ const x=input(),c=I.checkpoint(x,NOW);
+ assert.equal(c.version,4);
+ assert.deepEqual(c.positionMarks,[]);
+});
