@@ -30,6 +30,14 @@ test('undated or unsafe links are not counted as recent verified news',()=>{
  {title:'Undated',url:'https://example.com/',publishedAt:'invalid'}];
  A.equal(L.build(x,NOW,true).lenses.find(x=>x.id==='news').status,'review');
 });
+test('undated fundamental retrieval stays under review',()=>{
+ const x=full();x.fundamentals.profile.retrievedAt=null;
+ A.equal(L.build(x,NOW,true).lenses.find(x=>x.id==='fundamentals').status,'review');
+});
+test('future-dated news does not count as published evidence',()=>{
+ const x=full();x.news[0].publishedAt=new Date(NOW+30000).toISOString();
+ A.equal(L.build(x,NOW,true).lenses.find(x=>x.id==='news').status,'review');
+});
 test('unconfirmed book retains review status',()=>{
  const x=full(),r=L.build(x,NOW,false);
  A.equal(r.lenses.find(x=>x.id==='risk').status,'review');
