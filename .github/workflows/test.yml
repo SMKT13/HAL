@@ -1,15 +1,25 @@
 name: HAL desktop, finance and Android regression tests
 
+# Avoid duplicate full builds for every draft-branch commit. These suites are
+# heavyweight and private-repo hosted-runner time consumes monthly allowance.
+# Run on main, on ready-for-review PR changes, or deliberately via Actions UI.
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: hal-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   web:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     # Playwright 1.51.1 supports 24.04; do not drift with ubuntu-latest.
     runs-on: ubuntu-24.04
     steps:
@@ -31,6 +41,7 @@ jobs:
       - run: npm run test:ui
 
   android:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
