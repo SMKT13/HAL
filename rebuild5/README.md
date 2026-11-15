@@ -2,6 +2,11 @@
 
 Status: **initial implementation, not a completed application**. Existing 4.6 remains untouched on main.
 
+## Alpha branch identity
+- The working Android branch is **5.0.0-alpha.1**, versionCode **32**, while `main` stays on installed release **4.6.0**, versionCode 31.
+- The APK remains unsigned until verified CI, Android device/backup migration QA, and original-certificate signing. The same `in.smkt.haldesk` ID and schema-4 SQLite ledger are mandatory.
+- Native status reporting, Gradle, npm package/lock, build output filenames, release-identity checks and CI artifact labels share this alpha identity. Do **not** use a new signing certificate or uninstall the installed app.
+
 ## Release invariants
 - Android application ID `in.smkt.haldesk`, Android 8.0+ and original signing certificate.
 - Keep real SQLite schema-4 ledger and original Keystore alias compatible; never overwrite it from PAPER.
@@ -27,6 +32,7 @@ Status: **initial implementation, not a completed application**. Existing 4.6 re
 - `android/app/src/main/assets/quality5.js`: independent quote provenance/contract-identity reconciliation. Contradictory same-clock provider prices are withheld, while mismatched lot sizes/expiries/strikes retain conflict metadata through the finance engine so even manually entered marks cannot bypass a contract mismatch. Source integrity counts are visible in Data Health.
 - `android/app/src/main/assets/migrate5.js`: QA-only, read-only schema-4 upgrade compatibility check. It rejects loss or mutation of positions, journal fees, lifetime history, private notes and risk limits, while allowing old broker-confirmation flags to be reset for fresh verification. The report contains only changed section names/counts, not the user's private financial or journal data.
 - `android/app/src/main/assets/portfolio5.js`: read-only lifetime accounting audit. Independently reconciles per-leg units/marks, booked gross P&L, cumulative charge statements, later fees, manual/stale/expired marks and funding versus settlement cash. Withholds net and loss-recovery figures if any required mark or financial invariant fails. Exposes a booked recovery requirement without implying future returns.
+- `android/tests/release5.test.js`: release-identity regression for Android 8 minimum, strict app package preservation, versionCode upgrade, source/lockfile version, original certificate and security flags.
 - `android/tests/portfolio5.test.js`: tests closed October puts, partial futures closes, cumulative lifetime fee coverage, additional later fees, missing marks, expired contracts, corrupted totals and half-paise rounding. `ui4.test.js` covers the audited Performance screen and unchanged saved book.
 - `android/tests/migrate5.test.js`: synthetic closed-put, fee, multi-expiry book, confirmation reset, malformed backup and no-mutation acceptance tests.
 - `android/tests/hedge5.test.js`, `lenses5.test.js` and Playwright AI-panel review checks: accounting reconciliation, missing comparisons, net cash credits, expiry gap and no unintended AI network calls.
@@ -38,7 +44,7 @@ Status: **initial implementation, not a completed application**. Existing 4.6 re
 
 ## Verification and limitations
 - Run `cd android && npm ci && npm test && npm run test:ui`. GitHub Actions also executes native Java/Android tests, lint and an unsigned candidate build. Inspect the PR checks for the latest commit before claiming pass.
-- Current CI limitation: recent GitHub Actions jobs have failed before runner assignment (no steps executed), even on retry. An earlier run passed the native and browser suite. Selected `data4.test.js` and `quality5.test.js` checks (45/45), plus `migrate5.test.js` checks (8/8), were executed manually in an isolated JavaScript harness. The lightweight harness does **not** replace `node --test`, full GitHub CI or real-device verification.
+- Current CI limitation: recent GitHub Actions jobs have failed before runner assignment (no steps executed), even on retry. An earlier run passed the native and browser suite. Selected data/quality (45), migration (8) and portfolio (11) tests passed independently in an isolated JavaScript harness (64/64), and 15 static alpha-release invariants passed. The lightweight harness does **not** replace `node --test`, full GitHub CI or real-device verification.
 - The current branch is **not** a cleanly reimplemented application yet. It is an isolated, compatible vertical slice in preparation for further modular replacement. Existing 4.6 remains on `main`.
 - It has **not** been installed on a physical phone, authenticated against real Upstox quotes or signed with the original certificate.
 - Monte Carlo fractions are **conditional model samples**, not real-world loss probabilities, historical backtests, guarantees or entry signals.
