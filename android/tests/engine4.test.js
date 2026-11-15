@@ -189,3 +189,17 @@ test('strict risk and hedge checks reject a fabricated source or an old retrieva
 test('strict quote source accepts explicit provider REST v3 provenance',()=>{
  A.equal(E.quoteQuality(Q(4900,{source:'upstox_rest_v3'}),{now:NOW,requireFresh:true,requireTrade:true}).valid,true);
 });
+
+test('backup normalization and completed journal refuse zero futures exit but preserve worthless put close',()=>{
+ const close=type=>({
+  id:'close-test',kind:'close',date:'2026-11-10',exit:0,fees:10,
+  leg:{id:'closed-leg',type,expiry:'2026-12-29',lots:1,lotSize:150,entry:5000,
+   ...(type==='PE'?{strike:4500}:{})}
+ });
+ const f={...E.emptyBook(),journal:[close('FUT')]};
+ A.throws(()=>E.validateBook(f),/close price/);
+ const p={...E.emptyBook(),journal:[close('PE')]};
+ const result=E.validateBook(p);
+ A.equal(result.journal[0].exit,0);
+ A.equal(result.journal[0].gross,-750000);
+});
