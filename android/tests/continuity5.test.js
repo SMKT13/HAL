@@ -57,6 +57,15 @@ test('same instrument key but different lot size is recorded as contract conflic
  A.equal(r.packet.futures[0].quote.last_price,null);
  A.equal(r.contractConflictSpecs.length,2);
 });
+test('dated REST quote can repair a previously quarantined observation with no clock',()=>{
+ const old=snap(),newer=snap(late);
+ old.spot={last_price:null,quote_as_of:null,last_trade_at:null,
+   failure:'HAL5 quote integrity: missing provider clock'};
+ newer.spot.last_price=4755;
+ const r=C.reconcile(old,newer,now);
+ A.equal(r.packet.spot.last_price,4755);
+ A.equal(r.packet.spot.failure,undefined);
+});
 test('future-clock quarantine is resolved by a valid later clock without waiting for the bogus future hour',()=>{
  const old=snap(),bad=snap('2026-11-15T10:00:00Z');
  const first=C.reconcile(old,bad,now).packet;
