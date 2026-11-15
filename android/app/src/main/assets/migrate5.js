@@ -63,8 +63,8 @@ function replacement(current,incoming){
   return {section:name,before:previous.length,after:replacement.length,removed,modified};
  });
  const oldLedger=E.ledger(old),newLedger=E.ledger(next);
- const booked=book=>({gross:E.ledger(book).realized,fees:E.ledger(book).charges});
- const oldTotals=booked(old),newTotals=booked(next);
+ const oldTotals={gross:oldLedger.realized,fees:oldLedger.charges},
+  newTotals={gross:newLedger.realized,fees:newLedger.charges};
  const changedGross=Math.abs(oldTotals.gross-newTotals.gross)>.005;
  const changedFees=Math.abs(oldTotals.fees-newTotals.fees)>.005;
  const oldCumulative=old.history?.charges??null,newCumulative=next.history?.charges??null;
