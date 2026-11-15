@@ -1,0 +1,14 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {expiryPayoff,protectionCoverage,incrementalRisk,intrinsic} from "./risk-core.mjs";
+const future={type:"FUT",side:"long",quantity:300,entry:4927.35,expiry:"2026-12-29"};
+const put1={type:"PE",side:"long",quantity:150,entry:38.9,strike:4500,expiry:"2026-11-23"};
+const put2={type:"PE",side:"long",quantity:150,entry:24.1,strike:4400,expiry:"2026-11-23"};
+test("expiry intrinsic handles zero",()=>assert.equal(intrinsic("PE",4500,4600),0));
+test("single expiry payoff",()=>assert.equal(expiryPayoff([future],5000,"2026-12-29"),21795));
+test("mixed expiry rejected",()=>assert.throws(()=>expiryPayoff([future,put1],4500,"2026-12-29"),/mixed expiry/));
+test("coverage at put expiry",()=>assert.deepEqual(protectionCoverage([future,put1,put2],"2026-11-23"),{futures:300,puts:300,covered:300,uncovered:0,ratio:1}));
+test("coverage after put expiry",()=>assert.deepEqual(protectionCoverage([future,put1,put2],"2026-11-24"),{futures:300,puts:0,covered:0,uncovered:300,ratio:0}));
+test("scenario risk from marks",()=>assert.equal(incrementalRisk({currentMarks:[100,25],scenarioMarks:[90,40],quantities:[300,150],sides:["long","long"]}),-750));
+test("missing marks are never silently zero",()=>assert.throws(()=>incrementalRisk({currentMarks:[null],scenarioMarks:[5],quantities:[150],sides:["long"]}),/missing/));
+test("invalid expiry rejected",()=>assert.throws(()=>expiryPayoff([{...future,expiry:"2026-02-30"}],5000,"2026-02-30"),/invalid expiry/));
