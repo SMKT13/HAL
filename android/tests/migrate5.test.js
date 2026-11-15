@@ -91,7 +91,7 @@ test('removed notes are counted, but private content is not exposed in the impac
 });
 test('changed cumulative charge coverage requires destructive-import confirmation',()=>{
  const H=require('../app/src/main/assets/history5.js');
- const before=book(),after=H.setCharges(E.validateBook(before),{asOf:'2026-10-31',amount:100,source:'Broker statement'},true);
+ const before=book(),after=H.setCharges(E.validateBook(before),{asOf:'2026-10-31',amount:1000,source:'Broker statement'},true);
  const impact=G.replacement(before,after);
  A.equal(impact.destructive,true);
  A.ok(impact.warnings.some(x=>x.includes('Cumulative')));
