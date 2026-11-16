@@ -79,7 +79,20 @@ public final class MainActivity extends Activity {
         stream=new MarketStream(data->{final int ticket=streamGeneration.get();sendIf("stream",data,()->ticket==streamGeneration.get()&&(foreground||"stopped".equals(data.optString("state"))));});
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(11,16,32));
         root.setOnApplyWindowInsetsListener((view,insets)->{ view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom()); return insets.consumeSystemWindowInsets(); });
-        web=new WebView(this);web.setBackgroundColor(Color.rgb(11,16,32));
+        try {
+            web = new WebView(this);
+        } catch (RuntimeException unavailable) {
+            setContentView(root);
+            new AlertDialog.Builder(this)
+                .setTitle("Android WebView unavailable")
+                .setMessage("Enable or update Android System WebView or Chrome in Android settings, then reopen HAL Desk. Your saved book stays on this device.")
+                .setPositiveButton("Retry", (dialog, which) -> recreate())
+                .setNegativeButton("Close", (dialog, which) -> finish())
+                .setCancelable(false)
+                .show();
+            return;
+        }
+        web.setBackgroundColor(Color.rgb(11,16,32));
         WebView.setWebContentsDebuggingEnabled(false);
         WebSettings settings=web.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setAllowFileAccessFromFileURLs(false);settings.setAllowUniversalAccessFromFileURLs(false);
@@ -416,7 +429,7 @@ public final class MainActivity extends Activity {
             catch(Exception error){send("error",object("code","browser_unavailable"));}
         });}
     }
-    @Override protected void onPause(){backgroundAt=android.os.SystemClock.elapsedRealtime();foreground=false;generation.incrementAndGet();invalidateAi("AI review cancelled when the app left the foreground.");client.cancel();cancelOffline();stopStream();super.onPause();web.onPause();web.pauseTimers();}
+    @Override protected void onPause(){backgroundAt=android.os.SystemClock.elapsedRealtime();foreground=false;generation.incrementAndGet();invalidateAi("AI review cancelled when the app left the foreground.");client.cancel();cancelOffline();stopStream();super.onPause();if(web!=null){web.onPause();web.pauseTimers();}}
     @Override protected void onResume(){super.onResume();long awayMs=backgroundAt<0?0:Math.max(0,android.os.SystemClock.elapsedRealtime()-backgroundAt);backgroundAt=-1;foreground=true;lastRequest=0;lastNseRequest=0;researchRequests.clear();if(web!=null){web.onResume();web.resumeTimers();if(pageReady){JSONObject resumed=object("state","resumed");try{resumed.put("awayMs",awayMs);}catch(Exception ignored){}send("lifecycle",resumed);offlineStatus();}}}
     @Override protected void onDestroy(){foreground=false;client.cancel();cancelOffline();streamGeneration.incrementAndGet();stream.shutdown();generation.incrementAndGet();invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");executor.shutdownNow();researchExecutor.shutdownNow();nseExecutor.shutdownNow();aiExecutor.shutdownNow();offlineExecutor.shutdownNow();if (offlineFinbert!=null)offlineFinbert.close();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}if(books!=null)books.close();super.onDestroy();}
     @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp && window.HALApp.back()",null);else super.onBackPressed();}

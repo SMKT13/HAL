@@ -13,6 +13,23 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk={26,35})
 public class PlatformSafetyTest {
+ @org.robolectric.annotation.Implements(WebView.class)
+ public static class UnavailableWebView extends org.robolectric.shadows.ShadowWebView {
+  @org.robolectric.annotation.Implementation
+  protected void __constructor__(android.content.Context context) {
+   throw new android.util.AndroidRuntimeException("No WebView provider installed");
+  }
+ }
+
+ @Test @Config(shadows=UnavailableWebView.class)
+ public void missingWebViewShowsRecoveryAndSurvivesPause() {
+  ActivityController<MainActivity> activity=Robolectric.buildActivity(MainActivity.class).create().start().resume();
+  android.app.AlertDialog dialog=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
+  assertNotNull(dialog);
+  assertEquals("Retry",dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).getText());
+  activity.pause().stop().destroy();
+ }
+
  @Test public void trustedOriginAndWebViewRestrictionsSurviveLifecycle() throws Exception {
   ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).create().start().resume();
   Field field=MainActivity.class.getDeclaredField("web");field.setAccessible(true);
