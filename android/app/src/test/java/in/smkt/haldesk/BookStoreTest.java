@@ -4,6 +4,19 @@ import android.content.Context;import org.json.JSONObject;import org.junit.*;imp
 public class BookStoreTest{
  private Context context;private String empty="{\"version\":4,\"legs\":[],\"journal\":[]}";
  @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("haldesk_book.db");}
+ @Test public void nseCacheSurvivesDatabaseReopen() throws Exception {
+     String key = "research:nse_insights_v1";
+     try (BookStore store = new BookStore(context)) {
+         store.cachePut(key, new JSONObject().put("sample", 42).toString());
+         try { store.cachePut("nse_insights_v1", "{}"); fail("invalid key"); }
+         catch (Exception expected) { assertEquals("invalid_cache_key", expected.getMessage()); }
+     }
+     try (BookStore reopened = new BookStore(context)) {
+         JSONObject cached = reopened.cacheGet(key);
+         assertTrue(cached.getBoolean("cached"));
+         assertEquals(42, cached.getJSONObject("data").getInt("sample"));
+     }
+ }
  @Test public void survivesRestartAndRetainsPrevious()throws Exception{BookStore s=new BookStore(context);assertTrue(s.load(false).isNull("book"));assertEquals(1,s.save(empty,0).getLong("revision"));assertEquals(2,s.save(empty,1).getLong("revision"));s.close();s=new BookStore(context);assertEquals(2,s.load(false).getLong("revision"));assertEquals(1,s.load(true).getLong("revision"));s.close();}
  @Test public void invalidWritesDoNotEraseBook()throws Exception{BookStore s=new BookStore(context);s.save(empty,0);try{s.save(empty,0);fail();}catch(Exception e){assertEquals("revision_conflict_reload_required",e.getMessage());}try{s.save("invalid",1);fail();}catch(Exception e){}assertEquals(1,s.load(false).getLong("revision"));s.close();}
  @Test public void cacheDoesNotBecomeLive()throws Exception{BookStore s=new BookStore(context);s.cachePut("snapshot","{\"asOf\":\"2026-01-01T10:00:00Z\"}");JSONObject c=s.cacheGet("snapshot");assertTrue(c.getBoolean("cached"));assertEquals("2026-01-01T10:00:00Z",c.getJSONObject("data").getString("asOf"));try{s.cachePut("snapshot","{\"token\":\"synthetic\"}");fail();}catch(Exception e){assertEquals("credentials_forbidden_in_backup",e.getMessage());}s.close();}

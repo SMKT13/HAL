@@ -1,11 +1,6 @@
 # HAL Desk 5 — independent rebuild track
 
-Status: **ongoing Android 5.0 alpha development, not a completed application or release-ready APK**. Existing 4.6 remains untouched on main.
-
-## Alpha branch identity
-- The working Android branch is **5.0.0-alpha.1**, versionCode **32**, while `main` stays on installed release **4.6.0**, versionCode 31.
-- The APK remains unsigned until verified CI, Android device/backup migration QA, and original-certificate signing. The same `in.smkt.haldesk` ID and schema-4 SQLite ledger are mandatory.
-- Native status reporting, Gradle, npm package/lock, build output filenames, release-identity checks and CI artifact labels share this alpha identity. Do **not** use a new signing certificate or uninstall the installed app.
+The Android release target is HAL Desk 5.0.0 (versionCode 33), based on the 5.0 alpha (code 32) and compatible in package identity with 4.6.0 (code 31). See [local build and upgrade instructions](../android/INSTALL.md) and the verification report accompanying the APK. The progress notes below describe the original alpha implementation.
 
 ## Release invariants
 - Android application ID `in.smkt.haldesk`, Android 8.0+ and original signing certificate.

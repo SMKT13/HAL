@@ -14,7 +14,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -73,12 +72,7 @@ final class NseMcpClient {
         out.put("exchange_time_ist",stock.getString("latestTimestamp"));
         out.put("exchange_time_iso",asOf.toString());
         out.put("provider_retrieved_at",source.optString("updatedAt",""));
-        ZonedDateTime current=ZonedDateTime.now(IST);
-        boolean open=current.getDayOfWeek().getValue()<=5 &&
-            !current.toLocalTime().isBefore(java.time.LocalTime.of(9,15)) &&
-            current.toLocalTime().isBefore(java.time.LocalTime.of(15,30));
-        out.put("session_in_progress",open);
-        out.put("quote_stale",open&&asOf.isBefore(Instant.now().minusSeconds(600)));
+        // A cash quote does not establish session status on holidays or special sessions.
         out.put("source","NSE CM MCP · HAL EQ");
         return out;
     }
@@ -109,7 +103,7 @@ final class NseMcpClient {
                 try {
                     JSONObject result=rpc("initialize",args("protocolVersion",protocol,
                         "capabilities",new JSONObject(),
-                        "clientInfo",args("name","HAL-Desk-Android","version","4.3.0")),false);
+                        "clientInfo",args("name","HAL-Desk-Android","version","5.0.0")),false);
                     if(result==null)throw new Failure("nse_handshake_failed");
                     protocol=result.optString("protocolVersion",protocol);
                     if(!protocol.matches("20[0-9]{2}-[0-9]{2}-[0-9]{2}"))
@@ -218,12 +212,23 @@ final class NseMcpClient {
         if(data==null||data.length()<5)throw new Failure("nse_history_incomplete");
         double lo5=Double.POSITIVE_INFINITY,hi5=0,lo20=Double.POSITIVE_INFINITY,hi20=0;
         int count=0;JSONObject last=null;JSONArray recent=new JSONArray();
-        for(int i=data.length()-1;i>=0&&count<20;i--){
-            JSONObject row=data.optJSONObject(i);
-            if(row==null||!"HAL".equals(row.optString("symbol")))continue;
+        java.util.TreeMap<LocalDate, JSONObject> sessions = new java.util.TreeMap<>();
+        LocalDate today = LocalDate.now(IST);
+        for (int i = 0; i < data.length(); i++) {
+            JSONObject row = data.optJSONObject(i);
+            if (row == null || !"HAL".equals(row.optString("symbol"))) continue;
+            LocalDate date;
+            try { date = LocalDate.parse(row.optString("date")); }
+            catch (java.time.format.DateTimeParseException invalid) { continue; }
+            if (date.isAfter(today)) continue;
+            if (sessions.put(date, row) != null) throw new Failure("nse_duplicate_session");
+        }
+        for (JSONObject row : sessions.descendingMap().values()) {
+            if (count == 20) break;
             Double lo=positiveNumber(row.opt("low")),hi=positiveNumber(row.opt("high")),
                    close=positiveNumber(row.opt("close"));
-            if(lo==null||hi==null||close==null||lo>hi||close<lo||close>hi)continue;
+            if(lo==null||hi==null||close==null||lo>hi||close<lo||close>hi)
+                throw new Failure("nse_history_incomplete");
             if(last==null)last=row;
             recent.put(new JSONObject().put("date",row.optString("date")).put("close",close));
             lo20=Math.min(lo20,lo);hi20=Math.max(hi20,hi);
@@ -236,7 +241,7 @@ final class NseMcpClient {
         JSONArray chronological=new JSONArray();
         for(int i=recent.length()-1;i>=0;i--)chronological.put(recent.getJSONObject(i));
         return args("as_of",last.optString("date"),"trading_days",count,"recent_closes",chronological,
-            "low_5",lo5,"high_5",hi5,"low_20",lo20,"high_20",hi20,
+            "low_5",lo5,"high_5",hi5,"low_20",count==20?lo20:JSONObject.NULL,"high_20",count==20?hi20:JSONObject.NULL,
             "pivot",pivot,"s1",2*pivot-h,"r1",2*pivot-l,
             "calculation","Unadjusted NSE completed daily bars. Zones are observations, not trading signals.");
     }

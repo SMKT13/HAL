@@ -33,7 +33,7 @@ function intrinsic(type,strike,spot){
 function expiryPayoff(legs,settlement,expiry){
  if(!Array.isArray(legs)||!legs.length)throw Error('no legs');
  nonNegative(settlement,'settlement');
- if(!validDate(expiry))throw Error('invalid date');
+ if(!validDate(expiry))throw Error('invalid expiry date');
  return legs.reduce((sum,item)=>{
   const l=validateLeg(item);
   if(l.expiry!==expiry)throw Error('mixed expiry: use explicitly dated settlement scenario');

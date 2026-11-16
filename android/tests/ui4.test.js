@@ -4,7 +4,7 @@ const origin='https://appassets.androidplatform.net/',root=path.resolve(__dirnam
 const q=p=>({last_price:p,bid:p-.5,ask:p+.5,bid_quantity:900,ask_quantity:900,quote_as_of:ts,last_trade_at:ts,retrieved_at:ts,volume:1000,open_interest:5000});const snap={fetched_at_iso:ts,spot:{...q(4950),prev_close:4900},futures:[{instrument_key:'SYNTH_F',expiry:FUT.expiry,lot_size:150,quote:q(5000)}],option_expiry:PUT.expiry,available_expiries:[PUT.expiry],option_rows:[{strike:4500,put:{instrument_key:'SYNTH_P',lot_size:150,iv:30,delta:-.3,theta:-.2,quote:q(50)}}]};let browser,checks=0;
 const click=(p,a)=>p.locator(`[data-action="${a}"]`).first().click(),nav=async(p,a,b)=>{await p.locator(`[data-screen="${a}"]`).click();if(b)await p.locator(`[data-sub="${b}"]`).click()},emit=(p,event,data)=>p.evaluate(({event,data})=>HALApp.receive(event,data),{event,data});
 async function save(p){await p.locator('#modal-save').click();A.equal(await p.locator('#modal-error').innerText(),'');A.equal(await p.locator('#modal').isVisible(),false)}async function check(name,fn){await fn();console.log('PASS '+name);checks++}
-async function pageFor(seed={}){const context=await browser.newContext({viewport:{width:390,height:844}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route(origin+'**',r=>{const name=new URL(r.request().url()).pathname.slice(1)||'index.html',file=path.join(root,name);return fs.existsSync(file)?r.fulfill({path:file,contentType:name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':'application/javascript'}):r.abort()});await page.clock.install({time:new Date(now)});await page.addInitScript(seed=>{window.saved=seed.book||null;window.rev=0;window.previous=null;window.calls=[];window.corrupt=seed.corrupt;window.forceSaveFailure=false;window.reviewCache=seed.cache||{};window.forceCacheFailure=false;if(seed.legacy)localStorage.setItem('hal_desk_v2',JSON.stringify(seed.legacy));const log=(n,...a)=>calls.push([n,...a]);window.HALNative={loadBook:()=>JSON.stringify(corrupt?{ok:false,revision:rev,message:'checksum invalid'}:{ok:true,book:saved,revision:rev}),saveBook:(s,r)=>{if(forceSaveFailure)return JSON.stringify({ok:false,message:'synthetic disk failure'});if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});previous=saved;saved=JSON.parse(s);return JSON.stringify({ok:true,revision:++rev})},previousBook:()=>JSON.stringify({ok:true,book:previous}),restorePreviousBook:r=>{if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});saved=previous;corrupt=false;return JSON.stringify({ok:true,book:saved,revision:++rev})},cacheGet:key=>JSON.stringify({ok:true,data:reviewCache[key]||null}),cachePut:(key,value)=>{if(forceCacheFailure)return JSON.stringify({ok:false});reviewCache[key]=JSON.parse(value);return JSON.stringify({ok:true})},ready:()=>{},finbertStatus:()=>{}};for(const n of ['research','refresh','nseRefresh','settings','aiSettings','openTokenPage','exportBackup','exportCSV','importBackup','importHistory','printReview','ai','aiCancel','finbertInstall','finbertCancel','finbertRemove','finbertScore','streamStart','streamStop','openLink','minimize'])HALNative[n]=(...a)=>log(n,...a)},seed);await page.goto(origin);await page.locator('h1').waitFor();return {page,context,errors}}
+async function pageFor(seed={}){const context=await browser.newContext({viewport:{width:390,height:844}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route(origin+'**',r=>{const name=new URL(r.request().url()).pathname.slice(1)||'index.html',file=path.join(root,name);return fs.existsSync(file)?r.fulfill({path:file,contentType:name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':'application/javascript'}):r.abort()});await page.clock.install({time:new Date(now)});await page.addInitScript(seed=>{window.saved=seed.book||null;window.rev=0;window.previous=null;window.calls=[];window.corrupt=seed.corrupt;window.forceSaveFailure=false;window.reviewCache=seed.cache||{};window.forceCacheFailure=false;if(seed.legacy)localStorage.setItem('hal_desk_v2',JSON.stringify(seed.legacy));const validCacheKey=k=>/^(snapshot|research|health)(:[A-Za-z0-9_-]{1,40}){0,4}$/.test(k);const log=(n,...a)=>calls.push([n,...a]);window.HALNative={loadBook:()=>JSON.stringify(corrupt?{ok:false,revision:rev,message:'checksum invalid'}:{ok:true,book:saved,revision:rev}),saveBook:(s,r)=>{if(forceSaveFailure)return JSON.stringify({ok:false,message:'synthetic disk failure'});if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});previous=saved;saved=JSON.parse(s);return JSON.stringify({ok:true,revision:++rev})},previousBook:()=>JSON.stringify({ok:true,book:previous}),restorePreviousBook:r=>{if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});saved=previous;corrupt=false;return JSON.stringify({ok:true,book:saved,revision:++rev})},cacheGet:key=>JSON.stringify(validCacheKey(key)?{ok:true,data:reviewCache[key]||null}:{ok:false}),cachePut:(key,value)=>{if(forceCacheFailure||!validCacheKey(key))return JSON.stringify({ok:false});reviewCache[key]=JSON.parse(value);return JSON.stringify({ok:true})},ready:()=>{},finbertStatus:()=>{}};for(const n of ['research','refresh','nseRefresh','settings','aiSettings','openTokenPage','exportBackup','exportCSV','importBackup','importHistory','printReview','ai','aiCancel','finbertInstall','finbertCancel','finbertRemove','finbertScore','streamStart','streamStop','openLink','minimize'])HALNative[n]=(...a)=>log(n,...a)},seed);await page.goto(origin);await page.locator('h1').waitFor();return {page,context,errors}}
 const launch=()=>pw.chromium.launch({executablePath:process.env.HAL_BROWSER,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});(async()=>{browser=await launch();try{let x=await pageFor(),p=x.page;
 await check('fresh empty book and every primary/subsection renders',async()=>{A.match(await p.locator('main').innerText(),/No open book/);A.deepEqual(await p.locator('.bottom-nav button').evaluateAll(nodes=>nodes.map(n=>n.dataset.screen)),['position','history','technicals','research','ai']);for(const [a,bs]of [['position',['overview','book','performance','risk','journal','stress','compare','hedge','break-even']],['history',[]],['technicals',['markets','indicators','insights']],['research',['company','news']],['ai',['assistant','coach']]]){await nav(p,a);for(const b of bs)await nav(p,a,b);}A.deepEqual(x.errors,[]);A.equal((await p.evaluate(()=>calls.filter(c=>['ai','finbertInstall'].includes(c[0])))).length,0)});
 await check('local six-perspective evidence map does not call AI or change holdings',async()=>{
@@ -60,14 +60,14 @@ await check('HAL Desk 5 lifetime recovery reconciles closed October puts, charge
  A.match(await ap.locator('main').innerText(),/8,715\.00/);
  A.match(await ap.locator('main').innerText(),/Withheld until all marks are valid/);
  await emit(ap,'snapshot',snap);
- A.match(await ap.locator('main').innerText(),/Lifetime net/);
+ A.match(await ap.locator('main').innerText(),/Lifetime net/i);
  A.match(await ap.locator('main').innerText(),/14,745\.00/);
  A.equal(await ap.evaluate(()=>JSON.stringify(saved)),before);
  A.deepEqual(ae,[]);
  await ac.close();
 });
 await check('HAL Desk 5 expiry agenda warns ahead of a put/future gap without changing real positions',async()=>{
- const start=Date.parse(E.istDate()+'T00:00:00Z'),
+ const start=Date.parse(E.istDate(now)+'T00:00:00Z'),
   putExpiry=new Date(start+8*E.DAY).toISOString().slice(0,10),
   futureExpiry=new Date(start+45*E.DAY).toISOString().slice(0,10),
   b={...E.emptyBook(),legs:[
@@ -166,7 +166,7 @@ await check('eligible protective-put comparison audits cash and December coverag
  A.ok(await detail.count(),await hp.locator('main').innerText());
  await detail.click();
  A.match(await hp.locator('#modal-body').innerText(),/Futures quantity covered/);
- A.match(await hp.locator('#modal-body').innerText(),/Net cash required/);
+ A.match(await hp.locator('#modal-body').innerText(),/Indicative net cash required/);
  A.equal(await hp.evaluate(()=>JSON.stringify({legs:saved.legs,journal:saved.journal})),before);
  A.deepEqual(he,[]);
  await hc.close();
@@ -255,7 +255,13 @@ await check('official NSE lens is independent, cacheable, escaped and never a de
  A.match(await panel.innerText(),/200-day SMA/);
  A.match(await panel.innerText(),/Relative outperformance/);
  A.equal(await p.evaluate(()=>window.nsePwned),undefined);
- A.ok((await p.evaluate(()=>Object.keys(reviewCache))).includes('nse_insights_v1'));
+ A.ok((await p.evaluate(()=>Object.keys(reviewCache))).includes('research:nse_insights_v1'));
+ const restarted=await pageFor({cache:await p.evaluate(()=>reviewCache)});
+ await nav(restarted.page,'technicals','markets');
+ await emit(restarted.page,'nse_error',{code:'offline'});
+ A.match(await restarted.page.locator('#nse-insights').innerText(),/Saved observation/);
+ A.match(await restarted.page.locator('#nse-insights').innerText(),/4,843.40/);
+ await restarted.context.close();
  await nav(p,'position','overview');A.match(await p.locator('main').innerText(),/No open book/);
 });
 await check('empty scenario blocked',async()=>{await nav(p,'position','stress');await click(p,'scenario');A.match(await p.locator('#toast').innerText(),/Record/)});

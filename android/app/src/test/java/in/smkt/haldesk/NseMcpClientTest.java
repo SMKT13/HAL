@@ -60,7 +60,7 @@ public final class NseMcpClientTest {
     }
     @Test public void historicalLevelsUseOnlyValidHalCompletedBars()throws Exception {
         JSONArray a=new JSONArray();
-        for(int i=0;i<6;i++){
+        for(int i=5;i>=0;i--){
             double high=5000+i*10,low=4800+i*5,close=4900+i*5;
             a.put(new JSONObject().put("symbol","HAL").put("date","2026-11-"+String.format("%02d",i+1))
                 .put("low",low).put("high",high).put("close",close));
@@ -69,7 +69,8 @@ public final class NseMcpClientTest {
         assertEquals(6,levels.getInt("trading_days"));
         assertEquals(4805.0,levels.getDouble("low_5"),0.001); // last five of six
         assertEquals(5050.0,levels.getDouble("high_5"),0.001);
-        assertEquals(4800.0,levels.getDouble("low_20"),0.001);
+        assertTrue(levels.isNull("low_20"));
+        assertTrue(levels.isNull("high_20"));
         assertEquals(6,levels.getJSONArray("recent_closes").length());
         assertEquals("2026-11-06",levels.getString("as_of"));
     }

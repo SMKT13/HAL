@@ -2,6 +2,8 @@
 (function () {
   'use strict';
   const native=window.HALNative;
+  const cacheKey='research:nse_insights_v1';
+  let cacheWriteFailed=false;
   const root=document.getElementById('main');
   let snapshot=null, fromCache=false, pending=false, lastAttempt=0, error='', opened=false;
   const safe=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -11,6 +13,7 @@
   const percent=x=>num(x)===null?'—':(num(x)>0?'+':'')+num(x).toFixed(2)+'%';
   const val=(name,value)=>'<div class="row"><span>'+safe(name)+'</span><strong>'+safe(value)+'</strong></div>';
   const when=x=>{
+    if(!x)return 'Unknown source time';
     const d=new Date(x);
     return isNaN(d.getTime())?'Unknown source time':d.toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true})+' IST';
   };
@@ -34,15 +37,18 @@
     let html='<div class="section-heading"><div><h2>Official NSE Insights</h2><p class="fine">Independent cash-market research · NSE MCP · no Upstox token required</p></div><button type="button" id="nse-refresh" class="text-button"'+(pending?' disabled':'')+'>Refresh NSE</button></div>';
     html+='<p class="fine" role="status">'+safe(status)+'</p>';
     if(error)html+='<p class="warning fine" role="alert">'+safe(error==='refresh_too_soon'?'Please allow one minute between NSE requests.':'NSE data unavailable. Existing research remains visible; no fallback price is used for positions.')+'</p>';
+    if(cacheWriteFailed)html+=small('This snapshot could not be saved for offline use.');
     if(!snapshot)return html+small('Open this section to fetch HAL EQ, benchmark context and historical signals from NSE. This feature is informational only.');
     html+=small('HTTP retrieved: '+when(s.retrieved_at)+'. Official CM quotes can lag trading by 1–3 minutes. Cash quotes never overwrite Upstox derivatives marks or portfolio P&L.');
     if(q){
+      const quoteTime=Date.parse(q.exchange_time_iso);
+      const aged=Number.isFinite(quoteTime)&&Date.now()-quoteTime>600000;
       const p=num(q.lastTradedPrice),change=num(q.perChange),direction=change<0?'negative':change>0?'positive':'';
       html+='<div class="metrics"><div class="metric"><small>HAL EQ · last NSE trade</small><strong>'+money(p)+'</strong><span class="'+direction+'">'+percent(change)+' ('+money(q.change)+')</span></div>'+
-        '<div class="metric"><small>Exchange quote timestamp</small><strong style="font-size:15px">'+safe(when(q.exchange_time_iso))+'</strong><span>'+(q.quote_stale?'STALE during market hours':q.session_in_progress?'During market hours':'Last published trading session')+'</span></div></div>';
+        '<div class="metric"><small>Exchange quote timestamp</small><strong style="font-size:15px">'+safe(when(q.exchange_time_iso))+'</strong><span>'+(fromCache?'Saved observation':aged?'Older than 10 minutes':'Exchange observation')+'</span></div></div>';
       html+=val('Day open / high / low',money(q.openPrice)+' / '+money(q.highPrice)+' / '+money(q.lowPrice));
       html+=val('Total equity traded',count(q.volume)+' shares');
-      if(q.quote_stale)html+='<p class="warning fine">This NSE quote is older than 10 minutes during trading hours. Verify the exchange time before relying on it.</p>';
+      if(aged)html+=small('Quote age exceeds 10 minutes. Session status is shown separately when available.');
     } else html+=small('Cash quote unavailable. Historical evidence, if available, is independent of live data.');
     html+='<h3>Moving averages · daily close</h3>';
     html+=val('20-day SMA',money(sma20)+(q&&sma20!==null?(num(q.lastTradedPrice)>=sma20?' · price above':' · price below'):''));
@@ -71,7 +77,7 @@
     html+='<h3>Market context</h3>';
     for(const [name,key] of [['NIFTY 50','nifty50'],['India VIX','india_vix']]){
       const v=l[key],ix=v&&v.index;
-      html+=val(name,ix?money(ix.last).slice(1)+(num(ix.percChange)===null?'':' · '+percent(ix.percChange)):'Unavailable');
+      html+=val(name,ix&&num(ix.last)!==null?money(ix.last).slice(1)+(num(ix.percChange)===null?'':' · '+percent(ix.percChange)):'Unavailable');
       if(v&&v.nseTimestamp)html+=small(name+' NSE time: '+v.nseTimestamp);
     }
     if(b)html+=val('NSE market breadth ('+String(b.date||'EOD')+')',
@@ -118,7 +124,7 @@
     setTimeout(function(){if(pending&&lastAttempt===attempt){pending=false;error="nse_timeout";paint();}},120000);
   }
   try {
-    const raw=native&&typeof native.cacheGet==='function'?JSON.parse(native.cacheGet('nse_insights_v1')):null;
+    const raw=native&&typeof native.cacheGet==='function'?JSON.parse(native.cacheGet(cacheKey)):null;
     if(raw&&raw.ok&&raw.data&&raw.data.source==='NSE official MCP (personal research only)'){
       snapshot=raw.data;fromCache=true;
     }
@@ -130,7 +136,7 @@
       if(event==='nse_loading'){pending=true;error='';paint();return;}
       if(event==='nse_snapshot'){
         pending=false;error='';snapshot=data;fromCache=false;
-        try{if(native&&typeof native.cachePut==='function')native.cachePut('nse_insights_v1',JSON.stringify(data));}catch(_){}
+        try{cacheWriteFailed=!JSON.parse(native.cachePut(cacheKey,JSON.stringify(data))).ok;}catch(_){cacheWriteFailed=true;}
         paint();return;
       }
       if(event==='nse_error'){pending=false;error=String(data&&data.code||'nse_unavailable');paint();return;}

@@ -94,7 +94,7 @@ function v5BrokerPreviewModal(){
  input('rc-price','Broker-reported close or settlement price (₹)','')+
  input('rc-fees','Transaction charges (₹)',0)+
  input('rc-date','Completed trade/settlement date',E.istDate(),'date')+
- input('rc-source','Broker statement or contract-note reference','')+'</div>'+
+ input('rc-source','Broker statement or contract-note reference','','text')+'</div>'+
  '<label><input type="checkbox" id="rc-confirm">I have independently verified the actual completed transaction and charges against my broker records.</label>'+
  '<p class="fine">This does NOT write a journal entry. After reviewing, use Book → Record completed close to record the transaction separately and verify its outcome.</p>';
  modal('Preview a broker-confirmed close',fields,'Calculate read-only preview',()=>{
