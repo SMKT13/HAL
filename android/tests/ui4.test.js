@@ -31,6 +31,22 @@ await check('portfolio opens an isolated PAPER copy and preserves the real book'
  A.deepEqual(errors,[]);
  await context.close();
 });
+await check('select an owned put, load a later expiry and inspect a one-lot cash comparison',async()=>{
+ const second={...PUT,id:'other',instrumentKey:'SYNTH_OTHER',strike:4400};
+ const {page,context,errors}=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT,second]}});
+ const before=await page.evaluate(()=>JSON.stringify(saved));
+ const expiry=FUT.expiry;
+ await emit(page,'snapshot',{...snap,available_expiries:[PUT.expiry,expiry],option_rows:[...snap.option_rows,{strike:4400,put:{instrument_key:'SYNTH_OTHER',lot_size:150,quote:q(20)}}]});
+ await nav(page,'position','book');await page.locator('[data-action="one-start"][data-id="other"]').click();
+ A.equal(await page.locator('#one-owned').inputValue(),'other');
+ await page.selectOption('#one-expiry',expiry);
+ await emit(page,'research',{section:'hedges',frame:expiry,fetched_at_iso:ts,data:{option_expiry:expiry,option_rows:[{strike:4500,put:{instrument_key:'SYNTH_NEXT',lot_size:150,quote:q(60)}}]}});
+ await page.selectOption('#one-candidate','SYNTH_NEXT');
+ A.match(await page.locator('main').innerText(),/Estimated net cash required/);
+ A.match(await page.locator('main').innerText(),/Sell 4,400 PE/);
+ A.equal(await page.evaluate(()=>JSON.stringify(saved)),before);
+ A.deepEqual(errors,[]);await context.close();
+});
 await check('local six-perspective evidence map does not call AI or change holdings',async()=>{
  await nav(p,'ai','assistant');
  A.match(await p.locator('main').innerText(),/Six-Perspective Evidence Map/);

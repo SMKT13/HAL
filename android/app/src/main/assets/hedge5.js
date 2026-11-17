@@ -83,7 +83,54 @@ function auditHedge(book,engineResult,instrumentKey,throughDate){
    'Physical-delivery, margin and broker cutoffs require separate account-specific review.'
   ]};
 }
-const api={quantity,auditHedge};
+function compareOneLot(book,market,ownedId,candidateKey,settings={},now=Date.now()){
+ const E=typeof module==='object'?require('./engine4.js'):root.HAL4Engine;
+ const b=E.validateBook(book),p=E.hedgePreferences(settings);
+ const old=b.legs.find(l=>l.id===ownedId&&l.type==='PE');
+ if(!old)throw Error('Choose an owned protective put.');
+ if(b.legs.some(l=>E.expiryTime(l.expiry)<=now))throw Error('Reconcile expired legs before comparing a rollover.');
+ if(!b.legs.some(l=>l.type==='FUT'))throw Error('Record the futures exposure first.');
+ const next=market.contracts.find(c=>c.instrumentKey===candidateKey&&c.type==='PE');
+ if(!next||!date(next.expiry)||next.expiry<=old.expiry||!finite(next.strike)||next.strike<=0)
+  throw Error('Choose a listed put with a later expiry.');
+ if(next.lotSize!==old.lotSize)throw Error('One replacement lot must cover the same units as one owned lot.');
+ const units=old.lotSize;
+ function price(leg,side){
+  const match=E.matchContract(leg,market);
+  if(match.error)throw Error(match.error);
+  const q=market.quotes[match.contract.instrumentKey];
+  const quality=E.quoteQuality(q,{now,requireFresh:true,requireTrade:true,maxAge:p.maxAge,maxTradeAge:p.maxTradeAge});
+  if(!quality.valid)throw Error(side+' quote: '+quality.reasons.join(', '));
+  if(!finite(q.bid)||!finite(q.ask)||q.bid<=0||q.ask<q.bid)throw Error(side+' needs a valid two-sided quote.');
+  if((q.ask-q.bid)/((q.ask+q.bid)/2)*100>p.maxSpread)throw Error(side+' spread exceeds your limit.');
+  if(!finite(q[side+'Qty'])||q[side+'Qty']<units)throw Error('Insufficient displayed '+side+' depth for one lot.');
+  if(!finite(q.volume)||q.volume<p.minVolume||!finite(q.oi)||q.oi<p.minOI)throw Error(side+' volume or open interest is unavailable or below your limits.');
+  return q;
+ }
+ const sell=price(old,'bid'),buy=price(next,'ask');
+ const sale=sell.bid*units*(1-p.slippage/100),purchase=buy.ask*units*(1+p.slippage/100);
+ const fees=p.exitFees+p.buyFees,netCash=purchase+fees-sale;
+ const dates=[...new Set(b.legs.map(l=>l.expiry).concat(next.expiry))].sort();
+ const coverage=dates.map(expiry=>{
+  const remaining=b.legs.filter(l=>l.expiry>expiry);
+  const count=type=>remaining.filter(l=>l.type===type).reduce((sum,l)=>sum+quantity(l),0);
+  const futures=count('FUT'),keep=count('PE');
+  const rolled=keep-(old.expiry>expiry?units:0)+(next.expiry>expiry?units:0);
+  return {expiry,futures,keep:Math.min(futures,keep),rolled:Math.min(futures,rolled),putUnits:rolled};
+ });
+ const spot=market.spot,spotQuality=E.quoteQuality(spot,{now,requireFresh:true,requireTrade:true});
+ const scenarios=[0,-.03,-.05,-.10].map(shock=>{
+  if(!spotQuality.valid)return {shock,error:'Fresh HAL spot required for scenarios.'};
+  const params={spot:spot.price*(1+shock),horizon:old.expiry,fallbackIV:p.fallbackIV,ivShift:p.ivShift,rate:p.rate,dividend:p.dividend};
+  const model=E.scenario([{...next,id:'replacement',lots:1,entry:0}],market,params,now);
+  if(!model.complete)return {shock,error:model.errors.join(', ')};
+  const keepValue=Math.max(old.strike-params.spot,0)*units;
+  const rollValue=model.rows[0].modelPrice*units;
+  return {shock,keepValue,rollValue,difference:rollValue-keepValue-netCash};
+ });
+ return {units,sale,purchase,fees,netCash,sell,buy,coverage,scenarios};
+}
+const api={quantity,auditHedge,compareOneLot};
 if(typeof module==='object'&&module.exports)module.exports=api;
 root.HAL5Hedge=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

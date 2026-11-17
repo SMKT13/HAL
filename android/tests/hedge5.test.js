@@ -60,3 +60,24 @@ test('does not alter recorded positions or source comparisons',()=>{
 test('reject missing input and negative accounting fields',()=>{
  const x=base();x.result.candidates[0].saleProceeds=null;A.throws(()=>run(x),/Missing or negative/);
 });
+
+test('one-lot roll prices only the selected bid, keeps the other put, and withholds stale comparisons',()=>{
+ const E=require('../app/src/main/assets/engine4.js'),now=Date.parse('2026-11-17T05:00:00Z'),at=new Date(now).toISOString();
+ const old={type:'PE',expiry:'2026-11-23',strike:4500,lotSize:150,lots:1,entry:35,id:'a',instrumentKey:'a'};
+ const other={...old,strike:4400,id:'b',instrumentKey:'b'};
+ const next={...old,expiry:'2026-12-29',id:'c',instrumentKey:'c'};
+ const future={...old,id:'f',type:'FUT',expiry:next.expiry,instrumentKey:'f',strike:null,entry:4900,lots:2};
+ const b={...E.emptyBook(),legs:[future,old,other]},before=JSON.stringify(b);
+ const q=bid=>({bid,ask:bid+1,price:bid,bidQty:150,askQty:150,volume:400,oi:800,quoteAt:at,tradeAt:at,retrievedAt:at,source:'REST'});
+ const m=E.normalizeMarket({spot:q(4900),contracts:[old,other,next],quotes:{a:q(40),b:q(20),c:q(60)}});
+ const p={slippage:0,buyFees:10,exitFees:5,fallbackIV:25};
+ const run=(leg='a',settings=p)=>H.compareOneLot(b,m,leg,'c',settings,now);
+ const r=run();A.equal(r.netCash,(61-40)*150+15);A.equal(run('b').netCash,(61-20)*150+15);
+ A.equal(r.coverage[0].keep,0);A.equal(r.coverage[0].rolled,150);A.equal(r.coverage[0].futures,300);
+ A.equal(r.scenarios.length,4);for(const s of r.scenarios)A.equal(s.difference,s.rollValue-s.keepValue-r.netCash);
+ A.ok(run('a',{...p,fallbackIV:null}).scenarios.every(s=>s.error));
+ m.quotes.c.askQty=149;A.throws(run,/depth/);m.quotes.c.askQty=150;
+ m.quotes.c.tradeAt='2026-11-16T05:00:00Z';A.throws(run,/quote/);m.quotes.c.tradeAt=at;
+ m.contracts.find(c=>c.instrumentKey==='c').lotSize=100;A.throws(run,/same units/);
+ A.equal(JSON.stringify(b),before);
+});
