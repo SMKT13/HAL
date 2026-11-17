@@ -17,27 +17,34 @@ function theme(){document.body.classList.toggle('light',book.preferences.theme==
 function commit(b){if(storageError)throw Error('Recover the saved book before editing.');const next=E.validateBook(b);const changed=I.materialFingerprint(next)!==I.materialFingerprint(book);if(changed&&I.confirmationFingerprint(next)!==I.confirmationFingerprint(book)){next.riskProfile.confirmedAt=null;next.riskProfile.confirmedBook=null;}const r=D.saveBook(N,localStorage,next,revision);if(changed){ui.ai=null;invalidateCalculations();if(ui.pendingAI)native('aiCancel',ui.pendingAI.id);ui.pendingAI=null;}book=r.book;revision=r.revision;book.revision=revision;theme();render();}
 function cache(){try{const x=JSON.stringify(D.cache(s));if(N?.cachePut){const r=JSON.parse(N.cachePut('snapshot',x));if(!r.ok)throw Error();}else localStorage.setItem('hal_cache_v4',x);}catch(_){toast('Market cache could not be saved; your portfolio is stored separately.');}}
 
-// Review observations live in a separate cache, never in the book transaction or
-// its recovery slot. The baseline stays fixed throughout a foreground session.
-let reviewBaseline=null,reviewCurrent=null,reviewCaptured=false,reviewSaveFailed=false,hiddenAt=null;
+// The comparison point is written only when the user marks Today as reviewed.
+let reviewBaseline=null,reviewReadError=false;
 function beginReview(){
- let cached=null;
- try{if(N?.cacheGet){const r=JSON.parse(N.cacheGet('snapshot:review'));cached=r.ok?r.data?.current:null;}
- else cached=JSON.parse(localStorage.getItem('hal_review_v4')||'null')?.current;}catch(_){}
- reviewCurrent=W.latestReview([cached]);
- reviewBaseline=W.latestReview([reviewCurrent,...book.checkpoints]);
- reviewCaptured=false;reviewSaveFailed=false;
+ try{
+  let data;
+  if(N?.cacheGet){
+   const r=JSON.parse(N.cacheGet('snapshot:review'));
+   if(!r.ok)throw Error();
+   data=r.data;
+  }else data=JSON.parse(localStorage.getItem('hal_review_v4')||'null');
+  if(data&&(![1,2].includes(data.version)||!W.latestReview([data.current])))throw Error();
+  reviewBaseline=data?.version===2?data.current:W.latestReview([data?.current,...book.checkpoints]);
+  reviewReadError=false;
+ }catch(_){reviewReadError=true;}
 }
-function captureReview(){
- if(reviewCaptured||reviewSaveFailed||storageError||(ui.screen!=='position'||ui.position!=='overview')||document.visibilityState==='hidden'||s.cached)return;
- const input=evidence();if(!W.canCaptureReview(input))return;
- const current=I.checkpoint(input),payload=JSON.stringify({version:1,current});
- try{if(N?.cachePut){const r=JSON.parse(N.cachePut('snapshot:review',payload));if(!r.ok)throw Error();}
- else localStorage.setItem('hal_review_v4',payload);
- reviewCurrent=current;reviewCaptured=true;
- }catch(_){reviewSaveFailed=true;toast('This review could not be saved. Your positions are unaffected.');}
+function markReviewed(){
+ if(reviewReadError)beginReview();
+ if(reviewReadError)throw Error('Could not read the saved review. Reopen Today and retry.');
+ const input=evidence();
+ if(storageError||s.cached||s.failure||!W.canCaptureReview(input))throw Error('Refresh HAL spot and all open contracts before marking reviewed.');
+ const current=I.checkpoint(input),payload=JSON.stringify({version:2,current});
+ try{
+  if(N?.cachePut){
+   if(!JSON.parse(N.cachePut('snapshot:review',payload)).ok)throw Error();
+  }else localStorage.setItem('hal_review_v4',payload);
+ }catch(_){throw Error('Review could not be saved. Retry Mark reviewed.');}
+ reviewBaseline=current;render();toast('Marked reviewed at '+when(current.savedAt));
 }
-function resumeReview(awayMs){if(E.finite(awayMs)&&awayMs>=300000||hiddenAt!==null&&Date.now()-hiddenAt>=300000)beginReview();hiddenAt=null;}
 const market=()=>D.market(s),ledger=()=>E.ledger(book,market()),risk=()=>{const r=E.risk(book,market());if(book.legs.length&&!isBookConfirmed()&&!r.warnings.some(w=>w.code==='unconfirmed'))r.warnings.push({code:'unconfirmed',title:'Confirm your book',detail:'Check these positions against your broker records.'});return r;},news=()=>I.newsGroups(D.news(s));
 function technical(frame='D'){const p=D.rawCandles(s,frame),t=E.technicals(p.raw,frame,Date.now(),p.retrievedAt);if(p.error){t.stale=true;t.bias='Refresh failed';}return t;}
 function evidence(){return {book,valuation:ledger(),risk:risk(),market:market(),technical:technical(),fundamentals:I.providerFundamentals(D.packet(s,'fundamentals','D',ui.statement)),news:news(),scenarios:ui.result&&!Array.isArray(ui.result)?[ui.result]:[],funding:book.funding};}
@@ -52,7 +59,6 @@ function navigate(screen,sub){
   ui.reviewOpen=false;
   ui.screen=screen;
   if(sub)ui[screen==='ai'?'aiPage':screen]=sub;
-  if(screen==='position'&&ui.position==='overview')captureReview();
   if(screen==='technicals'){if(ui.technicals==='lab'&&ui.expiry)request('hedges',ui.expiry);else request('candles',ui.technicals==='backtest'?'D':ui.frame);}
   if(screen==='research'){
     if(ui.research==='company')request('fundamentals');
@@ -64,8 +70,20 @@ const intro=(t,n)=>`<div class="page-intro"><div class="eyebrow">Hindustan Aeron
 function clocks(q){const z=E.quoteQuality(q);return row('Provider quote',when(q?.quoteAt))+row('Last exchange trade',when(q?.tradeAt))+row('HTTP retrieved',when(q?.retrievedAt))+row('Last successful refresh',when(s.lastSuccess))+row('Last failed refresh',when(s.lastFailure))+`<p class="fine">${esc([...z.reasons,...z.warnings].join(' · ')||'A recent HTTP retrieval does not establish a recent exchange trade.')}</p>`;}
 
 function changeView(){
- const current=checkpoint(),c=I.changes(reviewBaseline,current,news());
- if(!c.ready)return `<p class="fine">${reviewCaptured?'Your first review is saved. Your next visit will compare with this observation.':'Load current prices for every leg to begin. Reviews save automatically while Today is open.'}</p>`;
+ const input=evidence(),current=I.checkpoint(input),c=I.changes(reviewBaseline,current,news());
+ const ready=!storageError&&!s.cached&&!s.failure&&W.canCaptureReview(input);
+ const controls='<div class="toolbar">'+btn('mark-reviewed','Mark reviewed',ready?'class="primary"':'disabled')+'</div>';
+ const hint=reviewReadError?'The saved review could not be read. Retry when fresh marks are available.':
+  ready?'Mark reviewed to compare future observations with these prices.':
+  !book.legs.length?'Record your open positions to begin a position review.':'Fresh HAL spot and a current REST mark for every open leg are required to mark reviewed.';
+ const blocked=input.valuation.rows.filter(r=>r.mark?.source==='Manual'||r.mark?.status!=='current'||
+  !E.quoteQuality(r.mark?.quote,{requireFresh:true,requireTrade:true}).valid);
+ const needsPrices=blocked.length?'<details><summary>Contracts needing fresh prices ('+blocked.length+')</summary>'+
+  blocked.map(({leg,mark})=>row(leg.type==='PE'?num(leg.strike,0)+' PE · '+date(leg.expiry):'Future · '+date(leg.expiry),
+   mark?.source==='Manual'?'Manual mark':(mark?.warnings||[]).join(' · ')||'Fresh provider quote and trade time required')).join('')+
+  btn('go-book','Inspect contract marks','class="text-button"')+'</details>':'';
+ const footer='<p class="fine">'+esc(hint)+'</p>'+needsPrices+controls;
+ if(!c.ready)return footer;
  const attribution=A5.compare(reviewBaseline,current);
  return `<p class="fine">Compared with ${esc(when(c.from))}</p><div class="metrics">${tile('HAL spot difference',money(c.spot))}${tile('Open P&L change',money(c.open),attribution.available?'Reconciled exact REST marks':c.sameBook?'Indicative · attribution unavailable':'Position changed')}</div><p class="fine">${esc(c.reason)}</p>`+
   (attribution.available?'<details><summary>Per-leg P&amp;L change from verified market marks</summary>'+
@@ -74,7 +92,7 @@ function changeView(){
     money(r.from),money(r.to),money(r.pnl)]))+
    row('Reconciled change in open P&L',money(attribution.total))+
    '<p class="fine">'+esc(attribution.scope)+' Quote timestamps are checked for each open contract. This comparison excludes transaction fees and cannot explain why a price moved.</p></details>':
-   '<p class="fine">Per-leg change withheld: '+esc(attribution.reason)+' Older review checkpoints remain readable but need a second complete observation for a reliable contract-level comparison.</p>');
+   '<p class="fine">Per-leg change withheld: '+esc(attribution.reason)+' Older review checkpoints remain readable but need a second complete observation for a reliable contract-level comparison.</p>')+footer;
 }
 function articleCards(list,limit=30){return list.slice(0,limit).map(n=>`<article class="news-item"><div class="news-meta"><span>${esc(n.source||'Unknown source')}${n.official?' · Official filing':''}</span><span>${esc(when(n.publishedAt))}</span></div><h3>${esc(n.title)}</h3>${n.summary?'<p>'+esc(n.summary)+'</p>':''}${n.duplicates?.length?badge(n.duplicates.length+' duplicates grouped'):''}${ui.sentiments[n.url]?badge('FinBERT '+ui.sentiments[n.url].label+' '+pct(ui.sentiments[n.url].confidence*100)):''}<div class="toolbar">${n.url?btn('link','Read source',`data-url="${esc(n.url)}" class="text-button"`)+btn('explain-news','Explain',`data-url="${esc(n.url)}" class="text-button"`)+btn('bookmark',book.bookmarks.some(b=>b.url===n.url)?'Saved':'Save',`data-url="${esc(n.url)}" class="text-button"`):badge('Link unavailable')}</div><p class="fine">Retrieved ${esc(when(n.retrievedAt))}</p></article>`).join('')||empty('No verified news loaded','Refresh when connected. Absence from a feed does not prove that no event occurred.');}
 
@@ -152,7 +170,7 @@ function today(m,l,r){
  `<section class="card next-review"><span class="eyebrow">Next review</span><h2>${esc(next.title)}</h2><p>${esc(next.detail)}</p>${btn(next.action,next.label,'class="primary"')}${book.legs.length?btn('explain-position','Explain my protection','class="text-button"'):''}</section></div>`+
  (audit.consistent?'':card('P&L integrity needs review',reviews(audit.errors.map(detail=>({title:'Accounting mismatch',detail})))))+
  v5ExpiryPanel()+
- card('Since your last visit',changeView())+
+ card('Since last review',changeView())+
  card('Exposure and protection',row('Futures',num(r.futureUnits,0)+' units · '+num(r.futureLots,0)+' lots')+row('Put quantity coverage',pct(r.coverage))+row('Nearest expiry',date(r.nextExpiry))+row('Recorded realised after charges',money(bookedNet)))+recoveryView.cards(false)+
  card(c.ready?'New evidence to review':'Latest HAL evidence',(c.ready&&!recent.length?empty('No new items in the loaded feed','Open Business review for existing evidence and upcoming events.'):articleCards(recent,1)),btn('go-company','Business review →','class="text-button"'))+
  `<details class="card disclosure"><summary>Protection, market context & source times</summary>${strategySummary(m,true)}${row('Futures exposure',num(r.futureUnits,0)+' units')}${row('Net delta',num(r.delta))}${row('NIFTY 50',money(m.nifty?.price))}${row('India VIX',num(m.vix?.price))}${clocks(m.spot)}${btn('health','Check all feeds','class="text-button"')}</details>`;
@@ -681,7 +699,7 @@ function tryInPaper(){
     'Use portfolio copy',openCopy);
  }else openCopy();
 }
-const actions={'roll-save':saveRoll,'roll-delete':b=>deleteRoll(b.dataset.id),'roll-reprice':b=>repriceRoll(b.dataset.id),'one-start':b=>{Object.assign(oneLot,{owned:b.dataset.id,expiry:'',candidate:'',iv:'',savedSettings:null});navigate('position','one-lot');},
+const actions={'mark-reviewed':markReviewed,'roll-save':saveRoll,'roll-delete':b=>deleteRoll(b.dataset.id),'roll-reprice':b=>repriceRoll(b.dataset.id),'one-start':b=>{Object.assign(oneLot,{owned:b.dataset.id,expiry:'',candidate:'',iv:'',savedSettings:null});navigate('position','one-lot');},
  'one-fetch':()=>{if(!configured)throw Error('Connect Upstox to fetch expiry quotes.');request('hedges',oneLot.expiry,true);request('contracts','D',true);},
  'atlas-paper':tryInPaper,'atlas-performance':()=>navigate('position','performance'),'atlas-history':()=>navigate('history'),'bt-load':()=>request('candles','D',true),'bt-run':()=>{
  const p=D.rawCandles(s,'D');
@@ -712,7 +730,7 @@ const actions={'roll-save':saveRoll,'roll-delete':b=>deleteRoll(b.dataset.id),'r
   if(!r.complete)throw Error('Simulation valuation unavailable: '+r.errors.join('; '));
   return r.total-valuation.open;
  });ui.mcAt=stamp();render();
-},'v5-broker-preview':v5BrokerPreviewModal,'v5-rollover':v5RollModal,'v5-settlement':v5SettleModal,add:()=>legEditor(),edit:b=>legEditor(b.dataset.id),close:b=>closeLeg(b.dataset.id),verify:()=>{request('contracts','D',true);toast('Requested exact saved-contract verification.');},confirm:confirmBook,cash:cashEntry,'journal-edit':b=>editJournal(b.dataset.id),funding,limits,note:()=>noteEditor(),'note-edit':b=>noteEditor(b.dataset.id),settings,connection:()=>native('settings'),'token-page':()=>native('openTokenPage'),health,recovery,export:()=>native('exportBackup',JSON.stringify(D.safeBackup(book),null,2)),csv:()=>native('exportCSV',E.journalCSV(book)),import:()=>native('importBackup'),link:b=>{const url=E.safeURL(b.dataset.url);if(url)native('openLink',url);},bookmark:b=>{const url=b.dataset.url,n=news().find(n=>n.url===url)||book.bookmarks.find(n=>n.url===url);if(n)commit({...book,bookmarks:book.bookmarks.some(x=>x.url===url)?book.bookmarks.filter(x=>x.url!==url):[...book.bookmarks,{title:n.title,url,published:n.publishedAt||n.published,source:n.source}]});},checkpoint:()=>{const c=checkpoint();if(!c.quoteAsOf)throw Error('Load a timestamped market observation before saving a checkpoint.');commit({...book,checkpoints:[...book.checkpoints,c].slice(-5000)});reviewBaseline=c;render();toast('Review checkpoint saved.');},'go-stress':()=>navigate('plan','stress'),'go-news':()=>navigate('research','news'),scenario:()=>{if(!book.legs.length)throw Error('Record your actual open position before modelling.');readScenario();ui.result=E.scenario(book,market(),scenarioParams());ui.resultAt=stamp();render();},'shock-grid':()=>{if(!book.legs.length)throw Error('Record your actual open position before modelling.');readScenario();const p=scenarioParams(),m=market();if(!E.finite(p.spot))throw Error('Enter a scenario spot price.');ui.result=[0,-.03,-.05,-.1].map(shock=>({shock,spot:p.spot*(1+shock),...E.scenario(book,m,{...p,spot:p.spot*(1+shock)})}));ui.resultAt=stamp();render();},'hedge-fetch':()=>{const h=hedgeSettings();commit({...book,hedge:h});refresh();for(const d of s.snapshot?.available_expiries||[])request('hedges',d,true);toast('Listed protection refresh requested. Compare after feeds complete.');},'hedge-rank':()=>{if(!isBookConfirmed())throw Error('Confirm the current book against broker records first.');const h=hedgeSettings();commit({...book,hedge:h});ui.hedges=E.findHedges(book,market(),h);ui.hedgesAt=stamp();render();},'hedge-detail':b=>compareHedge(b.dataset.id),frame:b=>{ui.frame=b.dataset.id;request('candles',ui.frame);render();},candles:()=>request('candles',ui.frame,true),technical:()=>request('candles','D',true),fundamentals:()=>request('fundamentals','D',true),chain:()=>{request('hedges',ui.expiry,true);},news:()=>{request('news','D',true);request('filings','D',true);},'stream-start':()=>native('streamStart'),'stream-stop':()=>native('streamStop'),'patterns-load':()=>request('patterns','D',true),patterns:()=>{const p=D.rawCandles(s,'D','patterns');if(p.error)throw Error('Historical feed refresh failed. Retry before scanning.');ui.pattern=E.patterns(p.raw,{window:value('pattern-window'),forward:value('pattern-forward')});render();},'ai-settings':()=>native('aiSettings'),'ai-review':aiReview,'ai-cancel':()=>{if(ui.pendingAI)native('aiCancel',ui.pendingAI.id);ui.pendingAI=null;ui.aiError='Cancelled by you.';render();},'model-install':()=>native('finbertInstall'),'model-cancel':()=>native('finbertCancel'),'model-remove':()=>modal('Remove offline model','<p>Remove model files from this phone. Portfolio records remain available.</p>','Remove model',()=>native('finbertRemove')),sentiment:()=>{const items=news().filter(n=>n.url).slice(0,12).map(n=>({id:n.url,title:n.title.slice(0,480)}));native('finbertScore',JSON.stringify(items));}};
+},'v5-broker-preview':v5BrokerPreviewModal,'v5-rollover':v5RollModal,'v5-settlement':v5SettleModal,add:()=>legEditor(),edit:b=>legEditor(b.dataset.id),close:b=>closeLeg(b.dataset.id),verify:()=>{request('contracts','D',true);toast('Requested exact saved-contract verification.');},confirm:confirmBook,cash:cashEntry,'journal-edit':b=>editJournal(b.dataset.id),funding,limits,note:()=>noteEditor(),'note-edit':b=>noteEditor(b.dataset.id),settings,connection:()=>native('settings'),'token-page':()=>native('openTokenPage'),health,recovery,export:()=>native('exportBackup',JSON.stringify(D.safeBackup(book),null,2)),csv:()=>native('exportCSV',E.journalCSV(book)),import:()=>native('importBackup'),link:b=>{const url=E.safeURL(b.dataset.url);if(url)native('openLink',url);},bookmark:b=>{const url=b.dataset.url,n=news().find(n=>n.url===url)||book.bookmarks.find(n=>n.url===url);if(n)commit({...book,bookmarks:book.bookmarks.some(x=>x.url===url)?book.bookmarks.filter(x=>x.url!==url):[...book.bookmarks,{title:n.title,url,published:n.publishedAt||n.published,source:n.source}]});},checkpoint:()=>{const c=checkpoint();if(!c.quoteAsOf)throw Error('Load a timestamped market observation before saving a checkpoint.');commit({...book,checkpoints:[...book.checkpoints,c].slice(-5000)});render();toast('Review checkpoint saved.');},'go-stress':()=>navigate('plan','stress'),'go-news':()=>navigate('research','news'),scenario:()=>{if(!book.legs.length)throw Error('Record your actual open position before modelling.');readScenario();ui.result=E.scenario(book,market(),scenarioParams());ui.resultAt=stamp();render();},'shock-grid':()=>{if(!book.legs.length)throw Error('Record your actual open position before modelling.');readScenario();const p=scenarioParams(),m=market();if(!E.finite(p.spot))throw Error('Enter a scenario spot price.');ui.result=[0,-.03,-.05,-.1].map(shock=>({shock,spot:p.spot*(1+shock),...E.scenario(book,m,{...p,spot:p.spot*(1+shock)})}));ui.resultAt=stamp();render();},'hedge-fetch':()=>{const h=hedgeSettings();commit({...book,hedge:h});refresh();for(const d of s.snapshot?.available_expiries||[])request('hedges',d,true);toast('Listed protection refresh requested. Compare after feeds complete.');},'hedge-rank':()=>{if(!isBookConfirmed())throw Error('Confirm the current book against broker records first.');const h=hedgeSettings();commit({...book,hedge:h});ui.hedges=E.findHedges(book,market(),h);ui.hedgesAt=stamp();render();},'hedge-detail':b=>compareHedge(b.dataset.id),frame:b=>{ui.frame=b.dataset.id;request('candles',ui.frame);render();},candles:()=>request('candles',ui.frame,true),technical:()=>request('candles','D',true),fundamentals:()=>request('fundamentals','D',true),chain:()=>{request('hedges',ui.expiry,true);},news:()=>{request('news','D',true);request('filings','D',true);},'stream-start':()=>native('streamStart'),'stream-stop':()=>native('streamStop'),'patterns-load':()=>request('patterns','D',true),patterns:()=>{const p=D.rawCandles(s,'D','patterns');if(p.error)throw Error('Historical feed refresh failed. Retry before scanning.');ui.pattern=E.patterns(p.raw,{window:value('pattern-window'),forward:value('pattern-forward')});render();},'ai-settings':()=>native('aiSettings'),'ai-review':aiReview,'ai-cancel':()=>{if(ui.pendingAI)native('aiCancel',ui.pendingAI.id);ui.pendingAI=null;ui.aiError='Cancelled by you.';render();},'model-install':()=>native('finbertInstall'),'model-cancel':()=>native('finbertCancel'),'model-remove':()=>modal('Remove offline model','<p>Remove model files from this phone. Portfolio records remain available.</p>','Remove model',()=>native('finbertRemove')),sentiment:()=>{const items=news().filter(n=>n.url).slice(0,12).map(n=>({id:n.url,title:n.title.slice(0,480)}));native('finbertScore',JSON.stringify(items));}};
 
 Object.assign(actions,{
  'go-book':()=>navigate('position','book'),'go-risk':()=>navigate('position','risk'),
@@ -756,7 +774,7 @@ $('modal-close').onclick=$('modal-cancel').onclick=closeModal;$('modal-save').on
 document.addEventListener('keydown',ev=>{if($('modal').hidden)return;if(ev.key==='Escape')closeModal();if(ev.key==='Tab'){const nodes=[...$('modal').querySelectorAll('button,input,select,textarea,a')].filter(x=>!x.disabled&&!x.hidden),first=nodes[0],last=nodes.at(-1);if(ev.shiftKey&&document.activeElement===first){ev.preventDefault();last.focus();}if(!ev.shiftKey&&document.activeElement===last){ev.preventDefault();first.focus();}}});
 function receive(event,data){
  if(event==='history_preview'){try{historyView.preview(data);}catch(e){toast(e.message);}return;}
- if(event==='lifecycle'&&data.state==='resumed'){resumeReview(data.awayMs);s.loading=false;for(const h of Object.values(s.health))if(h.pending){h.pending=null;h.lastAttempt=null;}invalidateCalculations();if(ui.pendingAI){ui.pendingAI=null;ui.aiError='Cancelled when the app left the foreground.';}}
+ if(event==='lifecycle'&&data.state==='resumed'){s.loading=false;for(const h of Object.values(s.health))if(h.pending){h.pending=null;h.lastAttempt=null;}invalidateCalculations();if(ui.pendingAI){ui.pendingAI=null;ui.aiError='Cancelled when the app left the foreground.';}}
  if(event==='connection'){configured=!!data.configured;if(!started){started=true;if(configured){refresh();request('candles');request('news');request('filings');request('fundamentals');}}}
  if(event==='ai_connection'){ui.aiConfigured=!!data.configured;ui.model=data.model||'';}
  if(['snapshot','error','research','research_error'].includes(event))invalidateCalculations();
@@ -771,7 +789,6 @@ function receive(event,data){
  if(event==='ai_result'&&ui.pendingAI?.id===data.id){const p=ui.pendingAI.evidence;ui.ai={...data.data,evidenceAt:data.data?.evidenceGeneratedAt||p.generatedAt,bookRevision:data.data?.bookRevision||p.bookRevision,portfolioIncluded:data.data?.portfolioIncluded??p.portfolioIncluded};ui.pendingAI=null;}
  if(event==='ai_error'&&ui.pendingAI?.id===data.id){ui.aiError=data.message||'Gemini request failed.';ui.pendingAI=null;}
  if(event==='finbert_status')ui.finbert={...ui.finbert,...data};if(event==='finbert_error')ui.finbert={state:'error',message:data.message};if(event==='finbert_results')for(const x of data.items||[])if(['positive','negative','neutral'].includes(x.label)&&E.finite(x.confidence))ui.sentiments[x.id]=x;
- if(['snapshot','research'].includes(event))captureReview();
  // Do not interrupt editing or a consent preview while new market data arrives.
  if(!document.activeElement?.matches('main input,main select,main textarea'))render();
 }
@@ -782,6 +799,6 @@ beginReview();
 if(s.snapshot?.option_expiry&&E.expiryTime(s.snapshot.option_expiry)>=Date.now())ui.expiry=s.snapshot.option_expiry;theme();render();native('ready');native('finbertStatus');
 setInterval(()=>{if(document.visibilityState==='visible'&&book.preferences.auto&&configured){refresh(false);}},60000);
 setInterval(()=>{for(const [k,h]of Object.entries(s.health))if(h.pending&&Date.now()-Date.parse(h.pending)>180000)s=D.ingest(s,'research_error',{key:k,code:'network_unavailable'});if(document.visibilityState==='visible'&&!document.activeElement?.matches('input,select,textarea')&&$('modal').hidden)render();},30000);
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible'){hiddenAt=Date.now();native('streamStop');s.loading=false;for(const h of Object.values(s.health))if(h.pending){h.pending=null;h.lastAttempt=null;}invalidateCalculations();if(ui.pendingAI){native('aiCancel',ui.pendingAI.id);ui.pendingAI=null;ui.aiError='Cancelled when the app left the foreground.';}}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible'){native('streamStop');s.loading=false;for(const h of Object.values(s.health))if(h.pending){h.pending=null;h.lastAttempt=null;}invalidateCalculations();if(ui.pendingAI){native('aiCancel',ui.pendingAI.id);ui.pendingAI=null;ui.aiError='Cancelled when the app left the foreground.';}}});
 const colorScheme=matchMedia('(prefers-color-scheme: light)'),themeChanged=()=>{theme();render();};if(colorScheme.addEventListener)colorScheme.addEventListener('change',themeChanged);else colorScheme.addListener(themeChanged);window.addEventListener('resize',()=>{if(chart)chart.applyOptions({width:$('market-chart').clientWidth});});
 })();

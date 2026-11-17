@@ -10,7 +10,7 @@ const click=(p,a)=>p.locator(`[data-action="${a}"]`).first().click(),nav=async(p
  if(tab!=='today')await p.locator(`[data-route="${screen}"][data-sub="${key}"]`).click();
 },emit=(p,event,data)=>p.evaluate(({event,data})=>HALApp.receive(event,data),{event,data});
 async function save(p){await p.locator('#modal-save').click();A.equal(await p.locator('#modal-error').innerText(),'');A.equal(await p.locator('#modal').isVisible(),false)}async function check(name,fn){await fn();console.log('PASS '+name);checks++}
-async function pageFor(seed={}){const context=await browser.newContext({viewport:{width:390,height:844}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route(origin+'**',r=>{const name=new URL(r.request().url()).pathname.slice(1)||'index.html',file=path.join(root,name);return fs.existsSync(file)?r.fulfill({path:file,contentType:name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':'application/javascript'}):r.abort()});await page.clock.install({time:new Date(now)});await page.addInitScript(seed=>{window.saved=seed.book||null;window.rev=0;window.previous=null;window.calls=[];window.corrupt=seed.corrupt;window.forceSaveFailure=false;window.reviewCache=seed.cache||{};window.forceCacheFailure=false;if(seed.legacy)localStorage.setItem('hal_desk_v2',JSON.stringify(seed.legacy));const validCacheKey=k=>/^(snapshot|research|health)(:[A-Za-z0-9_-]{1,40}){0,4}$/.test(k);const log=(n,...a)=>calls.push([n,...a]);window.HALNative={loadBook:()=>JSON.stringify(corrupt?{ok:false,revision:rev,message:'checksum invalid'}:{ok:true,book:saved,revision:rev}),saveBook:(s,r)=>{if(forceSaveFailure)return JSON.stringify({ok:false,message:'synthetic disk failure'});if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});previous=saved;saved=JSON.parse(s);return JSON.stringify({ok:true,revision:++rev})},previousBook:()=>JSON.stringify({ok:true,book:previous}),restorePreviousBook:r=>{if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});saved=previous;corrupt=false;return JSON.stringify({ok:true,book:saved,revision:++rev})},cacheGet:key=>JSON.stringify(validCacheKey(key)?{ok:true,data:reviewCache[key]||null}:{ok:false}),cachePut:(key,value)=>{if(forceCacheFailure||!validCacheKey(key))return JSON.stringify({ok:false});reviewCache[key]=JSON.parse(value);return JSON.stringify({ok:true})},ready:()=>{},finbertStatus:()=>{}};for(const n of ['research','refresh','nseRefresh','settings','aiSettings','openTokenPage','exportBackup','exportCSV','importBackup','importHistory','printReview','ai','aiCancel','finbertInstall','finbertCancel','finbertRemove','finbertScore','streamStart','streamStop','openLink','minimize'])HALNative[n]=(...a)=>log(n,...a)},seed);await page.goto(origin);await page.locator('h1').waitFor();return {page,context,errors}}
+async function pageFor(seed={},startTime=now){const context=await browser.newContext({viewport:{width:390,height:844}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route(origin+'**',r=>{const name=new URL(r.request().url()).pathname.slice(1)||'index.html',file=path.join(root,name);return fs.existsSync(file)?r.fulfill({path:file,contentType:name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':'application/javascript'}):r.abort()});await page.clock.install({time:new Date(startTime)});await page.addInitScript(seed=>{window.saved=seed.book||null;window.rev=0;window.previous=null;window.calls=[];window.corrupt=seed.corrupt;window.forceSaveFailure=false;window.reviewCache=seed.cache||{};window.forceCacheFailure=false;if(seed.legacy)localStorage.setItem('hal_desk_v2',JSON.stringify(seed.legacy));const validCacheKey=k=>/^(snapshot|research|health)(:[A-Za-z0-9_-]{1,40}){0,4}$/.test(k);const log=(n,...a)=>calls.push([n,...a]);window.HALNative={loadBook:()=>JSON.stringify(corrupt?{ok:false,revision:rev,message:'checksum invalid'}:{ok:true,book:saved,revision:rev}),saveBook:(s,r)=>{if(forceSaveFailure)return JSON.stringify({ok:false,message:'synthetic disk failure'});if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});previous=saved;saved=JSON.parse(s);return JSON.stringify({ok:true,revision:++rev})},previousBook:()=>JSON.stringify({ok:true,book:previous}),restorePreviousBook:r=>{if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});saved=previous;corrupt=false;return JSON.stringify({ok:true,book:saved,revision:++rev})},cacheGet:key=>JSON.stringify(validCacheKey(key)?{ok:true,data:reviewCache[key]||null}:{ok:false}),cachePut:(key,value)=>{if(forceCacheFailure||!validCacheKey(key))return JSON.stringify({ok:false});reviewCache[key]=JSON.parse(value);return JSON.stringify({ok:true})},ready:()=>{},finbertStatus:()=>{}};for(const n of ['research','refresh','nseRefresh','settings','aiSettings','openTokenPage','exportBackup','exportCSV','importBackup','importHistory','printReview','ai','aiCancel','finbertInstall','finbertCancel','finbertRemove','finbertScore','streamStart','streamStop','openLink','minimize'])HALNative[n]=(...a)=>log(n,...a)},seed);await page.goto(origin);await page.locator('h1').waitFor();return {page,context,errors}}
 const launch=()=>pw.chromium.launch({executablePath:process.env.HAL_BROWSER,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});(async()=>{browser=await launch();try{let x=await pageFor(),p=x.page;
 await check('fresh empty book and every primary/subsection renders',async()=>{A.match(await p.locator('main').innerText(),/No open book/);A.deepEqual(await p.locator('.bottom-nav button').evaluateAll(nodes=>nodes.map(n=>n.dataset.screen)),['today','portfolio','plan','research']);for(const [a,bs]of [['position',['overview','book','performance','risk','journal','stress','compare','hedge','break-even']],['history',[]],['technicals',['markets','indicators','insights']],['research',['company','news']],['ai',['assistant','coach']]]){await nav(p,a);for(const b of bs)await nav(p,a,b);}A.deepEqual(x.errors,[]);A.equal((await p.evaluate(()=>calls.filter(c=>['ai','finbertInstall'].includes(c[0])))).length,0)});
 await check('portfolio opens an isolated PAPER copy and preserves the real book',async()=>{
@@ -407,7 +407,7 @@ await check('same-book daily review explains futures and put price moves without
   risk:E.risk(b,oldMarket,at)},at);
  const x=await pageFor({book:b,cache:{'snapshot:review':{version:1,current:previous}}});
  await emit(x.page,'connection',{configured:true});await emit(x.page,'snapshot',snap);
- const review=x.page.locator('section.card').filter({has:x.page.getByRole('heading',{name:'Since your last visit',exact:true})});
+ const review=x.page.locator('section.card').filter({has:x.page.getByRole('heading',{name:'Since last review',exact:true})});
  A.match(await review.innerText(),/2,250.00/);
  await review.locator('summary').filter({hasText:'Per-leg P&L change'}).click();
  const output=await review.innerText();
@@ -443,24 +443,33 @@ await check('HAL Desk 5 rollover compares exact fresh futures quotes without cha
  A.deepEqual(x.errors,[]);
  await x.context.close();
 });
-await check('daily review saves fresh observations separately and keeps the prior visit fixed',async()=>{
+await check('Mark reviewed preserves a legacy baseline across refresh, navigation and resume until explicitly replaced',async()=>{
  const I=require('../app/src/main/assets/insights4.js');const b=E.validateBook({...E.emptyBook(),legs:[FUT,PUT]});
  const previous={version:4,savedAt:new Date(now-3600000).toISOString(),quoteAsOf:new Date(now-3601000).toISOString(),bookRevision:I.materialFingerprint(b),spot:4900,open:22000,complete:true,newsURLs:[]};
- x=await pageFor({book:b,cache:{'snapshot:review':{version:1,current:previous}}});p=x.page;
+ const legacy={version:1,current:previous},key='snapshot:review';
+ x=await pageFor({book:b,cache:{[key]:legacy}});p=x.page;
  await emit(p,'connection',{configured:true});await emit(p,'snapshot',snap);
- const state=await p.evaluate(()=>({revision:rev,previous,review:reviewCache['snapshot:review'],book:saved}));
- A.equal(state.revision,0);A.equal(state.previous,null);A.equal(state.book.checkpoints.length,0);A.ok(Math.abs(state.review.current.open-23460)<1e-6);
+ await nav(p,'position','book');await nav(p,'position','overview');
+ await emit(p,'lifecycle',{state:'resumed',awayMs:360000});
  A.match(await p.locator('main').innerText(),/1,460.00/);
- const baseline=JSON.stringify(state.review);await emit(p,'snapshot',{...snap,spot:{...snap.spot,last_price:4960}});
- A.equal(await p.evaluate(()=>JSON.stringify(reviewCache['snapshot:review'])),baseline);
- await nav(p,'position','book');await nav(p,'position','overview');A.match(await p.locator('main').innerText(),/1,460.00/);
- await emit(p,'lifecycle',{state:'resumed',awayMs:360000});const changed=await p.locator('section.card').filter({has:p.getByRole('heading',{name:'Since your last visit',exact:true})}).innerText();A.match(changed,/₹0.00/);A.ok(!changed.includes('1,460.00'));await emit(p,'snapshot',snap);A.equal(await p.evaluate(()=>rev),0);
- await x.context.close();
+ A.deepEqual(await p.evaluate(k=>reviewCache[k],key),legacy);
+ await p.evaluate(()=>window.forceCacheFailure=true);await click(p,'mark-reviewed');
+ A.match(await p.locator('#toast').innerText(),/could not be saved/i);
+ A.deepEqual(await p.evaluate(k=>reviewCache[k],key),legacy);
+ await p.evaluate(()=>window.forceCacheFailure=false);await click(p,'mark-reviewed');
+ const pinned=await p.evaluate(k=>reviewCache[k],key);
+ A.equal(pinned.version,2);A.ok(Math.abs(pinned.current.open-23460)<1e-6);
+ A.equal(await p.evaluate(()=>rev),0);A.equal(await p.evaluate(()=>saved.checkpoints.length),0);
+ const restart=await pageFor({book:b,cache:{[key]:pinned}},Date.parse(pinned.current.savedAt)+1000);
+ await emit(restart.page,'snapshot',snap);
+ const review=restart.page.locator('section.card').filter({has:restart.page.getByRole('heading',{name:'Since last review',exact:true})});
+ A.match(await review.innerText(),/₹0.00/);A.deepEqual(await restart.page.evaluate(k=>reviewCache[k],key),pinned);
+ await restart.context.close();await x.context.close();
 });
 await browser.close();browser=await launch();
 await check('offline, incomplete and failed refreshes do not advance the review baseline',async()=>{
  x=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT]}});p=x.page;
- await emit(p,'snapshot',{...snap,option_rows:[]});A.equal(await p.evaluate(()=>reviewCache['snapshot:review']),undefined);
+ await emit(p,'snapshot',{...snap,option_rows:[]});A.ok(await p.locator('[data-action="mark-reviewed"]').isDisabled());A.match(await p.locator('details').filter({hasText:'Contracts needing fresh prices'}).textContent(),/4,500 PE/);A.equal(await p.evaluate(()=>reviewCache['snapshot:review']),undefined);
  await emit(p,'error',{code:'network_unavailable'});A.equal(await p.evaluate(()=>reviewCache['snapshot:review']),undefined);
  await p.evaluate(()=>window.forceCacheFailure=true);await emit(p,'snapshot',snap);
  A.equal(await p.evaluate(()=>rev),0);A.equal(await p.evaluate(()=>saved.legs.length),2);
