@@ -101,7 +101,7 @@
     return html+'<p class="fine">Source: NSE Market Data MCP (cash equities and Bhavcopy), for personal research only. Not for trade execution or investment advice.</p>';
   }
   function mount(){
-    if(!root||document.querySelector('.bottom-nav [data-screen="technicals"][aria-current="page"]')===null)return;
+    if(!root||document.querySelector('.subnav [data-route="technicals"][data-sub="markets"][aria-pressed="true"]')===null)return;
     if(document.getElementById('nse-insights'))return;
     const section=document.createElement('section');
     section.id='nse-insights';section.className='card';section.setAttribute('aria-label','Official NSE market research');

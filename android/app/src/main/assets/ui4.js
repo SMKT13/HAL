@@ -60,7 +60,7 @@ function navigate(screen,sub){
   }
   render();window.scrollTo(0,0);
 }
-const subnav=(group,items)=>`<div class="subnav">${items.map(([k,t])=>`<button data-sub="${k}" class="${ui[group]===k?'active':''}" aria-pressed="${ui[group]===k}">${esc(t)}</button>`).join('')}</div>`,intro=(t,n)=>`<div class="page-intro"><div class="eyebrow">Hindustan Aeronautics · NSE</div><h1>${esc(t)}</h1><p>${esc(n)}</p></div>`,reviews=items=>items.map(w=>`<article class="review-item"><strong>${esc(w.title)}</strong><p>${esc(w.detail)}</p></article>`).join('');
+const intro=(t,n)=>`<div class="page-intro"><div class="eyebrow">Hindustan Aeronautics · NSE</div><h1>${esc(t)}</h1><p>${esc(n)}</p></div>`,reviews=items=>items.map(w=>`<article class="review-item"><strong>${esc(w.title)}</strong><p>${esc(w.detail)}</p></article>`).join('');
 function clocks(q){const z=E.quoteQuality(q);return row('Provider quote',when(q?.quoteAt))+row('Last exchange trade',when(q?.tradeAt))+row('HTTP retrieved',when(q?.retrievedAt))+row('Last successful refresh',when(s.lastSuccess))+row('Last failed refresh',when(s.lastFailure))+`<p class="fine">${esc([...z.reasons,...z.warnings].join(' · ')||'A recent HTTP retrieval does not establish a recent exchange trade.')}</p>`;}
 
 function changeView(){
@@ -127,7 +127,7 @@ function v5BrokerPreviewResult(){
 function v5ExpiryPanel(large=false){
  if(!book.legs.length)return '';
  const x=X5.agenda(book,E.istDate()),items=large?x.alerts:x.alerts.slice(0,4);
- return card('HAL Desk 5 · Expiry & settlement review',
+ return card('Expiry & settlement review',
   row('Next recorded expiry',date(x.nextExpiry))+
   row('Active futures / put units',num(x.futureUnits,0)+' / '+num(x.putUnits,0))+
   row('Futures units without put quantity',num(x.uncovered,0))+
@@ -146,9 +146,9 @@ function today(m,l,r){
  const dailyLabel=integrityBlocked?'withheld pending price integrity review':q.status==='current'&&!s.failure?'today':'last recorded change · not live';
  const next=W.priority(evidence(),configured),c=changes(),recent=(c.ready?c.newNews:news()).slice(0,1);
  return ''+
- `<div class="price-ribbon"><div><span class="eyebrow">HAL · NSE</span><strong>${money(m.spot.price)}</strong></div><div class="price-change ${color(daily)}">${money(daily)} ${esc(dailyLabel)}${badge(q.status,q.status)}</div></div>`+
+ `<div class="price-ribbon"><div><span class="eyebrow">HAL · NSE</span><strong>${money(m.spot.price)}</strong><small>Quote · ${esc(when(m.spot.quoteAt))}</small></div><div class="price-change ${color(daily)}">${money(daily)} ${esc(dailyLabel)}${badge(q.status,q.status)}</div></div>`+
  (!book.legs.length?card('Start with your actual position',`<p>Connect prices, record your futures and puts, then review them together.</p><ol class="setup-steps"><li>${configured?'Prices connected':btn('connection','Connect Upstox')}</li><li>${btn('add','Add first position','class="primary"')}</li><li>Confirm the entries against your broker.</li></ol><p class="fine">You can record positions offline. No example holdings are added.</p>`):'')+
- `<div class="daily-grid"><section class="card hero daily-position"><span class="eyebrow">Your combined position</span><div class="hero-value ${color(verifiedOpen)}">${book.legs.length?money(verifiedOpen):'No open book'}</div><p class="fine">Indicative open P&L · ${l.manual?'manual marks included':l.stale?'older prices':l.complete?'all marks available':'missing contract prices'}</p><p class="fine">Strategy net <strong>${money(verifiedNet)}</strong> · includes recorded realised P&amp;L and charges</p>${btn('go-book','View my position →','class="text-button"')}</section>`+
+ `<div class="daily-grid"><section class="card hero daily-position"><span class="eyebrow">Lifetime net strategy P&amp;L</span><div class="hero-value ${color(verifiedNet)}">${money(verifiedNet)}</div>${row('Lifetime gross',money(audit.complete?audit.realizedGross+verifiedOpen:null))}${row('Recorded charges',money(audit.recordedCharges))}<p class="fine">${book.legs.length?'Open P&L '+money(verifiedOpen):'No open book'} · ${esc(audit.markQuality)}</p>${btn('atlas-performance','See P&L breakdown','class="text-button"')}</section>`+
  `<section class="card next-review"><span class="eyebrow">Next review</span><h2>${esc(next.title)}</h2><p>${esc(next.detail)}</p>${btn(next.action,next.label,'class="primary"')}${book.legs.length?btn('explain-position','Explain my protection','class="text-button"'):''}</section></div>`+
  (audit.consistent?'':card('P&L integrity needs review',reviews(audit.errors.map(detail=>({title:'Accounting mismatch',detail})))))+
  v5ExpiryPanel()+
@@ -229,7 +229,7 @@ function v5RiskPanel(savedBook,valuation){
  const expiryDetail=gap?'After '+date(gap.afterExpiry)+', '+num(gap.uncovered,0)+' futures units lack put quantity protection.':'No additional uncovered futures shown in the dated expiry ladder.';
  const settle=ui.settlementResult,path=ui.settlementPath;
  const lifetimeScenario=V5.lifetimeNet(settle,valuation.realized,valuation.charges);
- return card('HAL Desk 5 · Protection by date',
+ return card('Protection by date',
   '<p class="fine">Read-only expiry ladder · dates use IST. It does not change your recorded book.</p>'+
   (relevant.length?table(['From date','Futures units','Put units','Uncovered'],relevant.map(x=>[date(x.onDate),x.futures,x.puts,x.uncovered])):empty('No unexpired futures','Any expired contracts still require broker reconciliation.'))+
   (gap?'<p class="warning fine">'+esc(expiryDetail)+'</p>':'<p class="fine">'+esc(expiryDetail)+'</p>')+
@@ -260,18 +260,18 @@ function v5RiskPanel(savedBook,valuation){
 }
 function v5PortfolioPanel(savedBook,valuation){
  const a=P5.audit(savedBook,valuation);
- if(!a.consistent)return card('HAL Desk 5 · Lifetime accounting audit',
+ if(!a.consistent)return card('Lifetime accounting audit',
   '<p class="warning">Recorded and calculated portfolio totals do not reconcile. Financial summaries are withheld in this audit panel.</p>'+
   reviews(a.errors.map(detail=>({title:'Accounting conflict',detail})))+
   '<p class="fine">Preserve the saved book and review completed trades, costs and contract marks against your broker before drawing conclusions.</p>');
- return card('HAL Desk 5 · Lifetime accounting',
+ return card('Lifetime accounting',
   '<div class="metrics wide">'+
    tile('Open P&L',money(a.open),a.complete?'All open legs priced':'Incomplete · one or more marks unavailable')+
    tile('Realised gross',money(a.realizedGross))+
    tile('Recorded lifetime charges',money(a.recordedCharges))+
    tile('Lifetime net',money(a.net),a.complete?'Indicative, not broker-settled':'Withheld until all marks are valid')+
   '</div>'+
-  row('Booked realised net after charges',money(a.bookedNet))+
+  btn('atlas-history','View completed trade history','class="text-button"')+row('Booked realised net after charges',money(a.bookedNet))+
   row('Open-trade P&L needed to offset booked loss',money(a.bookedRecoveryRequirement))+
   row('Indicative remaining lifetime shortfall',money(a.indicativeShortfall))+
   row('Open valuation quality',a.markQuality)+
@@ -302,7 +302,7 @@ function advancedAssumptions(p){return `<details id="scenario-advanced" ${ui.adv
 function scenarioInputs(m){const p=ui.scenario;return `<div class="form-grid">${input('sc-spot','HAL price to explore (₹)',E.value(p.spot)??m.spot.price)}${input('sc-horizon','On date · blank means now',p.horizon,'date')}</div>${advancedAssumptions(p)}<p class="fine">Uses observed futures basis and valid provider IV when available. Rate ${esc(p.rate)}%, dividend ${esc(p.dividend)}%, IV shift ${esc(p.shift)} points. Open Advanced assumptions to review or supply missing IV.</p>`;}
 function v5MonteCarloPanel(){
  const r=ui.mcResult;
- return card('HAL Desk 5 · Monte Carlo risk',
+ return card('Monte Carlo risk',
   '<p>Illustrative distribution of additional P&L from current marks. Select a horizon above and enter assumptions; no historical volatility is inferred.</p>'+
   '<div class="form-grid">'+input('mc-vol','Assumed annual HAL share volatility (%)',ui.mcVol)+
   input('mc-drift','Assumed annual return (%) · 0 = neutral',ui.mcDrift)+'</div>'+
@@ -340,7 +340,7 @@ function businessBoard(){
 function facts(v,path='',out=[]){if(out.length>=120)return out;if(Array.isArray(v))v.slice(0,30).forEach((x,i)=>facts(x,path+' ['+(i+1)+']',out));else if(v&&typeof v==='object')for(const [k,x]of Object.entries(v))facts(x,path?path+' / '+k:k,out);else if(v!=null)out.push([path,String(v)]);return out;}
 function v5BacktestPanel(){
  const p=ui.btParams,r=ui.btReport,g=ui.btRegime,src=ui.btSource;
- return card('HAL Desk 5 · Historical strategy research',
+ return card('Historical strategy research',
  '<p>Long-only SMA crossover on completed HAL cash-equity daily candles. Signals from a daily close are filled at the next completed daily bar open. This is PAPER research, not a HAL futures/options strategy or live entry signal.</p>'+
  '<div class="form-grid">'+input('bt-fast','Fast SMA (2–199)',p.fast)+
  input('bt-slow','Slow SMA (3–200)',p.slow)+
@@ -368,7 +368,7 @@ function v5BacktestPanel(){
 }
 function v5EvidencePanel(){
  const r=L5.build(evidence(),Date.now(),isBookConfirmed());
- return card('HAL Desk 5 · Six-Perspective Evidence Map',
+ return card('Six-Perspective Evidence Map',
   '<p class="fine">Calculated locally on this phone; opening this panel does not call Gemini or send portfolio data. The map checks evidence readiness, not whether a trade should be taken.</p>'+
   row('Perspectives with available evidence',num(r.available,0)+' of 6')+
   table(['Perspective','Status','Source review'],
@@ -389,24 +389,38 @@ if(section==='ai')body=v5EvidencePanel()+card('Evidence-grounded AI Desk',`<p cl
 return body;}
 function streamView(){const x=s.stream;return x?row('State',String(x.state).replace(/_/g,' '))+row('Decoded frames',num(x.frames,0))+table(['Instrument','Preview price','Feed time'],(x.rows||[]).map(q=>[q.key||q.instrument_key||q.instrumentKey,money(q.price??q.last_price),when(x.feed_ts?new Date(x.feed_ts).toISOString():null)])):empty('Preview stopped');}
 function drawChart(){const el=$('market-chart'),t=technical(ui.frame);if(!el||!t.rows.length||!window.LightweightCharts)return;const c=getComputedStyle(document.body);chart=LightweightCharts.createChart(el,{width:el.clientWidth,height:300,layout:{background:{color:c.getPropertyValue('--surface').trim()},textColor:c.getPropertyValue('--muted').trim()},grid:{vertLines:{color:c.getPropertyValue('--line').trim()},horzLines:{color:c.getPropertyValue('--line').trim()}},timeScale:{timeVisible:ui.frame!=='D'},handleScroll:{vertTouchDrag:false},localization:{locale:'en-IN',timeFormatter:v=>when(new Date(v*1000).toISOString())}});const cs=chart.addSeries(LightweightCharts.CandlestickSeries,{upColor:'#49b9a3',downColor:'#e88b93',borderVisible:false,wickUpColor:'#49b9a3',wickDownColor:'#e88b93'});cs.setData(t.rows.map(r=>({time:r.t/1000,open:r.o,high:r.h,low:r.l,close:r.c})));const vol=chart.addSeries(LightweightCharts.HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:'volume'});vol.priceScale().applyOptions({scaleMargins:{top:.82,bottom:0}});vol.setData(t.rows.map(r=>({time:r.t/1000,value:r.v,color:r.c>=r.o?'#38786b':'#75424d'})));for(const [k,color]of [['sma20','#bcb4fb'],['sma50','#e2be78'],['sma200','#70c8be']])if(t.series?.[k])chart.addSeries(LightweightCharts.LineSeries,{color,lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(t.rows.map((r,i)=>({time:r.t/1000,value:t.series[k][i]})).filter(x=>E.finite(x.value)));for(const l of book.legs)cs.createPriceLine({price:l.type==='FUT'?l.entry:l.strike,color:'#edc78a',lineWidth:1,lineStyle:2,title:l.type==='FUT'?'Futures entry':'Owned put strike'});chart.timeScale().fitContent();}
-function workspace(m,l,r){
- const labels={position:'Current position',history:'Lifetime history',technicals:'Technicals',research:'Fundamentals & news',ai:'AI Desk'};
- const heading=`<div class="desk-heading"><div><small>Hindustan Aeronautics · NSE</small><h1>${esc(labels[ui.screen])}</h1></div>${btn('period-review',ui.reviewOpen?'Close review':'Review periods','class="text-button"')}</div>`;
- if(ui.reviewOpen)return heading+reviewView.view();
- if(ui.screen==='history')return heading+historyView.view()+recoveryView.cards(true);
- if(ui.screen==='position'){
-   const items=[['overview','Overview'],['book','Book'],['risk','Risk'],['stress','What-if'],['break-even','Break-even'],['hedge','Find a hedge'],['compare','Compare'],['performance','Performance'],['journal','Journal & funding']];
-   const nav=subnav('position',items);
-   if(ui.position==='overview')return heading+nav+today(m,l,r)+card('Options Lab',`Build hypothetical HAL option strategies without changing your actual holdings. ${btn('go-lab','Explore HAL Options Lab','class="primary"')}`);
-   if(ui.position==='break-even')return heading+nav+recoveryView.form();
-   if(['stress','compare','hedge'].includes(ui.position)){ui.plan=ui.position;return heading+nav+plan(m);}
-   return heading+nav+position(m,l,r);
- }
- if(ui.screen==='technicals')return heading+subnav('technicals',[['markets','Charts & derivatives'],['lab','Options Lab'],['indicators','Indicators'],['insights','Pattern scanner'],['backtest','Backtest']])+(ui.technicals==='lab'?optionsLab.view():research(m,ui.technicals));
- if(ui.screen==='ai')return heading+subnav('aiPage',[['assistant','Assistant'],['coach','Skills coach']])+(ui.aiPage==='coach'?card('Position review',reviews(I.coach(evidence()))):research(m,'ai'));
- return heading+subnav('research',[['company','Business'],['news','News & filings']])+research(m,ui.research);
+const atlasTabs={
+ today:[['position','overview','Today']],
+ portfolio:[['position','book','Open book'],['position','performance','Performance'],['history','','History'],['position','journal','Journal & funding'],['position','risk','Risk']],
+ plan:[['position','hedge','Find a hedge'],['position','stress','Stress test'],['position','compare','Compare'],['position','break-even','Break-even'],['technicals','lab','Options Lab']],
+ research:[['technicals','markets','Chart'],['technicals','indicators','Indicators'],['technicals','insights','Patterns'],['technicals','backtest','Backtest'],['research','company','Company'],['research','news','News & filings'],['ai','assistant','AI Desk'],['ai','coach','Skills coach']]
+};
+const atlasNames={today:'Today',portfolio:'Portfolio',plan:'Plan',research:'Research'};
+const lastAtlasRoute={};
+function atlasTab(){
+ const sub=ui[ui.screen==='ai'?'aiPage':ui.screen];
+ return Object.keys(atlasTabs).find(tab=>atlasTabs[tab].some(([screen,key])=>screen===ui.screen&&(!key||key===sub)))||'today';
 }
-function render(){if(chart){chart.remove();chart=null;}const m=market(),l=ledger(),r=risk();$('connection-state').textContent=configured?(s.loading?'Refreshing…':s.failure?'Connection needs review':'Upstox · read only'):'Offline desk · no token';$('session-state').textContent=m.status?.status?String(m.status.status).replace(/_/g,' '):'Market status unavailable';$('refresh').disabled=s.loading;$('notice').textContent=storageError?'Saved book could not be loaded. Existing records preserved. Open Settings → Recovery.':s.failure?D.message(s.failure)+' Previous observations remain visible.':s.cached?'Showing cached observations. Check source and trade timestamps.':'';$('notice').hidden=!$('notice').textContent;document.querySelectorAll('[data-screen]').forEach(b=>b.setAttribute('aria-current',b.dataset.screen===ui.screen?'page':'false'));$('main').innerHTML=storageError&&['position','history'].includes(ui.screen)?intro('Saved book needs recovery','Existing records are preserved.')+card('Financial values withheld',empty('The saved book could not be validated','Recover the previous book before editing or valuing the portfolio.'),btn('recovery','Review recovery','class="text-button"')):workspace(m,l,r);if(ui.screen==='technicals'&&ui.technicals==='markets'&&!ui.reviewOpen)drawChart();}
+function workspace(m,l,r){
+ const tab=atlasTab(),routes=atlasTabs[tab];
+ const current=routes.find(([screen,key])=>screen===ui.screen&&(!key||key===ui[screen==='ai'?'aiPage':screen]));
+ if(current)lastAtlasRoute[tab]=current;
+ const heading=`<div class="desk-heading"><div><small>Hindustan Aeronautics · NSE</small><h1>${atlasNames[tab]}</h1></div>${btn('period-review',ui.reviewOpen?'Close review':'Review periods','class="text-button"')}</div>`;
+ if(ui.reviewOpen)return heading+reviewView.view();
+ const nav=routes.length===1?'':'<div class="subnav">'+routes.map(([screen,key,title])=>`<button data-route="${screen}" data-sub="${key}" class="${current?.[2]===title?'active':''}" aria-pressed="${current?.[2]===title}">${title}</button>`).join('')+'</div>';
+ let view;
+ if(ui.screen==='history')view=historyView.view()+recoveryView.cards(true);
+ else if(ui.screen==='position'){
+   if(ui.position==='overview')view=today(m,l,r);
+   else if(ui.position==='break-even')view=recoveryView.form();
+   else if(tab==='plan'){ui.plan=ui.position;view=plan(m);}
+   else view=position(m,l,r);
+ }else if(ui.screen==='technicals')view=ui.technicals==='lab'?optionsLab.view():research(m,ui.technicals);
+ else if(ui.screen==='ai')view=ui.aiPage==='coach'?card('Position review',reviews(I.coach(evidence()))):research(m,'ai');
+ else view=research(m,ui.research);
+ return heading+nav+view;
+}
+function render(){if(chart){chart.remove();chart=null;}const m=market(),l=ledger(),r=risk();$('connection-state').textContent=configured?(s.loading?'Refreshing…':s.failure?'Connection needs review':'Upstox · read only'):'Offline desk · no token';$('session-state').textContent=m.status?.status?String(m.status.status).replace(/_/g,' '):'Market status unavailable';$('refresh').disabled=s.loading;$('notice').textContent=storageError?'Saved book could not be loaded. Existing records preserved. Open Settings → Recovery.':s.failure?D.message(s.failure)+' Previous observations remain visible.':s.cached?'Showing cached observations. Check source and trade timestamps.':'';$('notice').hidden=!$('notice').textContent;document.querySelectorAll('[data-screen]').forEach(b=>b.setAttribute('aria-current',b.dataset.screen===atlasTab()?'page':'false'));$('main').innerHTML=storageError&&['position','history'].includes(ui.screen)?intro('Saved book needs recovery','Existing records are preserved.')+card('Financial values withheld',empty('The saved book could not be validated','Recover the previous book before editing or valuing the portfolio.'),btn('recovery','Review recovery','class="text-button"')):workspace(m,l,r);if(ui.screen==='technicals'&&ui.technicals==='markets'&&!ui.reviewOpen)drawChart();}
 function modal(title,html,label,fn){returnFocus=document.activeElement;$('modal-title').textContent=title;$('modal-body').innerHTML=html;$('modal-error').textContent='';$('modal-save').textContent=label||'Save';$('modal-save').hidden=!fn;saveModal=fn;$('modal').hidden=false;document.body.style.overflow='hidden';($('modal-body').querySelector('input,select,textarea,button')||$('modal-close')).focus();}
 function closeModal(){$('modal-error').textContent='';$('modal').hidden=true;document.body.style.overflow='';saveModal=null;if(returnFocus?.isConnected)returnFocus.focus();}
 function legEditor(id){const old=book.legs.find(l=>l.id===id),l=old||{type:'FUT',expiry:'',strike:null,lots:1,lotSize:null,entry:null,manual:null,instrumentKey:null},listed=market().contracts.filter(c=>['FUT','PE'].includes(c.type));modal(old?'Edit recorded position':'Record HAL position',`<p class="fine">Use exact broker-recorded entries and contract dates. Provider verification is required for automatic valuation. Manual quantities remain labelled unverified until matched.</p>${select('leg-listed','Fill from listed contract',[['','Enter from broker records'],...(l.instrumentKey&&!listed.some(c=>c.instrumentKey===l.instrumentKey)?[[l.instrumentKey,'Saved contract · currently not listed']]:[]),...listed.map(c=>[c.instrumentKey,(c.type==='FUT'?'Future':c.strike+' PE')+' · '+date(c.expiry)+' · lot '+c.lotSize])],l.instrumentKey||'')}<div class="form-grid">${select('leg-type','Position type',[['FUT','Long future'],['PE','Long protective put']],l.type)}${input('leg-expiry','Exact expiry',l.expiry,'date')}${input('leg-strike','Put strike (₹)',l.strike)}${input('leg-lots','Whole lots',l.lots)}${input('leg-size','Units per lot',l.lotSize)}${input('leg-entry','Actual entry / premium (₹)',l.entry)}${input('leg-manual','Manual mark · blank = REST',l.manual)}</div><p class="fine">A manual zero is valid for puts only. Futures marks must be greater than zero. Expired positions require a recorded close or settlement. Changing a position invalidates confirmation and previous AI conclusions.</p>`,'Save position',()=>{const next={...l,id:old?.id||'leg-'+Date.now(),type:text('leg-type'),expiry:text('leg-expiry'),strike:value('leg-strike'),lots:value('leg-lots'),lotSize:value('leg-size'),entry:value('leg-entry'),manual:value('leg-manual'),manualAt:value('leg-manual')==null?null:stamp(),instrumentKey:text('leg-listed')||null};if(next.type==='FUT'&&next.manual===0)throw Error('Futures manual marks must be greater than zero. Clear the field if unavailable.');E.validateLeg(next);const b=clone(book);if(old)b.legs[b.legs.findIndex(x=>x.id===old.id)]=next;else b.legs.push(next);commit(b);request('contracts','D',true);});$('leg-listed').onchange=()=>{const c=listed.find(c=>c.instrumentKey===text('leg-listed'));if(!c)return;$('leg-type').value=c.type;$('leg-expiry').value=c.expiry;$('leg-strike').value=c.strike??'';$('leg-size').value=c.lotSize;};}
@@ -448,11 +462,11 @@ function importPreview(raw){
   });
 }
 function recovery(){let r;const reviewedRevision=revision;if(N?.previousBook){r=JSON.parse(N.previousBook());if(!r.ok)throw Error(r.message);if(!r.book)throw Error('No previous-book recovery copy exists.');}else{const raw=localStorage.getItem('hal_previous_v4')||localStorage.getItem('hal_before_import_v2');if(!raw)throw Error('No recovery copy exists.');r={book:JSON.parse(raw)};}const b=E.validateBook(r.book);modal('Previous-book recovery',`<p>Restore ${b.legs.length} open legs and ${b.journal.length} journal records from the previous saved book.</p><p>The current native bytes are retained in a recovery quarantine when supported. Legacy WebView storage is not erased.</p>`,'Restore previous book',()=>{if(N?.restorePreviousBook){const x=JSON.parse(N.restorePreviousBook(reviewedRevision));if(!x.ok)throw Error(x.message);book=E.validateBook(x.book);revision=x.revision;storageError='';ui.ai=null;invalidateCalculations();ui.hedgeDraft=null;ui.pattern=null;if(ui.pendingAI)native('aiCancel',ui.pendingAI.id);ui.pendingAI=null;theme();render();}else{storageError='';commit(b);}});}
-function settings(){modal('HAL Desk 4.5.1 · Settings',`<p class="fine">Personal read-only research. Android 8+. Credentials stay encrypted natively; market and AI calls use fixed HTTPS destinations.</p><div class="toolbar">${btn('connection','Upstox connection')}${btn('ai-settings','Gemini settings')}${btn('token-page','Get Analytics Token')}</div>${select('theme','Appearance',[['dark','Graphite dark'],['light','Paper light'],['system','Follow device']],book.preferences.theme)}${select('mark-mode','Put valuation marks',[['ltp','Last traded price'],['bid','Quoted bid']],book.preferences.markMode)}<label><input id="auto-refresh" type="checkbox" ${book.preferences.auto?'checked':''}>Refresh roughly every 60 seconds while foreground</label><p class="fine">Android background monitoring is not guaranteed. No automatic paid AI requests occur.</p><div class="toolbar">${btn('export','Export JSON')}${btn('csv','Journal CSV')}${btn('import','Import backup')}${btn('recovery','Recovery')}${btn('health','Data health')}</div>`,'Save preferences',()=>commit({...book,preferences:{theme:text('theme'),markMode:text('mark-mode'),auto:$('auto-refresh').checked}}));}
+function settings(){modal('HAL Atlas · Settings',`<p class="fine">Personal read-only research. Android 8+. Credentials stay encrypted natively; market and AI calls use fixed HTTPS destinations.</p><div class="toolbar">${btn('connection','Upstox connection')}${btn('ai-settings','Gemini settings')}${btn('token-page','Get Analytics Token')}</div>${select('theme','Appearance',[['dark','Graphite dark'],['light','Paper light'],['system','Follow device']],book.preferences.theme)}${select('mark-mode','Put valuation marks',[['ltp','Last traded price'],['bid','Quoted bid']],book.preferences.markMode)}<label><input id="auto-refresh" type="checkbox" ${book.preferences.auto?'checked':''}>Refresh roughly every 60 seconds while foreground</label><p class="fine">Android background monitoring is not guaranteed. No automatic paid AI requests occur.</p><div class="toolbar">${btn('export','Export JSON')}${btn('csv','Journal CSV')}${btn('import','Import backup')}${btn('recovery','Recovery')}${btn('health','Data health')}</div>`,'Save preferences',()=>commit({...book,preferences:{theme:text('theme'),markMode:text('mark-mode'),auto:$('auto-refresh').checked}}));}
 function v5DataQualityPanel(a){
  if(!a)return '<p class="fine">No normalized market quality report available.</p>';
  const warnings=a.problems||[];
- return '<h3>HAL Desk 5 · Market data integrity</h3>'+
+ return '<h3>Market data integrity</h3>'+
   '<p class="fine">Independent provider and exchange clocks are never replaced by HTTP retrieval time. Cache observations cannot become streaming valuation marks. Quality counts overlap and are not a number of affected positions.</p>'+
   row('Quotes observed (including HAL spot)',num(a.total,0))+
   row('Missing or invalid prices',num(a.missingPrice,0))+
@@ -519,7 +533,7 @@ function quickScenario(kind){
  ui.screen='position';ui.position='stress';ui.plan='stress';ui.result=E.scenario(book,m,scenarioParams());ui.resultAt=stamp();ui.reduction=null;
  if(!ui.result.complete)ui.advanced=true;render();window.scrollTo(0,0);
 }
-const actions={'bt-load':()=>request('candles','D',true),'bt-run':()=>{
+const actions={'atlas-performance':()=>navigate('position','performance'),'atlas-history':()=>navigate('history'),'bt-load':()=>request('candles','D',true),'bt-run':()=>{
  const p=D.rawCandles(s,'D');
  if(p.error)throw Error('Daily candle request failed. Refresh provider data before backtesting.');
  const cleaned=E.candles(p.raw),bars=E.completed(cleaned,'D',Date.now()).slice(-2000);
@@ -569,7 +583,7 @@ const viewAPI={get:()=>({book,market:market(),evidence:evidence(),sessionBaselin
 const historyView=window.HALHistoryViews(viewAPI),recoveryView=window.createHalRecovery(viewAPI),reviewView=window.createHalReview(viewAPI);
 const optionsLab=window.createHalOptionsLab({...viewAPI,labContext:()=>({snapshot:s.snapshot||{},chain:D.packet(s,'hedges',ui.expiry)?.data||D.packet(s,'chain',ui.expiry)?.data||{},chains:Object.values(s.research||{}).map(x=>x?.data).filter(x=>x&&Array.isArray(x.option_rows)&&x.option_rows.length>0),expiry:ui.expiry,market:market(),book}),labSetExpiry:d=>{if(!E.validDate(d))return;ui.expiry=d;request('hedges',d);render();},labRefresh:force=>{if(ui.expiry)request('hedges',ui.expiry,!!force);}});
 Object.assign(actions,optionsLab.actions,historyView.actions,recoveryView.actions,reviewView.actions,{'period-review':()=>{ui.reviewOpen=!ui.reviewOpen;render();window.scrollTo(0,0);}});
-document.addEventListener('click',ev=>{const a=ev.target.closest('a[href]');if(a){ev.preventDefault();const u=E.safeURL(a.href);if(u)native('openLink',u);return;}const screen=ev.target.closest('[data-screen]'),sub=ev.target.closest('[data-sub]'),b=ev.target.closest('[data-action]');try{if(screen)navigate(screen.dataset.screen);if(sub)navigate(ui.screen,sub.dataset.sub);if(b)actions[b.dataset.action]?.(b);}catch(e){toast(e.message);}});
+document.addEventListener('click',ev=>{const a=ev.target.closest('a[href]');if(a){ev.preventDefault();const u=E.safeURL(a.href);if(u)native('openLink',u);return;}const screen=ev.target.closest('[data-screen]'),sub=ev.target.closest('[data-sub]'),b=ev.target.closest('[data-action]');try{if(screen){const tab=screen.dataset.screen;const [target,key]=lastAtlasRoute[tab]||atlasTabs[tab][0];navigate(target,key);}if(sub)navigate(sub.dataset.route||ui.screen,sub.dataset.sub);if(b)actions[b.dataset.action]?.(b);}catch(e){toast(e.message);}});
 function rememberInput(id){recoveryView.remember(id);if(id.startsWith('sc-')||id.startsWith('compare-'))clearCalculationOutput();if(id.startsWith('sc-')){readScenario();ui.result=null;ui.resultAt=null;ui.reduction=null;}if(id.startsWith('bt-')){ui.btReport=null;ui.btRegime=null;ui.btSource=null;for(const [k,suffix]of Object.entries({fast:'fast',slow:'slow',fee:'fee',slip:'slip'}))if($('bt-'+suffix))ui.btParams[k]=text('bt-'+suffix);}if(id.startsWith('mc-')){ui.mcVol=text('mc-vol');ui.mcDrift=text('mc-drift');ui.mcResult=null;ui.mcAt=null;}if(id.startsWith('compare-')){for(const k of ['leg','lots','costs'])if($('compare-'+k))ui.compare[k]=text('compare-'+k);ui.reduction=null;}if(id.startsWith('hg-')){ui.hedgeDraft={...(ui.hedgeDraft||book.hedge)};for(const [k,suffix]of Object.entries({budget:'budget',maxLoss:'loss',protectThrough:'through',maxSpread:'spread',buyFees:'buy',exitFees:'exit',slippage:'slip',ivShift:'iv',fallbackIV:'iv-assumption',rate:'rate',dividend:'dividend',minVolume:'volume',minOI:'oi'}))if($('hg-'+suffix))ui.hedgeDraft[k]=text('hg-'+suffix);ui.hedges=null;ui.hedgesAt=null;}if(id==='pattern-window')ui.patternWindow=text(id);if(id==='pattern-forward')ui.patternForward=text(id);if(id.startsWith('pattern-'))ui.pattern=null;if(id==='news-search')ui.search=text(id);if(id==='ai-question')ui.question=text(id);}
 document.addEventListener('toggle',ev=>{if(ev.target.id==='scenario-advanced')ui.advanced=ev.target.open;},true);
 document.addEventListener('input',ev=>rememberInput(ev.target.id));

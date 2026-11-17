@@ -87,3 +87,14 @@
 .lab-advanced label{min-width:0}
 .lab-advanced select,.lab-advanced input,.lab-advanced textarea{max-width:100%}
 @media(max-width:400px){.lab-catalog-grid{grid-template-columns:1fr}.lab-advanced>.lab-tabs button{font-size:11px;padding:8px 10px}.lab-watch-row{align-items:flex-start}}
+
+/* HAL Atlas navigation and portfolio surfaces */
+:root{--bg:#101622;--surface:#182130;--raised:#212c40;--line:#344159;--text:#f4f4ef;--muted:#abb8ce;--accent:#a6bdff;--accent-bg:#243551}
+body.light{--bg:#f8f6ef;--surface:#fffefa;--raised:#f1f1ed;--line:#d9dcd9;--text:#192333;--muted:#526174;--accent:#2046b8;--accent-bg:#eaf0ff}
+.brand strong{letter-spacing:-.05em;font-size:24px}.brand strong span{font-weight:650}
+.bottom-nav{grid-template-columns:repeat(4,minmax(0,1fr))}
+.app-header button,.bottom-nav button,.subnav button,.daily-position button{min-height:48px}
+.positive{color:#86dbac}body.light .positive{color:#12673b}
+.daily-position.hero{background:var(--surface);border-top:3px solid var(--accent)}
+.daily-position .hero-value{font-family:inherit;font-weight:650;font-variant-numeric:tabular-nums}
+.price-ribbon small{display:block;margin-top:4px}.row strong{text-align:right}
