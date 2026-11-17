@@ -6,10 +6,20 @@ Personal research, derivatives risk and portfolio accounting for **Hindustan Aer
 
 | Application | Source | Version | Storage |
 | --- | --- | --- | --- |
-| Android HAL Desk | `android/` | **4.6.0**, versionCode **31** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
+| Android HAL Desk | `android/` | **5.0.0**, versionCode **33** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
 | Desktop/web HAL viewer | `src/`, `backend/`, `server.ts`, `server.py` | Separate web product | Browser-origin-local portfolio, optional local Python market feed |
 
 **The two apps do not automatically share positions, history, model outputs or subscriptions.** Export/import only through documented, validated formats. The web viewer is not the canonical Android portfolio.
+
+## Getting started on Android
+
+1. If upgrading, export your saved book first and install the signed APK over the existing app. HAL Desk 5.0.0 supports Android 8.0 and later.
+2. Open Settings to connect your read-only Upstox Analytics Token. Refresh market data and check the displayed timestamps before using marks.
+3. In **Position → Book**, review your existing legs or enter your HAL futures and protective puts. Check expiry, lots, units per lot and entry prices against your records.
+4. Use **Position** for performance, protection gaps, stress scenarios and hedge or rollover comparisons. Open **History** for completed trades, charges, funding and backups.
+5. Open **Technicals → Options Lab** to model a hypothetical strategy and track it in the PAPER journal. Use **Research** for company and market evidence and **AI Desk** for optional analysis.
+
+See the [Android feature guide](android/README.md) for the five tabs, data sources, calculations and backup behaviour.
 
 ## Android desk capabilities
 
@@ -62,10 +72,10 @@ See [web viewer deployment](docs/WEB-VIEWER.md), [Android architecture](android/
 - **Financial accounting:** deterministic, revision-checked local saved book; exact expiry and lot validation; actual positions are never merged with hypothetical paper positions.
 - **Market adapters:** direct read-only Upstox Android access; independent official NSE cash research; cached/offline states explicitly marked. Web feed is a separate service.
 - **Security:** native Keystore AES-GCM, HTTPS and request allowlists, restricted bundled WebView origin, backup credential screening, no Android cloud/device transfer of the book or credentials. Keep any public clone free of signing material.
-- **Regression gates:** Node finance tests, Android native/Robolectric tests, AI policy tests, lint, browser simulations, and reproducible unsigned release APK in GitHub Actions. These tests **do not** establish live Upstox access or a physical-device upgrade.
-- **Android release process:** build unsigned in CI; privately sign with the original certificate; verify fingerprint and v2/v3 signatures; back up saved data before upgrading in place.
+- **Regression gates:** Node finance tests, Android native/Robolectric tests, AI policy tests, lint, browser simulations, and local unsigned release APK assembly. These tests **do not** establish live Upstox access or a physical-device upgrade.
+- **Android release process:** follow the [local release guide](android/docs/LOCAL-RELEASE.md) to build and verify the APK, then sign with the original certificate.
 
-The repository's legacy `verification/` files and archived documents document **historical** builds; use current [GitHub Actions](../../actions) for the latest test status rather than treating old reports as proof of the latest release.
+The signed 5.0.0 APK was built from [release source 9218c0e](https://github.com/SMKT13/HAL/commit/9218c0e7a27b946fe50b5f4c98b30d7087b2feb3). Its SHA-256 is `d6d61285ce24ef9de4249c453b1a005379a51a35e76f178cebf2df303f890a4d`.
 
 ## Scope of the 4.6 refactor
 
