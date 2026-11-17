@@ -10,11 +10,11 @@ fi
 if [ -x ./gradlew ]; then gradle_command=./gradlew; else gradle_command=gradle; fi
 "$gradle_command" --no-daemon :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease
 mkdir -p build
-"$bt/zipalign" -f -P 16 4 app/build/outputs/apk/release/app-release-unsigned.apk build/HAL-Desk-v5.0.0-unsigned.apk
+"$bt/zipalign" -f -P 16 4 app/build/outputs/apk/release/app-release-unsigned.apk build/HAL-Atlas-v5.1.0-unsigned.apk
 if [ "${HAL_UNSIGNED_ONLY:-0}" = 1 ]; then echo "Unsigned build ready"; exit 0; fi
 : "${HAL_SIGNING_KEY_FILE:?Path to original private keystore required}"
 : "${HAL_SIGNING_PASSWORD_FILE:?Path to private password file required}"
-"$bt/apksigner" sign --ks "$HAL_SIGNING_KEY_FILE" --ks-key-alias hal-personal --ks-pass "file:$HAL_SIGNING_PASSWORD_FILE" --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true --out build/HAL-Desk-v5.0.0-signed.apk build/HAL-Desk-v5.0.0-unsigned.apk
-"$bt/apksigner" verify --verbose --print-certs build/HAL-Desk-v5.0.0-signed.apk > build/signature-verification.txt
-if ! grep -Fq 'a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382' build/signature-verification.txt; then rm -f build/HAL-Desk-v5.0.0-signed.apk; echo "Certificate mismatch; APK withheld" >&2; exit 1; fi
-echo "Preserved identity verified: build/HAL-Desk-v5.0.0-signed.apk"
+"$bt/apksigner" sign --ks "$HAL_SIGNING_KEY_FILE" --ks-key-alias hal-personal --ks-pass "file:$HAL_SIGNING_PASSWORD_FILE" --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true --out build/HAL-Atlas-v5.1.0-signed.apk build/HAL-Atlas-v5.1.0-unsigned.apk
+"$bt/apksigner" verify --verbose --print-certs build/HAL-Atlas-v5.1.0-signed.apk > build/signature-verification.txt
+if ! grep -Fq 'a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382' build/signature-verification.txt; then rm -f build/HAL-Atlas-v5.1.0-signed.apk; echo "Certificate mismatch; APK withheld" >&2; exit 1; fi
+echo "Preserved identity verified: build/HAL-Atlas-v5.1.0-signed.apk"

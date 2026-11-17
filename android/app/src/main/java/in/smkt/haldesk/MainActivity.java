@@ -85,7 +85,7 @@ public final class MainActivity extends Activity {
             setContentView(root);
             new AlertDialog.Builder(this)
                 .setTitle("Android WebView unavailable")
-                .setMessage("Enable or update Android System WebView or Chrome in Android settings, then reopen HAL Desk. Your saved book stays on this device.")
+                .setMessage("Enable or update Android System WebView or Chrome in Android settings, then reopen HAL Atlas. Your saved book stays on this device.")
                 .setPositiveButton("Retry", (dialog, which) -> recreate())
                 .setNegativeButton("Close", (dialog, which) -> finish())
                 .setCancelable(false)
@@ -124,7 +124,7 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return "direct";}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","5.0.0");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","5.1.0");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
@@ -138,7 +138,7 @@ public final class MainActivity extends Activity {
         final String id=args.optString("id");if(!id.matches("[A-Za-z0-9_-]{1,80}"))return;
         try{final String model=AiPolicy.model(prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));
             if(config){JSONObject info=object("aiEnabled",secrets.has("gemini"));info.put("model",model);info.put("direct",true);info.put("researchEnabled",true);send("ai_config",withId(id,"data",info));return;}
-            if(!foreground)throw new Exception("Open HAL Desk before requesting an AI review.");
+            if(!foreground)throw new Exception("Open HAL Atlas before requesting an AI review.");
             if(!Boolean.TRUE.equals(args.opt("consent")))throw new Exception("Confirm sharing the selected evidence with Gemini.");
             if(!secrets.has("gemini"))throw new Exception("Enter your Gemini API key in AI settings first.");
             final String mode=args.optString("mode"),question=args.optString("message");final JSONObject evidence=AiPolicy.sanitizeEvidence(args.optJSONObject("evidence"),mode);AiPolicy.prompt(mode,question,evidence.toString());final int current=aiGeneration.get();
@@ -401,7 +401,7 @@ public final class MainActivity extends Activity {
                 if (!foreground || isFinishing() || web == null) return;
                 try {
                     android.print.PrintManager printer = (android.print.PrintManager) getSystemService(PRINT_SERVICE);
-                    String name = "HAL Desk review " + java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"));
+                    String name = "HAL Atlas review " + java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"));
                     printer.print(name, web.createPrintDocumentAdapter(name), null);
                 } catch (RuntimeException error) {
                     send("file_error", object("message", "Android printing is unavailable."));

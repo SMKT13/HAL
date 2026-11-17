@@ -103,7 +103,7 @@ final class NseMcpClient {
                 try {
                     JSONObject result=rpc("initialize",args("protocolVersion",protocol,
                         "capabilities",new JSONObject(),
-                        "clientInfo",args("name","HAL-Desk-Android","version","5.0.0")),false);
+                        "clientInfo",args("name","HAL-Atlas-Android","version","5.1.0")),false);
                     if(result==null)throw new Failure("nse_handshake_failed");
                     protocol=result.optString("protocolVersion",protocol);
                     if(!protocol.matches("20[0-9]{2}-[0-9]{2}-[0-9]{2}"))

@@ -1,4 +1,4 @@
-# HAL Desk Android — 5.0.0 rebuild branch (versionCode 33)
+# HAL Atlas Android 5.1.0 (versionCode 34)
 
 This update preserves the Android package and SQLite schema-4 book used by 4.6.0 (versionCode 31).
 
@@ -14,7 +14,7 @@ In **Research → Chart**, select a completed candle or use **Earlier / Later**.
 
 ## User interface
 
-The five primary tabs remain **Position, History, Technicals, Research and AI Desk**. The real book supports only long futures and protective puts; the isolated Technicals → **Options Lab** supports hypothetical long/short futures, calls and puts, conventional strategies, payoff/risk modelling, model Greeks, IV/OI snapshots, watchlists and virtual journal entries.
+The four primary tabs are **Today, Portfolio, Plan and Research**. The real book supports only long futures and protective puts; the isolated Plan → **Options Lab** supports hypothetical long/short futures, calls and puts, conventional strategies, payoff/risk modelling, model Greeks, IV/OI snapshots, watchlists and virtual journal entries.
 
 **PAPER ledger v1 is now a state machine.** A draft can be edited. Marking it OPEN freezes its validated entry legs, quantity, price and opening charges. An open trade can be closed with explicit hypothetical prices and cumulative fees, but cannot be retroactively edited; clone to create another draft. Old 4.4/4.5 records load with unchanged schema 1 and establish a read-only opening snapshot on migration. This is not an executed order ledger.
 
