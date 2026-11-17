@@ -10,6 +10,8 @@ On the Atlas branch, open **Today → Since last review → Mark reviewed** to s
 
 Open **Today → Agenda** to see expiry dates, dated company notes, disclosures with a supplied event date and personal reminders. Tap **Inspect legs** to see the contracts and units expiring together. For an official filing with only a publication date, **Research → News & filings → Add event date** lets you enter the scheduled date from the document. Reminders appear in the app and travel with the saved-book backup.
 
+In **Research → Chart**, select a completed candle or use **Earlier / Later**. **Table** shows neighbouring OHLC and volume rows. The detail lists timestamped REST observations from saved checkpoints or the review baseline within the selected interval, and journal closes on that IST date. Each timeframe remembers its selection during the session.
+
 ## User interface
 
 The five primary tabs remain **Position, History, Technicals, Research and AI Desk**. The real book supports only long futures and protective puts; the isolated Technicals → **Options Lab** supports hypothetical long/short futures, calls and puts, conventional strategies, payoff/risk modelling, model Greeks, IV/OI snapshots, watchlists and virtual journal entries.

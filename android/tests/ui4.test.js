@@ -383,6 +383,25 @@ await check('destructive import previews ledger loss and failed native save neve
 await check('REST multi-leg accounting and missing data state',async()=>{await emit(p,'snapshot',snap);await nav(p,'position','overview');A.match(await p.locator('main').innerText(),/23,460/);await emit(p,'snapshot',{...snap,option_rows:[]});A.match(await p.locator('main').innerText(),/Unavailable/);await emit(p,'snapshot',snap)});
 await check('mixed-expiry scenario rejects later horizon, zero spot remains zero',async()=>{await nav(p,'position','stress');await p.locator('#sc-horizon').fill('2026-12-01');await p.locator('#scenario-advanced').evaluate(el=>el.open=true);await p.locator('#sc-iv').fill('30');await click(p,'scenario');A.match(await p.locator('main').innerText(),/Scenario unavailable/);await p.locator('#sc-horizon').fill('');await p.locator('#sc-spot').fill('0');await click(p,'scenario');A.ok(!(await p.locator('main').innerText()).includes('23,460.00'))});
 await check('failed refresh visibly retains observations',async()=>{await emit(p,'error',{code:'network_unavailable'});A.match(await p.locator('#notice').innerText(),/Network unavailable/)});
+await check('research candle cursor retains selection and matches saved marks to the exact 15-minute interval',async()=>{
+ const start=Date.parse('2026-10-30T09:15:00+05:30'),quarter=900000,at=new Date(start+quarter+1000).toISOString();
+ const mark={...PUT,instrumentKey:'SYNTH_P',price:43.25,source:'REST bid',status:'current',quoteAt:at,tradeAt:at,retrievedAt:at};
+ const seed={...E.emptyBook(),checkpoints:[{version:4,savedAt:at,positionMarks:[null,mark,{...mark,instrumentKey:'MANUAL',source:'Manual',price:987}]}]};
+ const x=await pageFor({book:seed}),p=x.page;
+ const candles=[0,1,2].map(i=>[new Date(start+i*quarter).toISOString(),4900+i,4904+i,4897,4902+i,300+i]);
+ await emit(p,'research',{section:'candles',frame:'15m',fetched_at_iso:ts,data:{history:{candles}}});
+ await nav(p,'technicals','markets');await p.locator('[data-action="frame"][data-id="15m"]').click();
+ const info=p.locator('#atlas-candle-detail');
+ await p.selectOption('#atlas-candle',String(start+quarter));
+ A.match(await info.innerText(),/43.25/);A.doesNotMatch(await info.innerText(),/987/);
+ await p.locator('[data-action="chart-mode"][data-id="table"]').click();
+ A.equal(await p.locator('#atlas-candle').inputValue(),String(start+quarter));A.match(await info.innerText(),/Candle · IST/i);
+ await p.locator('[data-action="chart-step"][data-id="1"]').click();
+ A.match(await info.innerText(),/No saved contract quotes/);
+ await nav(p,'research','company');await nav(p,'technicals','markets');
+ A.equal(await p.locator('#atlas-candle').inputValue(),String(start+2*quarter));
+ A.equal(await p.evaluate(()=>rev),0);A.deepEqual(x.errors,[]);await x.context.close();
+});
 await check('completed candles render charts and valid historical pattern dates',async()=>{const candles=Array.from({length:260},(_,i)=>{const c=4000+i*3+Math.sin(i/5)*40;return [new Date(now-(260-i)*E.DAY).toISOString(),c-2,c+15,c-12,c,1000+i]});for(const section of ['candles','patterns'])await emit(p,'research',{section,frame:'D',fetched_at_iso:ts,data:{history:{candles}}});await nav(p,'technicals','markets');A.ok(await p.locator('#market-chart canvas').count());A.ok(!(await p.locator('#toast').innerText()).includes('is not a function'));A.equal(await p.evaluate(()=>document.querySelector('#market-chart').querySelectorAll('canvas').length>=2),true);await nav(p,'technicals','insights');await click(p,'patterns');A.ok(!(await p.locator('main').innerText()).includes('1970'));A.deepEqual(x.errors,[])});
 await check('HAL Desk 5 completed-candle backtest runs locally without changing the real book',async()=>{
  const before=await p.evaluate(()=>JSON.stringify(saved));
