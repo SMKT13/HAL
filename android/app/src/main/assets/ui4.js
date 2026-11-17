@@ -323,15 +323,107 @@ function comparisonPlanner(m){
  (c?'<div data-calculation-output>'+card('Additional P&L from now',`<div class="comparison-results">${tile('Keep current position',money(c.current.additional),num(c.current.futureUnits,0)+' futures units')}${tile('Reduce by '+num(c.removedUnits,0)+' units',money(c.alternative.additional),num(c.alternative.futureUnits,0)+' futures units · '+num(c.alternative.putUnits,0)+' put units retained')}</div>${c.complete?row('Difference with reduction',money(c.difference)):reviews([...new Set([...c.current.errors,...c.alternative.errors])].map(detail=>({title:'Comparison needs an input',detail})))}<p class="fine">Horizon ${when(c.current.horizon)} · ${c.current.manual||c.alternative.manual?'Manual marks included. ':''}${c.current.stale||c.alternative.stale?'Older marks included. ':''}Estimated exit costs ${money(c.exitCosts)}.</p><details><summary>How to read this comparison</summary>${c.assumptions.map(a=>'<p class="fine">'+esc(a)+'</p>').join('')}</details>` )+'</div>':'')+
  card('Compare a different protective put',`<p>Use listed contracts to compare your current hedge with replacement protection, including premium, sale proceeds and liquidity.</p>${btn('go-hedge','Find replacement protection →','class="text-button"')}`);
 }
-const oneLot={owned:'',expiry:'',candidate:'',iv:''};
+const oneLot={owned:'',expiry:'',candidate:'',iv:'',savedSettings:null};
+const rollArchiveKey='research:atlas_rolls_v1';
+const rollSelection={first:'',second:''};
+let displayedRoll=null;
+function readRolls(){
+ let data;
+ if(N?.cacheGet){
+  const r=JSON.parse(N.cacheGet(rollArchiveKey));
+  if(!r.ok)throw Error('Saved comparisons could not be read.');
+  data=r.data;
+ }else data=JSON.parse(localStorage.getItem(rollArchiveKey)||'null');
+ if(data===null)return [];
+ if(data?.version!==1||!Array.isArray(data.records)||data.records.some(r=>
+  !r||typeof r.id!=='string'||typeof r.name!=='string'||!r.owned||!r.candidate||!r.settings||!r.spot||
+  !r.result?.sell||!r.result?.buy||!E.finite(r.result.netCash)||!Array.isArray(r.result.coverage)||!Array.isArray(r.result.scenarios)))
+  throw Error('Saved comparison data needs review. The existing records have been preserved.');
+ return data.records;
+}
+function writeRolls(records){
+ const data=JSON.stringify({version:1,records});
+ if(N?.cachePut){
+  if(!JSON.parse(N.cachePut(rollArchiveKey,data)).ok)throw Error('Could not save comparisons on this device.');
+ }else localStorage.setItem(rollArchiveKey,data);
+}
+function saveRoll(){
+ if(!displayedRoll)throw Error('Choose a priced rollover first.');
+ const copy=clone(displayedRoll);
+ modal('Save hedge comparison',input('roll-name','Comparison name',num(copy.candidate.strike,0)+' PE · '+date(copy.candidate.expiry),'text')+
+  '<label>Review note<textarea id="roll-note" maxlength="500"></textarea></label>'+
+  row('Quote comparison captured',when(copy.at)),'Save comparison',()=>{
+   const name=text('roll-name').trim();
+   if(!name||name.length>80)throw Error('Enter a name of 1–80 characters.');
+   const records=readRolls();
+   const id=Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
+   records.push({...copy,id,name,note:text('roll-note').trim().slice(0,500)});
+   writeRolls(records);rollSelection.second=rollSelection.first;rollSelection.first=id;
+   navigate('position','saved-rolls');
+  });
+}
+function savedRollsView(){
+ try{
+  const records=readRolls().reverse();
+  if(!records.length)return card('Saved hedge comparisons',empty('No saved comparisons','Open Replace one lot and save a priced comparison.'));
+  const first=records.find(r=>r.id===rollSelection.first)||records[0];
+  const second=records.find(r=>r.id===rollSelection.second&&r.id!==first.id);
+  const selected=second?[first,second]:[first];
+  const opts=records.map(r=>[r.id,r.name+' · '+when(r.at)]);
+  const metric=(label,fn)=>[label,...selected.map(fn)];
+  const results=[
+   metric('Owned put',r=>num(r.owned.strike,0)+' PE · '+date(r.owned.expiry)),
+   metric('Replacement put',r=>num(r.candidate.strike,0)+' PE · '+date(r.candidate.expiry)),
+   metric('Units rolled',r=>r.result.units),metric('Sale proceeds',r=>money(r.result.sale)),
+   metric('Purchase cost',r=>money(r.result.purchase)),metric('Charges',r=>money(r.result.fees)),
+   metric('Net cash (+ pay / − receive)',r=>money(r.result.netCash)),
+   metric('HAL spot used',r=>money(r.spot.price)),metric('Spot quote time',r=>when(r.spot.quoteAt)),
+   metric('Owned bid / quote time',r=>money(r.result.sell.bid)+' · '+when(r.result.sell.quoteAt)),
+   metric('Replacement ask / quote time',r=>money(r.result.buy.ask)+' · '+when(r.result.buy.quoteAt)),
+   metric('IV before shift',r=>r.settings.fallbackIV==null?(pct(r.result.buy.iv)+' provider'):pct(r.settings.fallbackIV)+' assumed'),
+   metric('Slippage per side',r=>pct(r.settings.slippage)),metric('Interest / dividend',r=>pct(r.settings.rate)+' / '+pct(r.settings.dividend)),
+   metric('IV shift (points)',r=>num(r.settings.ivShift)),metric('Review note',r=>r.note||'—')
+  ];
+  const headers=['',...selected.map(r=>r.name)];
+  const shocks=first.result.scenarios.map(s=>metric(pct(s.shock*100),r=>{
+   const v=r.result.scenarios.find(item=>item.shock===s.shock);
+   return v?.error||money(v?.difference);
+  }));
+  return card('Saved hedge comparisons',select('roll-first','First saved version',opts,first.id)+
+   select('roll-second','Compare with',[['','Choose another version'],...opts.filter(([id])=>id!==first.id)],second?.id||'')+
+   '<p class="fine">Each column uses its saved quotes, assumptions and owned-put expiry. Reopen Replace one lot to price a new version.</p>'+
+   table(headers,results))+card('Roll advantage at owned-put expiry',table(headers,[metric('Scenario date',r=>date(r.owned.expiry)),...shocks]))+
+   selected.map(r=>card(r.name+' · protection after expiry',table(['After expiry','Futures','Covered if kept','Covered if rolled'],r.result.coverage.map(c=>[date(c.expiry),c.futures,c.keep,c.rolled])))).join('')+
+   btn('roll-reprice','Reprice first version',`data-id="${esc(first.id)}"`)+
+   btn('roll-delete','Delete first saved version',`data-id="${esc(first.id)}"`);
+ }catch(e){return card('Saved hedge comparisons',empty('Unavailable',e.message));}
+}
+function repriceRoll(id){
+ const saved=readRolls().find(r=>r.id===id);
+ if(!saved)return;
+ const leg=book.legs.find(l=>l.type==='PE'&&l.id===saved.owned.id&&l.expiry===saved.owned.expiry&&
+  l.strike===saved.owned.strike&&l.lotSize===saved.result.units&&(!saved.owned.instrumentKey||l.instrumentKey===saved.owned.instrumentKey));
+ if(!leg)throw Error('The original owned put is no longer in this book with the same contract and lot size.');
+ Object.assign(oneLot,{owned:leg.id,expiry:saved.candidate.expiry,candidate:saved.candidate.instrumentKey,iv:'',savedSettings:saved.settings});
+ navigate('position','one-lot');
+ request('hedges',oneLot.expiry,true);request('contracts','D',true);
+}
+function deleteRoll(id){
+ const r=readRolls().find(r=>r.id===id);
+ if(!r)return;
+ modal('Delete saved comparison?',row('Saved version',r.name),'Delete comparison',()=>{
+  writeRolls(readRolls().filter(item=>item.id!==id));render();
+ });
+}
 function oneLotView(m){
+ displayedRoll=null;
  const puts=book.legs.filter(l=>l.type==='PE');
  const label=l=>num(l.strike,0)+' PE · '+date(l.expiry)+' · '+l.lots+' × '+l.lotSize;
  const owned=puts.find(l=>l.id===oneLot.owned);
  const dates=owned?[...new Set([...(s.snapshot?.available_expiries||[]),...m.contracts.filter(c=>c.type==='PE').map(c=>c.expiry)])].filter(d=>E.validDate(d)&&d>owned.expiry).sort():[];
  const listed=m.contracts.filter(c=>c.type==='PE'&&dates.includes(oneLot.expiry)&&c.expiry===oneLot.expiry).sort((a,b)=>a.strike-b.strike);
  const candidate=listed.find(c=>c.instrumentKey===oneLot.candidate);
- const settings=E.hedgePreferences(book.hedge);
+ const settings=E.hedgePreferences(oneLot.savedSettings||book.hedge);
  let form=select('one-owned','Owned put to replace',[['','Choose an owned put'],...puts.map(l=>[l.id,label(l)])],owned?.id);
  if(owned)form+=select('one-expiry','Later listed expiry',[['','Choose expiry'],...dates.map(d=>[d,date(d)])],oneLot.expiry);
  if(owned&&dates.includes(oneLot.expiry))form+=select('one-candidate','Replacement strike',[['','Choose put'],...listed.map(c=>[c.instrumentKey,num(c.strike,0)+' PE · '+c.lotSize+' units/lot'])],candidate?.instrumentKey);
@@ -342,11 +434,12 @@ function oneLotView(m){
   try{
    if(oneLot.iv!==''){settings.fallbackIV=Number(oneLot.iv);if(!Number.isFinite(settings.fallbackIV))throw Error('Enter a numeric IV assumption.');}
    const result=H5.compareOneLot(book,m,owned.id,candidate.instrumentKey,settings);
+   displayedRoll={at:stamp(),owned:{id:owned.id,strike:owned.strike,expiry:owned.expiry,instrumentKey:owned.instrumentKey},candidate,settings,spot:m.spot,result};
    output=card('Estimated cash for one lot',
     row('Sell '+label({...owned,lots:1})+' · bid '+money(result.sell.bid),money(result.sale))+
     row('Buy '+num(candidate.strike,0)+' PE · '+date(candidate.expiry)+' · ask '+money(result.buy.ask),money(result.purchase))+
     row('Buy and exit charges',money(result.fees))+row(result.netCash<0?'Estimated credit':'Estimated net cash required',money(Math.abs(result.netCash)))+
-    row('Owned put quote',when(result.sell.quoteAt))+row('Replacement quote',when(result.buy.quoteAt)))+
+    row('Owned put quote',when(result.sell.quoteAt))+row('Replacement quote',when(result.buy.quoteAt))+btn('roll-save','Save comparison','class="primary"'))+
     card('Protection after each expiry',table(['After expiry','Futures units','Covered if kept','Covered if rolled'],result.coverage.map(r=>[date(r.expiry),r.futures,r.keep,r.rolled]))+
     '<p class="fine">Quantity coverage assumes all other legs stay in the book through expiry. Strike levels determine the payoff.</p>')+
     card('Roll versus keep at '+date(owned.expiry),table(['HAL shock','Roll advantage (₹)'],result.scenarios.map(r=>[pct(r.shock*100),r.error||money(r.difference)]))+
@@ -356,6 +449,7 @@ function oneLotView(m){
  return card('Replace one lot',puts.length?
   '<p>Compare selling one lot of an owned put and buying one lot with a later expiry.</p><div class="form-grid">'+form+'</div>'+
   (dates.includes(oneLot.expiry)?btn('one-fetch','Fetch expiry quotes'):'')+
+  (oneLot.savedSettings?'<p class="fine">Using the saved version’s cost and model assumptions.</p>':'')+
   (candidate?input('one-iv','Scenario IV assumption (%) · optional',oneLot.iv)+
   row('IV when field is blank',settings.fallbackIV==null?'Timestamped provider IV':pct(settings.fallbackIV)+' saved assumption')+
   row('Slippage per side',pct(settings.slippage))+row('Buy / exit fees',money(settings.buyFees)+' / '+money(settings.exitFees))+
@@ -364,6 +458,7 @@ function oneLotView(m){
 }
 function plan(m){let body;const p=ui.scenario,h=ui.hedgeDraft||book.hedge;
 if(ui.plan==='one-lot')body=oneLotView(m);
+else if(ui.plan==='saved-rolls')body=savedRollsView();
 else if(ui.plan==='stress')body=stressPlanner(m);
 else if(ui.plan==='compare')body=comparisonPlanner(m);
 else if(ui.plan==='hedge')body=card('Find a protective put',`<p class="fine">Compare actual listed HAL puts as replacements for existing puts. Whole lots must exactly cover current futures units. A comparison never changes your saved positions.</p><div class="form-grid">${input('hg-budget','Gross purchase budget (₹)',h.budget)}${input('hg-loss','Sampled additional-loss limit (₹)',h.maxLoss)}${input('hg-through','Protection-through date',h.protectThrough,'date')}${input('hg-spread','Maximum bid/ask spread (%)',h.maxSpread)}</div><details><summary>Costs, liquidity & model assumptions</summary><div class="form-grid">${input('hg-buy','Buy charges (₹)',h.buyFees)}${input('hg-exit','Exit charges (₹)',h.exitFees)}${input('hg-slip','Slippage each side (%)',h.slippage)}${input('hg-iv','IV shift (percentage points)',h.ivShift)}${input('hg-iv-assumption','Explicit IV assumption (%) · optional',h.fallbackIV)}${input('hg-rate','Interest (% annual)',h.rate)}${input('hg-dividend','Dividend (% annual)',h.dividend)}${input('hg-volume','Minimum volume (units)',h.minVolume??1)}${input('hg-oi','Minimum OI (units)',h.minOI??1)}</div></details><div class="toolbar">${btn('hedge-fetch','Save & fetch puts','class="primary"')}${btn('hedge-rank','Compare available quotes')}</div><p class="fine">Fresh quote/trade clocks, contract specifications and liquidity are always required. Missing provider Greek timestamps require an explicitly entered IV assumption for model-only comparisons; no Greeks are invented. No qualifying contract is a valid result.</p>`)+(ui.hedges?`<p class="fine">Compared ${esc(when(ui.hedgesAt))}. Refresh or edit assumptions to recalculate.</p><div class="columns">${[['lowerCost','Lower Cost'],['balanced','Balanced'],['strongerProtection','Stronger Protection']].map(([k,title])=>{const c=ui.hedges.rankings[k];return card(title,c?`<h3>₹${num(c.contract.strike,0)} PE · ${date(c.contract.expiry)}</h3>${row('Gross purchase',money(c.grossCost))}${row('Sampled worst loss',money(c.worstLoss))}${row('Net cash required',money(c.netCashRequired))}${row('Model IV source',c.ivSource==='user-assumed'?'User-assumed '+num(c.ivAssumption)+'% · not verified Greeks':'Timestamp-verified provider IV')}${c.expiryGap?'<p class="warning fine">Protection ends before the last futures expiry.</p>':''}${btn('hedge-detail','Inspect comparison',`data-id="${esc(c.contract.instrumentKey)}" class="text-button"`)}`:empty('No qualifying candidate'));}).join('')}</div>${card('Eligibility & ranking',reviews(ui.hedges.errors.map(e=>({title:'No forced recommendation',detail:e})))+`<details><summary>Excluded contracts (${ui.hedges.excluded.length})</summary>${table(['Strike','Expiry','Reason'],ui.hedges.excluded.map(c=>[c.contract.strike,date(c.contract.expiry),c.reasons.join('; ')]))}</details><details><summary>Ranking method</summary>${ui.hedges.assumptions.map(x=>'<p class="fine">'+esc(x)+'</p>').join('')}</details>`)}`:empty('No comparison requested','Sampled worst loss is not a guaranteed maximum loss.'));
@@ -432,7 +527,7 @@ function drawChart(){const el=$('market-chart'),t=technical(ui.frame);if(!el||!t
 const atlasTabs={
  today:[['position','overview','Today']],
  portfolio:[['position','book','Open book'],['position','performance','Performance'],['history','','History'],['position','journal','Journal & funding'],['position','risk','Risk']],
- plan:[['position','hedge','Find a hedge'],['position','one-lot','Replace one lot'],['position','stress','Stress test'],['position','compare','Compare'],['position','break-even','Break-even'],['technicals','lab','Options Lab']],
+ plan:[['position','hedge','Find a hedge'],['position','one-lot','Replace one lot'],['position','saved-rolls','Saved comparisons'],['position','stress','Stress test'],['position','compare','Compare'],['position','break-even','Break-even'],['technicals','lab','Options Lab']],
  research:[['technicals','markets','Chart'],['technicals','indicators','Indicators'],['technicals','insights','Patterns'],['technicals','backtest','Backtest'],['research','company','Company'],['research','news','News & filings'],['ai','assistant','AI Desk'],['ai','coach','Skills coach']]
 };
 const atlasNames={today:'Today',portfolio:'Portfolio',plan:'Plan',research:'Research'};
@@ -586,7 +681,7 @@ function tryInPaper(){
     'Use portfolio copy',openCopy);
  }else openCopy();
 }
-const actions={'one-start':b=>{Object.assign(oneLot,{owned:b.dataset.id,expiry:'',candidate:'',iv:''});navigate('position','one-lot');},
+const actions={'roll-save':saveRoll,'roll-delete':b=>deleteRoll(b.dataset.id),'roll-reprice':b=>repriceRoll(b.dataset.id),'one-start':b=>{Object.assign(oneLot,{owned:b.dataset.id,expiry:'',candidate:'',iv:'',savedSettings:null});navigate('position','one-lot');},
  'one-fetch':()=>{if(!configured)throw Error('Connect Upstox to fetch expiry quotes.');request('hedges',oneLot.expiry,true);request('contracts','D',true);},
  'atlas-paper':tryInPaper,'atlas-performance':()=>navigate('position','performance'),'atlas-history':()=>navigate('history'),'bt-load':()=>request('candles','D',true),'bt-run':()=>{
  const p=D.rawCandles(s,'D');
@@ -643,9 +738,14 @@ function rememberInput(id){recoveryView.remember(id);if(id.startsWith('sc-')||id
 document.addEventListener('toggle',ev=>{if(ev.target.id==='scenario-advanced')ui.advanced=ev.target.open;},true);
 document.addEventListener('input',ev=>rememberInput(ev.target.id));
 document.addEventListener('change',ev=>{const id=ev.target.id;
+ if(id==='roll-first'||id==='roll-second'){
+  rollSelection[id==='roll-first'?'first':'second']=ev.target.value;
+  if(rollSelection.first===rollSelection.second)rollSelection.second='';
+  render();return;
+ }
  if(id.startsWith('one-')){
   const v=ev.target.value;
-  if(id==='one-owned')Object.assign(oneLot,{owned:v,expiry:'',candidate:''});
+  if(id==='one-owned')Object.assign(oneLot,{owned:v,expiry:'',candidate:'',savedSettings:null});
   if(id==='one-expiry'){Object.assign(oneLot,{expiry:v,candidate:''});if(E.validDate(v))request('hedges',v);}
   if(id==='one-candidate')oneLot.candidate=v;
   if(id==='one-iv')oneLot.iv=v;
