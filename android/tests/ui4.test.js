@@ -70,6 +70,25 @@ await check('select an owned put, load a later expiry and inspect a one-lot cash
  A.equal(await page.evaluate(()=>JSON.stringify(saved)),before);
  A.deepEqual(errors,[]);await context.close();
 });
+await check('Today agenda orders event dates, opens affected legs and keeps personal reminders through restart',async()=>{
+ const b={...E.emptyBook(),legs:[FUT,PUT,{...PUT,id:'p2',strike:4400,instrumentKey:'P2'}]};
+ const x=await pageFor({book:b}),p=x.page;
+ const openAgenda=async page=>{await page.locator('[data-screen="today"]').click();await page.locator('[data-sub="agenda"]').click();};
+ await openAgenda(p);
+ await emit(p,'research',{section:'filings',frame:'D',fetched_at_iso:ts,data:{items:[
+  {title:'Meeting scheduled',url:'https://nseindia.com/results',published:ts,event_date:'2026-11-15'},
+  {title:'Undated disclosure',url:'https://nseindia.com/filing',published:ts}]}});
+ A.deepEqual(await p.locator('.agenda-day h3').allTextContents(),['15 Nov 2026','23 Nov 2026','29 Dec 2026']);
+ A.doesNotMatch(await p.locator('main').innerText(),/Undated disclosure/);
+ await click(p,'agenda-expiry');A.match(await p.locator('#modal-body').innerText(),/4,400 PE/);A.match(await p.locator('#modal-body').innerText(),/4,500 PE/);await p.locator('#modal-close').click();
+ await click(p,'agenda-reminder');await p.fill('#agenda-title','Review hedge coverage');await p.fill('#agenda-date','2026-11-10');await save(p);
+ const stored=await p.evaluate(()=>saved);A.deepEqual(stored.legs.map(l=>l.id),b.legs.map(l=>l.id));
+ const restarted=await pageFor({book:stored});await openAgenda(restarted.page);
+ A.match(await restarted.page.locator('main').innerText(),/Review hedge coverage/);
+ await click(restarted.page,'agenda-done');await save(restarted.page);
+ A.doesNotMatch(await restarted.page.locator('main').innerText(),/Review hedge coverage/);
+ A.deepEqual(x.errors,[]);A.deepEqual(restarted.errors,[]);await x.context.close();await restarted.context.close();
+});
 await check('local six-perspective evidence map does not call AI or change holdings',async()=>{
  await nav(p,'ai','assistant');
  A.match(await p.locator('main').innerText(),/Six-Perspective Evidence Map/);

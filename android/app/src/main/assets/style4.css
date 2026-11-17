@@ -98,3 +98,10 @@ body.light{--bg:#f8f6ef;--surface:#fffefa;--raised:#f1f1ed;--line:#d9dcd9;--text
 .daily-position.hero{background:var(--surface);border-top:3px solid var(--accent)}
 .daily-position .hero-value{font-family:inherit;font-weight:650;font-variant-numeric:tabular-nums}
 .price-ribbon small{display:block;margin-top:4px}.row strong{text-align:right}
+
+.agenda-day{margin-top:18px;border-inline-start:2px solid var(--line);padding-inline-start:14px}
+.agenda-day h3{color:var(--accent);margin-bottom:6px}
+.agenda-item{padding:7px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.agenda-item small,.agenda-item strong{display:block}
+.agenda-item .toolbar{margin:0}
+.agenda-item button{min-height:48px}
