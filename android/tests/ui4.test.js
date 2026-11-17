@@ -13,6 +13,24 @@ async function save(p){await p.locator('#modal-save').click();A.equal(await p.lo
 async function pageFor(seed={}){const context=await browser.newContext({viewport:{width:390,height:844}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route(origin+'**',r=>{const name=new URL(r.request().url()).pathname.slice(1)||'index.html',file=path.join(root,name);return fs.existsSync(file)?r.fulfill({path:file,contentType:name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':'application/javascript'}):r.abort()});await page.clock.install({time:new Date(now)});await page.addInitScript(seed=>{window.saved=seed.book||null;window.rev=0;window.previous=null;window.calls=[];window.corrupt=seed.corrupt;window.forceSaveFailure=false;window.reviewCache=seed.cache||{};window.forceCacheFailure=false;if(seed.legacy)localStorage.setItem('hal_desk_v2',JSON.stringify(seed.legacy));const validCacheKey=k=>/^(snapshot|research|health)(:[A-Za-z0-9_-]{1,40}){0,4}$/.test(k);const log=(n,...a)=>calls.push([n,...a]);window.HALNative={loadBook:()=>JSON.stringify(corrupt?{ok:false,revision:rev,message:'checksum invalid'}:{ok:true,book:saved,revision:rev}),saveBook:(s,r)=>{if(forceSaveFailure)return JSON.stringify({ok:false,message:'synthetic disk failure'});if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});previous=saved;saved=JSON.parse(s);return JSON.stringify({ok:true,revision:++rev})},previousBook:()=>JSON.stringify({ok:true,book:previous}),restorePreviousBook:r=>{if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});saved=previous;corrupt=false;return JSON.stringify({ok:true,book:saved,revision:++rev})},cacheGet:key=>JSON.stringify(validCacheKey(key)?{ok:true,data:reviewCache[key]||null}:{ok:false}),cachePut:(key,value)=>{if(forceCacheFailure||!validCacheKey(key))return JSON.stringify({ok:false});reviewCache[key]=JSON.parse(value);return JSON.stringify({ok:true})},ready:()=>{},finbertStatus:()=>{}};for(const n of ['research','refresh','nseRefresh','settings','aiSettings','openTokenPage','exportBackup','exportCSV','importBackup','importHistory','printReview','ai','aiCancel','finbertInstall','finbertCancel','finbertRemove','finbertScore','streamStart','streamStop','openLink','minimize'])HALNative[n]=(...a)=>log(n,...a)},seed);await page.goto(origin);await page.locator('h1').waitFor();return {page,context,errors}}
 const launch=()=>pw.chromium.launch({executablePath:process.env.HAL_BROWSER,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});(async()=>{browser=await launch();try{let x=await pageFor(),p=x.page;
 await check('fresh empty book and every primary/subsection renders',async()=>{A.match(await p.locator('main').innerText(),/No open book/);A.deepEqual(await p.locator('.bottom-nav button').evaluateAll(nodes=>nodes.map(n=>n.dataset.screen)),['today','portfolio','plan','research']);for(const [a,bs]of [['position',['overview','book','performance','risk','journal','stress','compare','hedge','break-even']],['history',[]],['technicals',['markets','indicators','insights']],['research',['company','news']],['ai',['assistant','coach']]]){await nav(p,a);for(const b of bs)await nav(p,a,b);}A.deepEqual(x.errors,[]);A.equal((await p.evaluate(()=>calls.filter(c=>['ai','finbertInstall'].includes(c[0])))).length,0)});
+await check('portfolio opens an isolated PAPER copy and preserves the real book',async()=>{
+ const {page,context,errors}=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT]}});
+ const before=await page.evaluate(()=>JSON.stringify(saved));
+ await nav(page,'position','book');
+ await click(page,'atlas-paper');
+ A.equal(await page.locator('[data-screen="plan"]').getAttribute('aria-current'),'page');
+ A.equal(await page.locator('[data-action="lab-remove"]').count(),2);
+ await click(page,'lab-remove');
+ await nav(page,'position','book');
+ await click(page,'atlas-paper');
+ A.equal(await page.locator('#modal-title').innerText(),'Replace current PAPER workspace?');
+ await page.locator('#modal-cancel').click();
+ await nav(page,'technicals','lab');
+ A.equal(await page.locator('[data-action="lab-remove"]').count(),1);
+ A.equal(await page.evaluate(()=>JSON.stringify(saved)),before);
+ A.deepEqual(errors,[]);
+ await context.close();
+});
 await check('local six-perspective evidence map does not call AI or change holdings',async()=>{
  await nav(p,'ai','assistant');
  A.match(await p.locator('main').innerText(),/Six-Perspective Evidence Map/);

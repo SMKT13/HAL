@@ -294,7 +294,7 @@ function position(m,l,r){let body='';if(ui.position==='book')body=`<div class="t
 if(ui.position==='performance')body=v5PortfolioPanel(book,l)+card('Leg performance',table(['Contract','Expiry','Units','Entry','Mark','P&L'],l.rows.map(x=>[x.leg.type==='FUT'?'Future':num(x.leg.strike)+' PE',date(x.leg.expiry),x.units,money(x.leg.entry),money(x.mark.price),money(x.pnl)])))+card('Premium & cash',row('Open put entry premium',money(l.openPutPremium))+row('Settlement cash',money(l.settlements))+row('Funding cash',money(l.fundingMovements))+'<p class="fine">Settlement and funding cash are separate from P&L and are never added twice.</p>')+card('Price & review observations',table(['Saved at','Spot','Open P&L','Coverage'],book.checkpoints.slice(-30).reverse().map(c=>[when(c.savedAt),money(c.spot),money(c.open),pct(c.coverage)])),btn('checkpoint','Save checkpoint','class="text-button"'));
 if(ui.position==='risk'){const c=E.carryComparison(m);body=v5ExpiryPanel(true)+v5RiskPanel(book,l)+`<div class="metrics">${tile('Uncovered futures',num(r.uncoveredUnits,0)+' units')}${tile('Net delta',num(r.delta))}${tile('Net theta',num(r.theta),'Unavailable if convention is unverified')}${tile('Put quantity',num(r.putUnits,0))}</div>`+card('Position risks',reviews(r.warnings),btn('limits','Risk limits','class="text-button"'))+card('Protection timeline',table(['After expiry','Futures units','Put units','Uncovered'],r.timeline.map(t=>[date(t.date),t.futureUnits,t.putUnits,t.uncoveredUnits]))+'<p class="fine">Coverage at one time does not guarantee a downside floor through a later futures expiry.</p>')+card('Futures carry',table(['Near / far expiry','Spread','Annualised'],(Array.isArray(c)?c:c.rows||[]).map(x=>[date(x.nearExpiry||x.near?.expiry)+' / '+date(x.farExpiry||x.far?.expiry),money(x.spread),pct(x.annualized)]))+'<p class="fine">Observed spread, not a rollover plan or funding projection.</p>'+btn('v5-rollover','Inspect hypothetical futures rollover','class="text-button"')+v5RollResult());}
 if(ui.position==='journal')body=card('Funding snapshot',row('Recorded margin',money(book.funding.margin))+row('Recorded available funds',money(book.funding.free))+row('Time',when(book.funding.at))+'<p class="fine">Manual snapshot; broker margin can change. No account-fund access.</p>',btn('funding','Update','class="text-button"'))+`<div class="toolbar">${btn('cash','Record fee / cash','class="primary"')}${btn('csv','Journal CSV')}${btn('export','JSON backup')}${btn('import','Import')}${btn('recovery','Previous book')}</div>`+card('Completed history',book.journal.slice().reverse().map(j=>`<article class="news-item"><strong>${esc(j.kind==='close'?'Completed '+j.leg.type+' close':j.kind)}</strong><small> · ${date(j.date)}</small>${j.kind==='close'?row(j.leg.lots+' × '+j.leg.lotSize+' · '+date(j.leg.expiry),money((j.exit-j.leg.entry)*E.units(j.leg)))+row('Exit / charges',money(j.exit)+' / '+money(j.fees)):row('Amount',money(j.amount))}<p class="fine">${esc(j.note)}</p>${btn('journal-edit','Correct record',`data-id="${esc(j.id)}" class="text-button"`)}</article>`).join('')||empty('No recorded closes'))+(book.legacy?card('Preserved legacy history',row('Realised',money(book.legacy.realized))+row('Costs',money(book.legacy.costs))+table(['Date','Kind','Amount','Note'],book.legacy.journal.map(j=>[j.date,j.kind,money(j.amount),j.note]))):'');
-if(ui.position==='book'&&book.legs.length)body=card('Your strategy together',strategySummary(m)+`<div class="toolbar">${btn('go-compare','Compare an adjustment','class="primary"')}${btn('explain-position','Explain protection','class="text-button"')}</div>`)+body;
+if(ui.position==='book'&&book.legs.length)body=card('Your strategy together',strategySummary(m)+`<div class="toolbar">${btn('atlas-paper','Try in Paper','class="primary"')}${btn('go-compare','Compare an adjustment')}${btn('explain-position','Explain protection','class="text-button"')}</div>`)+body;
 return body;}
 function scenarioView(r){if(Array.isArray(r))return card('Sampled scenarios',table(['Shock','Spot','P&L','Quality'],r.map(x=>[pct(x.shock*100),money(x.spot),money(x.total),x.complete?x.kind:x.errors.join('; ')])));return card(r.complete?'Scenario results':'Scenario unavailable',`<div class="hero-value ${color(r.total)}">${money(r.total)}</div><p class="fine">${esc(r.kind)} · ${when(r.horizon)}</p>${r.complete?table(['Contract','Model price','Units','P&L','Valuation'],r.rows.map(x=>[x.leg.type==='FUT'?'Future':num(x.leg.strike)+' PE',money(x.modelPrice),x.units,money(x.pnl),x.kind])):reviews(r.errors.map(e=>({title:'Input needs review',detail:e})))}<details><summary>Assumptions</summary>${r.assumptions.map(a=>'<p class="fine">'+esc(a)+'</p>').join('')}</details>`);}
 
@@ -533,7 +533,20 @@ function quickScenario(kind){
  ui.screen='position';ui.position='stress';ui.plan='stress';ui.result=E.scenario(book,m,scenarioParams());ui.resultAt=stamp();ui.reduction=null;
  if(!ui.result.complete)ui.advanced=true;render();window.scrollTo(0,0);
 }
-const actions={'atlas-performance':()=>navigate('position','performance'),'atlas-history':()=>navigate('history'),'bt-load':()=>request('candles','D',true),'bt-run':()=>{
+function tryInPaper(){
+ const legs=window.HALOptionsLab.actualCopy(book);
+ if(!legs.length)throw Error('Record a futures or put position before making a paper copy.');
+ function openCopy(){
+   optionsLab.loadStrategy(legs,{fresh:true});
+   navigate('technicals','lab');
+ }
+ if(optionsLab.getDraft().legs.length){
+   modal('Replace current PAPER workspace?',
+    '<p>The copied holdings will replace the legs in the builder. Saved paper strategies remain available in the journal.</p>',
+    'Use portfolio copy',openCopy);
+ }else openCopy();
+}
+const actions={'atlas-paper':tryInPaper,'atlas-performance':()=>navigate('position','performance'),'atlas-history':()=>navigate('history'),'bt-load':()=>request('candles','D',true),'bt-run':()=>{
  const p=D.rawCandles(s,'D');
  if(p.error)throw Error('Daily candle request failed. Refresh provider data before backtesting.');
  const cleaned=E.candles(p.raw),bars=E.completed(cleaned,'D',Date.now()).slice(-2000);
