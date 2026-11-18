@@ -87,3 +87,59 @@
 .lab-advanced label{min-width:0}
 .lab-advanced select,.lab-advanced input,.lab-advanced textarea{max-width:100%}
 @media(max-width:400px){.lab-catalog-grid{grid-template-columns:1fr}.lab-advanced>.lab-tabs button{font-size:11px;padding:8px 10px}.lab-watch-row{align-items:flex-start}}
+
+/* ARENA workspace navigation and palette */
+:root {
+  --bg:#101c18; --surface:#172622; --raised:#20362e; --line:#31463c;
+  --text:#edf7f1; --muted:#a3bbb0; --accent:#a8e7c8; --accent-bg:#264c3d;
+}
+body.light {
+  --bg:#f3f5f2; --surface:#fff; --raised:#f5faf6; --line:#dce7df;
+  --text:#182824; --muted:#526c60; --accent:#137b63; --accent-bg:#e0f2e8;
+}
+.atlas-shell {min-height:100vh}
+.workspace-main {min-width:0}
+.workspace-sidebar {background:#142c26;color:#edf8f2;padding:10px 12px 0}
+.workspace-sidebar .brand {gap:9px;padding:0 4px 8px}
+.workspace-sidebar .brand-mark {background:#a8e7c8;color:#14362c;width:34px;height:34px;border-radius:10px}
+.workspace-sidebar .brand strong {font-size:16px}
+.workspace-sidebar .brand strong span {color:#a8e7c8}
+.workspace-nav {display:flex;gap:3px;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#517465 transparent;padding:2px 0 6px}
+.workspace-nav button {
+  display:flex;align-items:center;gap:7px;white-space:nowrap;flex:none;min-height:44px;
+  border:1px solid transparent;border-radius:9px;background:transparent;color:#c0d3c9;
+  padding:7px 9px;text-align:left;font-size:12px;
+}
+.workspace-nav button[aria-current=page] {background:#315345;border-color:#4d7362;color:#fff}
+.workspace-nav button:focus {outline-color:#a8e7c8}
+.nav-icon {width:17px;height:17px;color:#a8e7c8;flex:none}
+.nav-icon svg {display:block;width:100%;height:100%}
+.app-header {max-width:none;background:var(--surface);border-bottom:1px solid var(--line);padding:6px 14px;gap:8px}
+.app-header .connection-strip {margin:0;padding:0;flex-wrap:wrap;gap:2px 10px;font-size:11px}
+.app-header .header-actions {flex:none}
+.app-header .icon-button {width:36px;height:36px;min-width:36px}
+.workspace-main main {padding-bottom:24px}
+.desk-heading h1,.hero-value,.price-ribbon strong {font-family:inherit;letter-spacing:-.035em}
+.card {border-radius:14px}
+.overview-market {display:grid;gap:12px;grid-template-columns: minmax(0,1fr)}
+.overview-market .price-ribbon {margin-bottom:0}
+.chain-strike {font-weight:700;background:var(--raised)}
+.chain-put {color:var(--accent)}
+.chain-call {color:var(--amber)}
+.chain-table th,.chain-table td {white-space:nowrap;text-align:right}
+.chain-table .chain-strike {text-align:center}
+@media (min-width:650px) {
+  .overview-market {grid-template-columns:minmax(0,1.55fr) minmax(200px,1fr)}
+}
+@media (min-width:960px) {
+  .atlas-shell {display:grid;grid-template-columns:216px minmax(0,1fr)}
+  .workspace-sidebar {position:sticky;top:0;height:100vh;padding:24px 15px}
+  .workspace-sidebar .brand {padding-bottom:24px}
+  .workspace-nav {display:grid;overflow:visible}
+  .workspace-nav button {width:100%;padding-inline:12px}
+  .app-header {padding-inline:24px}
+}
+@media print {
+  .workspace-sidebar {display:none}
+  .atlas-shell {display:block}
+}

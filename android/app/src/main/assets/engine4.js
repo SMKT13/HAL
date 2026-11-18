@@ -52,7 +52,7 @@ function validateLeg(input, index=0) {
   return l;
 }
 function emptyBook() {
- return {version:4,revision:0,legs:[],journal:[],notes:[],bookmarks:[],checkpoints:[],riskProfile:{capital:null,maxLoss:null,hedgeBudget:null,reserve:null,reviewBelow:null,reviewAbove:null,confirmedAt:null,confirmedBook:null},funding:{margin:null,free:null,at:null},preferences:{theme:'dark',auto:true,markMode:'ltp'},hedge:{budget:null,maxLoss:null,protectThrough:null,buyFees:0,exitFees:0,slippage:0.5,maxSpread:10,ivShift:0,rate:6,dividend:0}};
+ return {version:4,revision:0,legs:[],journal:[],notes:[],bookmarks:[],checkpoints:[],riskProfile:{capital:null,maxLoss:null,hedgeBudget:null,reserve:null,reviewBelow:null,reviewAbove:null,rsiBelow:null,rsiAbove:null,expiryReviewDays:null,confirmedAt:null,confirmedBook:null},funding:{margin:null,free:null,at:null},preferences:{theme:'dark',auto:true,markMode:'ltp'},hedge:{budget:null,maxLoss:null,protectThrough:null,buyFees:0,exitFees:0,slippage:0.5,maxSpread:10,ivShift:0,rate:6,dividend:0}};
 }
 function validateBook(input) {
  input=cleanJSON(input);
@@ -84,6 +84,13 @@ function validateBook(input) {
  const p=input.preferences||{}; out.preferences={theme:['dark','light','system'].includes(p.theme)?p.theme:'dark',auto:p.auto!==false,markMode:p.markMode==='bid'?'bid':'ltp'};
  for(const k of ['capital','maxLoss','hedgeBudget','reserve','reviewBelow','reviewAbove']) {const v=input.riskProfile?.[k];if(v!=null&&(!finite(v)||v<0))fail('Invalid risk limit '+k+'.');out.riskProfile[k]=v??null;}
  if(finite(out.riskProfile.reviewBelow)&&finite(out.riskProfile.reviewAbove)&&out.riskProfile.reviewBelow>=out.riskProfile.reviewAbove)fail('Lower review trigger must be below the upper trigger.');
+ for(const key of ['rsiBelow','rsiAbove','expiryReviewDays']){
+  const v=input.riskProfile?.[key];
+  const isDays=key==='expiryReviewDays';
+  if(v!=null&&(!finite(v)||v<0||(isDays?(!Number.isInteger(v)||v>365):v>100)))fail('Invalid '+(isDays?'expiry reminder window':'RSI review threshold')+'.');
+  out.riskProfile[key]=v??null;
+ }
+ if(finite(out.riskProfile.rsiBelow)&&finite(out.riskProfile.rsiAbove)&&out.riskProfile.rsiBelow>=out.riskProfile.rsiAbove)fail('Lower RSI threshold must be below the upper threshold.');
  out.riskProfile.confirmedAt=iso(input.riskProfile?.confirmedAt);out.riskProfile.confirmedBook=safeText(input.riskProfile?.confirmedBook,50000)||null;
  out.hedge=hedgePreferences(input.hedge||{});
  // Removed rollover UI settings are archived losslessly, never interpreted as pending trades.
@@ -231,6 +238,19 @@ function risk(legsOrBook, input={}, now=Date.now()) {
  const valuation=ledger(book,market,{now});if(finite(rp.maxLoss)&&rp.maxLoss>0&&valuation.complete&&!valuation.stale&&!valuation.manual&&valuation.rows.every(r=>quoteQuality(r.mark.quote,{now,requireFresh:true,requireTrade:true}).valid)&&finite(valuation.net)&&valuation.net<=-rp.maxLoss)add('loss_limit','Recorded strategy loss review threshold crossed','Indicative strategy net P&L has reached your review threshold. This is not a guaranteed loss limit.');if(finite(rp.reserve)&&finite(book.funding.free)&&book.funding.free<rp.reserve)add('reserve','Recorded cash reserve below threshold','Review the age of your manual funding snapshot and current broker cash requirements.');if(legs.length&&!rp.confirmedAt)add('unconfirmed','Book not confirmed against broker','Confirm exact lots, entries, expiries and completed closes against your broker records.');
  const distribution=puts.map(l=>({legId:l.id,strike:l.strike,expiry:l.expiry,lots:l.lots,lotSize:l.lotSize,units:units(l)}));
  return {futureUnits,futureLots:sum(futures.map(l=>l.lots)),putUnits,putLots:sum(puts.map(l=>l.lots)),coveredUnits,uncoveredUnits:Math.max(0,futureUnits-putUnits),coverage:futureUnits?putUnits/futureUnits*100:null,delta:greeksComplete?delta:null,theta:greeksComplete&&thetaComplete?theta:null,greeksComplete:greeksComplete&&thetaComplete,deltaComplete:greeksComplete,thetaComplete:greeksComplete&&thetaComplete,nextExpiry:dates[0]||null,timeline,warnings,distribution,mismatches,openPutPremium:sum(puts.map(l=>l.entry*units(l))),coverageMeaning:'Quantity overlap at this time only; strike, basis and expiry still affect protection.'};
+}
+function marketReviewTriggers(profile,daily,nextExpiry,now=Date.now()){
+ const alerts=[];
+ const rsi=daily?.rsi;
+ if(daily?.frame==='D'&&!daily.stale&&finite(rsi)){
+  if(finite(profile.rsiBelow)&&rsi<=profile.rsiBelow)alerts.push({title:'Daily RSI below review level',detail:'RSI '+rsi.toFixed(1)+' is at or below '+profile.rsiBelow+'.'});
+  if(finite(profile.rsiAbove)&&rsi>=profile.rsiAbove)alerts.push({title:'Daily RSI above review level',detail:'RSI '+rsi.toFixed(1)+' is at or above '+profile.rsiAbove+'.'});
+ }
+ if(validDate(nextExpiry)&&finite(profile.expiryReviewDays)){
+  const days=(Date.parse(nextExpiry)-Date.parse(istDate(now)))/DAY;
+  if(days>=0&&days<=profile.expiryReviewDays)alerts.push({title:'Held expiry in review window',detail:nextExpiry+' · '+days+' calendar days away in IST.'});
+ }
+ return alerts;
 }
 function cdf(x) {const t=1/(1+0.2316419*Math.abs(x)),d=0.3989422804014327*Math.exp(-x*x/2),p=1-d*t*(0.319381530+t*(-0.356563782+t*(1.781477937+t*(-1.821255978+t*1.330274429))));return x>=0?p:1-p;}
 function putPrice(S,K,T,vol,r=0.06,q=0) {
@@ -430,6 +450,6 @@ function journalCSV(book) {
  for(const j of b.legacy?.journal||[])rows.push([j.id,'legacy_'+j.kind,j.date,null,null,null,null,null,null,null,j.kind==='close'?j.amount:null,j.kind==='fee'?j.amount:null,j.kind==='settlement'?j.amount:null,j.note]);
  const cell=v=>{if(v==null)return '""';let s=String(v);if(typeof v==='string'&&/^[=+\-@\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};return '\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n');
 }
-const api={DAY,YEAR,finite,value,time,iso,validDate,istDate,expiryTime,units,safeURL,validateLeg,emptyBook,validateBook,normalizeMarket,normQuote,quoteQuality,matchContract,resolveMark,ledger,closeLeg,recordCash,validGreeks,risk,cdf,putPrice,scenario,payoff,hedgePreferences,findHedges,candles,completed,sma,ema,rsi,atr,technicals,patterns,carryComparison,streamFrame,cacheRefresh,futuresSizing,journalCSV};
+const api={DAY,YEAR,finite,value,time,iso,validDate,istDate,expiryTime,units,safeURL,validateLeg,emptyBook,validateBook,normalizeMarket,normQuote,quoteQuality,matchContract,resolveMark,ledger,closeLeg,recordCash,validGreeks,risk,cdf,putPrice,scenario,payoff,hedgePreferences,findHedges,candles,completed,sma,ema,rsi,atr,technicals,patterns,carryComparison,streamFrame,cacheRefresh,marketReviewTriggers,futuresSizing,journalCSV};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.HAL4Engine=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

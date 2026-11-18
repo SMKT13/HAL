@@ -215,3 +215,14 @@ test('futures sizing floors to whole lots and respects paise boundaries',()=>{
   A.throws(()=>E.futuresSizing(...args));
  }
 });
+
+test('ARENA review thresholds use fresh daily RSI and the local expiry date',()=>{
+ const settings={rsiBelow:30,rsiAbove:70,expiryReviewDays:2};
+ const p=E.validateBook({...E.emptyBook(),riskProfile:settings}).riskProfile;
+ A.equal(p.rsiAbove,70);
+ A.equal(E.marketReviewTriggers(p,{frame:'D',rsi:72,stale:false},'2026-10-30',NOW).length,2);
+ A.equal(E.marketReviewTriggers(p,{frame:'D',rsi:72,stale:true},'2026-10-30',NOW).length,1);
+ A.equal(E.marketReviewTriggers(p,{frame:'1h',rsi:72,stale:false},'2026-10-27',NOW).length,0);
+ A.throws(()=>E.validateBook({...E.emptyBook(),riskProfile:{rsiBelow:70,rsiAbove:30}}),/Lower RSI/);
+ A.throws(()=>E.validateBook({...E.emptyBook(),riskProfile:{expiryReviewDays:1.5}}),/expiry reminder/);
+});
