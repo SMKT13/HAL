@@ -203,3 +203,15 @@ test('backup normalization and completed journal refuse zero futures exit but pr
  A.equal(result.journal[0].exit,0);
  A.equal(result.journal[0].gross,-750000);
 });
+
+test('futures sizing floors to whole lots and respects paise boundaries',()=>{
+ A.deepEqual(E.futuresSizing('7500','25','150'),{
+  lots:2,units:300,lossPerLot:3750,estimatedLoss:7500,unusedBudget:0
+ });
+ A.equal(E.futuresSizing('7499.99','25','150').lots,1);
+ A.equal(E.futuresSizing('3749.99','25','150').lots,0);
+ A.equal(E.futuresSizing('0.30','0.10','3').lots,1);
+ for(const args of [['','25','150'],['7500','0','150'],['7500','0.001','150'],['7500','25','1.5'],['7500','25','']]){
+  A.throws(()=>E.futuresSizing(...args));
+ }
+});

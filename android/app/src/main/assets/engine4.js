@@ -406,12 +406,30 @@ function cacheRefresh(previous, result, now=Date.now()) {
  const stamp=iso(now);if(result?.ok===true&&result.data&&typeof result.data==='object')return {data:clone(result.data),lastSuccess:stamp,lastFailure:previous?.lastFailure||null,failure:null,source:'REST'};
  return {data:previous?.data?clone(previous.data):null,lastSuccess:previous?.lastSuccess||null,lastFailure:stamp,failure:safeText(result?.error||'Refresh failed',500),source:previous?.data?'CACHE':'UNAVAILABLE'};
 }
+function futuresSizing(budgetInput, distanceInput, lotInput) {
+ function toPaise(input,label) {
+  const match=/^(\d*)(?:\.(\d{1,2}))?$/.exec(String(input).trim());
+  const paise=match ? Number((match[1]||'0')+((match[2]||'')+'00').slice(0,2)) : NaN;
+  if(!Number.isSafeInteger(paise)||paise<=0)fail(label+' must be positive with up to two decimal places.');
+  return paise;
+ }
+ const budget=toPaise(budgetInput,'Risk budget');
+ const distance=toPaise(distanceInput,'Stop distance');
+ const lotSize=value(lotInput);
+ if(!/^\d+$/.test(String(lotInput).trim())||!Number.isSafeInteger(lotSize)||lotSize<=0)fail('Enter a positive whole number of units per lot.');
+ const perLot=distance*lotSize;
+ if(!Number.isSafeInteger(perLot))fail('Loss per lot is outside the supported range.');
+ // Remove the integer remainder before division to avoid rounding up at a boundary.
+ const unused=budget%perLot;
+ const lots=(budget-unused)/perLot;
+ return {lots,units:lots*lotSize,lossPerLot:perLot/100,estimatedLoss:(budget-unused)/100,unusedBudget:unused/100};
+}
 function journalCSV(book) {
  const b=validateBook(book),columns=['id','kind','date','type','expiry','strike','lots','units_per_lot','entry','exit','gross_realized','charges','cash_movement','note'],rows=[columns];
  for(const j of b.journal)rows.push([j.id,j.kind,j.date,j.leg?.type,j.leg?.expiry,j.leg?.strike,j.leg?.lots,j.leg?.lotSize,j.leg?.entry,j.exit,j.kind==='close'?(j.exit-j.leg.entry)*units(j.leg):null,j.kind==='close'?j.fees:j.kind==='fee'?j.amount:null,['settlement','funding'].includes(j.kind)?j.amount:null,j.note]);
  for(const j of b.legacy?.journal||[])rows.push([j.id,'legacy_'+j.kind,j.date,null,null,null,null,null,null,null,j.kind==='close'?j.amount:null,j.kind==='fee'?j.amount:null,j.kind==='settlement'?j.amount:null,j.note]);
  const cell=v=>{if(v==null)return '""';let s=String(v);if(typeof v==='string'&&/^[=+\-@\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};return '\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n');
 }
-const api={DAY,YEAR,finite,value,time,iso,validDate,istDate,expiryTime,units,safeURL,validateLeg,emptyBook,validateBook,normalizeMarket,normQuote,quoteQuality,matchContract,resolveMark,ledger,closeLeg,recordCash,validGreeks,risk,cdf,putPrice,scenario,payoff,hedgePreferences,findHedges,candles,completed,sma,ema,rsi,atr,technicals,patterns,carryComparison,streamFrame,cacheRefresh,journalCSV};
+const api={DAY,YEAR,finite,value,time,iso,validDate,istDate,expiryTime,units,safeURL,validateLeg,emptyBook,validateBook,normalizeMarket,normQuote,quoteQuality,matchContract,resolveMark,ledger,closeLeg,recordCash,validGreeks,risk,cdf,putPrice,scenario,payoff,hedgePreferences,findHedges,candles,completed,sma,ema,rsi,atr,technicals,patterns,carryComparison,streamFrame,cacheRefresh,futuresSizing,journalCSV};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.HAL4Engine=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
