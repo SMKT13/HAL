@@ -814,7 +814,7 @@ function legEditor(id){
  const savedOnly=leg.instrumentKey&&!listed.some(contract=>contract.instrumentKey===leg.instrumentKey);
  const choices=[
   ['',listed.length?'Enter contract manually':'Enter from broker records'],
-  ...(savedOnly?[[leg.instrumentKey,'Saved contract · '+label(leg)+' · '+date(leg.expiry)]]:[]),
+  ...(savedOnly?[[leg.instrumentKey,'Saved contract · '+(leg.type==='FUT'?'HAL future':num(leg.strike,0)+' PE')+' · '+date(leg.expiry)]]:[]),
   ...listed.map(c=>[c.instrumentKey,(c.type==='FUT'?'Future':c.strike+' PE')+' · '+date(c.expiry)+' · '+c.lotSize+' units/lot'])
  ];
  const fields=select('leg-listed','Contract',choices,leg.instrumentKey||'')+
