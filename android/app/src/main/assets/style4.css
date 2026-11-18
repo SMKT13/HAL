@@ -160,3 +160,8 @@ body.light {
   .workspace-sidebar {display:none}
   .atlas-shell {display:block}
 }
+
+.app-header .icon-button {min-height:44px;min-width:44px}
+.modal-layer {padding:8px}
+.modal {max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);overscroll-behavior:contain}
+.modal-footer {bottom:0;flex-wrap:wrap}

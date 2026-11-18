@@ -100,6 +100,28 @@ await check('Overview shows timestamped NSE cash data without an Upstox token',a
   live:{stock:{lastTradedPrice:5000,exchange_time_iso:new Date(now+60000).toISOString()}}});
  A.match(await p.locator('#nse-overview-slot').innerText(),/timestamp-verified HAL trade is unavailable/);
 });
+await check('hedge assumptions stay open on refresh and retained chain prices carry an age warning',async()=>{
+ const {page,context}=await pageFor();
+ await nav(page,'position','hedge');
+ await page.locator('#hedge-advanced summary').click();
+ await page.locator('#hg-rate').fill('5.75');
+ await page.locator('#hg-rate').blur();
+ await emit(page,'snapshot',snap);
+ A.equal(await page.locator('#hedge-advanced').getAttribute('open'),'');
+ A.equal(await page.locator('#hg-rate').inputValue(),'5.75');
+ await nav(page,'technicals','chain');
+ await emit(page,'research',{section:'hedges',frame:PUT.expiry,fetched_at_iso:new Date(now-3600000).toISOString(),data:{option_rows:snap.option_rows}});
+ A.match(await page.locator('main').innerText(),/Last-known chain/);
+ await page.setViewportSize({width:360,height:390});
+ await page.addStyleTag({content:'body{font-size:125%}'});
+ await nav(page,'position','book');await click(page,'add');
+ await page.locator('#leg-entry').fill('4900');
+ await page.locator('#modal-save').scrollIntoViewIfNeeded();
+ A.ok(await page.locator('#modal-save').isVisible());
+ await page.evaluate(()=>HALApp.back());
+ A.equal(await page.locator('#modal').isVisible(),false);
+ await context.close();
+});
 await check('offline futures sizing calculates whole lots without changing the book',async()=>{
  await nav(p,'position','risk');
  await click(p,'open-futures-sizing');
@@ -271,7 +293,7 @@ await check('eligible protective-put comparison audits cash and December coverag
  await hp.locator('#hg-budget').fill('1000000');
  await hp.locator('#hg-loss').fill('100000000');
  await hp.locator('#hg-through').fill('2026-12-29');
- await hp.locator('summary').filter({hasText:'Costs, liquidity & model assumptions'}).click();
+ await hp.locator('summary').filter({hasText:'Advanced assumptions'}).click();
  await hp.locator('#hg-iv-assumption').fill('30');
  await click(hp,'hedge-rank');
  const detail=hp.locator('[data-action="hedge-detail"]').first();
@@ -443,7 +465,7 @@ await check('HAL Desk 5 completed-candle backtest runs locally without changing 
 await check('stream display never overwrites REST mark',async()=>{await emit(p,'snapshot',snap);await nav(p,'technicals','markets');await emit(p,'stream',{state:'decoded_quotes',frames:2,feed_ts:now,rows:[{key:'SYNTH_F',price:7777}]});A.match(await p.locator('#stream-view').innerText(),/7,777/);await nav(p,'position','overview');A.match(await p.locator('main').innerText(),/23,460/)});
 await check('news HTML remains escaped',async()=>{await emit(p,'research',{section:'news',frame:'D',fetched_at_iso:ts,data:{articles:{articles:{SYNTH:[{heading:'HAL <img src=x onerror="window.pwned=1"> contract',article_link:'https://example.com/hal',published_time:now-1000}]}}}});await nav(p,'research','news');A.match(await p.locator('main').innerText(),/HAL <img/);A.equal(await p.locator('main img').count(),0);A.equal(await p.evaluate(()=>window.pwned),undefined)});
 await check('AI exact evidence consent, research exclusion, reply and cancellation',async()=>{await nav(p,'ai','assistant');await p.locator('#ai-mode').selectOption('research');await click(p,'ai-review');const e=JSON.parse(await p.locator('#modal-body pre').innerText());A.equal(e.evidence.portfolioIncluded,false);A.ok(!JSON.stringify(e).includes('PRIVATE_MEMO'));await p.locator('#modal-save').click();A.match(await p.locator('#modal-error').innerText(),/consent/);A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='ai'))).length,0);await p.locator('#ai-consent').check();await save(p);const req=await p.evaluate(()=>JSON.parse(calls.filter(c=>c[0]==='ai').at(-1)[1]));await emit(p,'ai_result',{id:req.id,data:{reply:'Synthetic answer',portfolioIncluded:false}});A.match(await p.locator('main').innerText(),/Synthetic answer/);await click(p,'ai-review');await p.locator('#ai-consent').check();await save(p);await click(p,'ai-cancel');A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='aiCancel'))).length,1)});
-await check('FinBERT stays opt-in and light/dark responsive layouts fit',async()=>{A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='finbertInstall'))).length,0);await nav(p,'research','news');await click(p,'model-install');A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='finbertInstall'))).length,1);await p.locator('#settings').click();await p.locator('#theme').selectOption('light');await click(p,'save-workspace-preferences');A.ok(await p.locator('body.light').count());for(const width of [320,390,768,1080]){await p.setViewportSize({width,height:844});await nav(p,'position','overview');A.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))}const qa=path.resolve(__dirname,'../../qa');fs.mkdirSync(qa,{recursive:true});await p.setViewportSize({width:390,height:844});await p.screenshot({path:qa+'/today-light.png',fullPage:true});await p.locator('#settings').click();await p.locator('#theme').selectOption('dark');await click(p,'save-workspace-preferences');await nav(p,'position','overview');await p.screenshot({path:qa+'/today-dark.png',fullPage:true});A.deepEqual(x.errors,[])});
+await check('FinBERT stays opt-in and light/dark responsive layouts fit',async()=>{A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='finbertInstall'))).length,0);await nav(p,'research','news');await click(p,'model-install');A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='finbertInstall'))).length,1);await p.locator('#settings').click();await p.locator('#theme').selectOption('light');await click(p,'save-workspace-preferences');A.ok(await p.locator('body.light').count());for(const width of [320,360,390,768,1080]){await p.setViewportSize({width,height:844});await nav(p,'position','overview');A.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))}const qa=path.resolve(__dirname,'../../qa');fs.mkdirSync(qa,{recursive:true});await p.setViewportSize({width:390,height:844});await p.screenshot({path:qa+'/today-light.png',fullPage:true});await p.locator('#settings').click();await p.locator('#theme').selectOption('dark');await click(p,'save-workspace-preferences');await nav(p,'position','overview');await p.screenshot({path:qa+'/today-dark.png',fullPage:true});A.deepEqual(x.errors,[])});
 
 await check('hedge assumptions and pattern inputs survive refresh rendering',async()=>{await nav(p,'position','hedge');await p.locator('#hg-budget').fill('12345');await p.locator('#hg-through').fill('2026-11-23');await p.locator('#hg-budget').blur();await emit(p,'research',{section:'status',fetched_at_iso:ts,data:{status:'NORMAL_OPEN'}});A.equal(await p.locator('#hg-budget').inputValue(),'12345');A.equal(await p.locator('#hg-through').inputValue(),'2026-11-23');await nav(p,'technicals','insights');await p.locator('#pattern-window').fill('30');await p.locator('#pattern-forward').fill('5');await p.locator('#pattern-forward').blur();await emit(p,'idle',{});A.equal(await p.locator('#pattern-window').inputValue(),'30');A.equal(await p.locator('#pattern-forward').inputValue(),'5');});
 await check('resume clears a cancelled loading state',async()=>{await emit(p,'loading',{});A.equal(await p.locator('#refresh').isDisabled(),true);await emit(p,'lifecycle',{state:'resumed'});A.equal(await p.locator('#refresh').isDisabled(),false)});
@@ -597,7 +619,7 @@ await check('updated daily and planning layouts fit phone widths in both themes'
  const qa=path.resolve(__dirname,'../../qa');fs.mkdirSync(qa,{recursive:true});
  for(const theme of ['dark','light']){
   await p.locator('#settings').click();await p.locator('#theme').selectOption(theme);await click(p,'save-workspace-preferences');
-  for(const width of [320,390,768,1080]){await p.setViewportSize({width,height:844});for(const [a,b]of [['position','overview'],['position','book'],['position','stress'],['position','compare'],['research','company']]){
+  for(const width of [320,360,390,768,1080]){await p.setViewportSize({width,height:844});for(const [a,b]of [['position','overview'],['position','book'],['position','stress'],['position','compare'],['research','company']]){
    await nav(p,a,b);A.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${theme} ${width} ${a}/${b}`);
    if(width===390)await p.screenshot({path:qa+`/daily-${theme}-${a}${b?'-'+b:''}.png`,fullPage:true});
   }}
