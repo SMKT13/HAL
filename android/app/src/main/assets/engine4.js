@@ -152,7 +152,10 @@ function quoteQuality(q, opts={}) {
  if(opts.requireTrade&&tradeStale)reasons.push('Stale last exchange trade');
  if(q?.source==='CACHE')warnings.push('Cached observation');
  const failed=!!q?.failure||Number.isFinite(time(q?.lastFailure))&&(!Number.isFinite(time(q?.lastSuccess))||time(q.lastFailure)>time(q.lastSuccess));if(failed)warnings.push('Refresh failed; previous observation retained');if(opts.requireFresh&&(failed||q?.source==='CACHE'))reasons.push('A successful fresh REST refresh is required');
- return {valid:reasons.length===0,fresh:reasons.length===0&&!quoteStale&&!tradeStale&&Number.isFinite(tradeAt),status:reasons.length?'unavailable':quoteStale||tradeStale||q?.source==='CACHE'||failed?'stale':'current',reasons,warnings,quoteAge:Number.isFinite(quoteAt)?now-quoteAt:null,tradeAge:Number.isFinite(tradeAt)?now-tradeAt:null,quoteAt:iso(quoteAt),tradeAt:iso(tradeAt),retrievedAt:iso(retrievedAt)};
+ const retrievalCurrent=Number.isFinite(retrievedAt)&&now-retrievedAt<=maxAge&&retrievedAt+futureTolerance>=quoteAt;
+ const fresh=reasons.length===0&&retrievalCurrent&&Number.isFinite(tradeAt)&&retrievedAt+futureTolerance>=tradeAt&&!quoteStale&&!tradeStale&&!failed&&['REST','upstox_rest_v3'].includes(providerSource);
+ if(opts.requireFresh&&tradeAt>retrievedAt+futureTolerance)reasons.push('Trade postdates HTTP retrieval');
+ return {valid:reasons.length===0,fresh,status:reasons.length?'unavailable':fresh?'current':'stale' ,reasons,warnings,quoteAge:Number.isFinite(quoteAt)?now-quoteAt:null,tradeAge:Number.isFinite(tradeAt)?now-tradeAt:null,quoteAt:iso(quoteAt),tradeAt:iso(tradeAt),retrievedAt:iso(retrievedAt)};
 }
 function matchContract(leg, market) {
  const m=market?.contracts?market:normalizeMarket(market);

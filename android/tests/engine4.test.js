@@ -226,3 +226,12 @@ test('ARENA review thresholds use fresh daily RSI and the local expiry date',()=
  A.throws(()=>E.validateBook({...E.emptyBook(),riskProfile:{rsiBelow:70,rsiAbove:30}}),/Lower RSI/);
  A.throws(()=>E.validateBook({...E.emptyBook(),riskProfile:{expiryReviewDays:1.5}}),/expiry reminder/);
 });
+
+test('fresh and current require successful REST retrieval, quote and trade clocks',()=>{
+ for(const overrides of [{source:'CACHE'},{failure:'network'},{tradeAt:null},{retrievedAt:null},{retrievedAt:new Date(NOW-300000).toISOString()}]){
+  const result=E.quoteQuality(Q(5000,overrides),opts);
+  A.equal(result.fresh,false);
+  A.equal(result.status,'stale');
+ }
+ A.equal(E.quoteQuality(Q(5000),opts).fresh,true);
+});
