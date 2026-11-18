@@ -718,7 +718,60 @@ function workspace(m,l,r){
 function render(){inspectCandle=null;if(chart){const range=chart.timeScale().getVisibleRange();if(range&&activeChartPage)activeChartPage.range=range;chart.remove();chart=null;chartCandles=null;activeChartPage=null;}const m=market(),l=ledger(),r=risk();$('connection-state').textContent=configured?(s.loading?'Refreshing…':s.failure?'Connection needs review':'Upstox · read only'):'Offline desk · no token';$('session-state').textContent=m.status?.status?String(m.status.status).replace(/_/g,' '):'Market status unavailable';$('refresh').disabled=s.loading;$('notice').textContent=storageError?'Saved book could not be loaded. Existing records preserved. Open Settings → Recovery.':s.failure?D.message(s.failure)+' Previous observations remain visible.':s.cached?'Showing cached observations. Check source and trade timestamps.':'';$('notice').hidden=!$('notice').textContent;document.querySelectorAll('[data-screen]').forEach(b=>b.setAttribute('aria-current',b.dataset.screen===atlasTab()?'page':'false'));$('main').innerHTML=storageError&&['position','history'].includes(ui.screen)?intro('Saved book needs recovery','Existing records are preserved.')+card('Financial values withheld',empty('The saved book could not be validated','Recover the previous book before editing or valuing the portfolio.'),btn('recovery','Review recovery','class="text-button"')):workspace(m,l,r);if(ui.screen==='technicals'&&ui.technicals==='markets'&&!ui.reviewOpen)drawChart();}
 function modal(title,html,label,fn){returnFocus=document.activeElement;$('modal-title').textContent=title;$('modal-body').innerHTML=html;$('modal-error').textContent='';$('modal-save').textContent=label||'Save';$('modal-save').hidden=!fn;saveModal=fn;$('modal').hidden=false;document.body.style.overflow='hidden';($('modal-body').querySelector('input,select,textarea,button')||$('modal-close')).focus();}
 function closeModal(){$('modal-error').textContent='';$('modal').hidden=true;document.body.style.overflow='';saveModal=null;if(returnFocus?.isConnected)returnFocus.focus();}
-function legEditor(id){const old=book.legs.find(l=>l.id===id),l=old||{type:'FUT',expiry:'',strike:null,lots:1,lotSize:null,entry:null,manual:null,instrumentKey:null},listed=market().contracts.filter(c=>['FUT','PE'].includes(c.type));modal(old?'Edit recorded position':'Record HAL position',`<p class="fine">Use exact broker-recorded entries and contract dates. Provider verification is required for automatic valuation. Manual quantities remain labelled unverified until matched.</p>${select('leg-listed','Fill from listed contract',[['','Enter from broker records'],...(l.instrumentKey&&!listed.some(c=>c.instrumentKey===l.instrumentKey)?[[l.instrumentKey,'Saved contract · currently not listed']]:[]),...listed.map(c=>[c.instrumentKey,(c.type==='FUT'?'Future':c.strike+' PE')+' · '+date(c.expiry)+' · lot '+c.lotSize])],l.instrumentKey||'')}<div class="form-grid">${select('leg-type','Position type',[['FUT','Long future'],['PE','Long protective put']],l.type)}${input('leg-expiry','Exact expiry',l.expiry,'date')}${input('leg-strike','Put strike (₹)',l.strike)}${input('leg-lots','Whole lots',l.lots)}${input('leg-size','Units per lot',l.lotSize)}${input('leg-entry','Actual entry / premium (₹)',l.entry)}${input('leg-manual','Manual mark · blank = REST',l.manual)}</div><p class="fine">A manual zero is valid for puts only. Futures marks must be greater than zero. Expired positions require a recorded close or settlement. Changing a position invalidates confirmation and previous AI conclusions.</p>`,'Save position',()=>{const next={...l,id:old?.id||'leg-'+Date.now(),type:text('leg-type'),expiry:text('leg-expiry'),strike:value('leg-strike'),lots:value('leg-lots'),lotSize:value('leg-size'),entry:value('leg-entry'),manual:value('leg-manual'),manualAt:value('leg-manual')==null?null:stamp(),instrumentKey:text('leg-listed')||null};if(next.type==='FUT'&&next.manual===0)throw Error('Futures manual marks must be greater than zero. Clear the field if unavailable.');E.validateLeg(next);const b=clone(book);if(old)b.legs[b.legs.findIndex(x=>x.id===old.id)]=next;else b.legs.push(next);commit(b);request('contracts','D',true);});$('leg-listed').onchange=()=>{const c=listed.find(c=>c.instrumentKey===text('leg-listed'));if(!c)return;$('leg-type').value=c.type;$('leg-expiry').value=c.expiry;$('leg-strike').value=c.strike??'';$('leg-size').value=c.lotSize;};}
+function legEditor(id){
+ const old=book.legs.find(leg=>leg.id===id);
+ const leg=old||{type:'FUT',lots:1};
+ const listed=market().contracts.filter(contract=>['FUT','PE'].includes(contract.type));
+ const savedOnly=leg.instrumentKey&&!listed.some(contract=>contract.instrumentKey===leg.instrumentKey);
+ const choices=[
+  ['',listed.length?'Enter contract manually':'Enter from broker records'],
+  ...(savedOnly?[[leg.instrumentKey,'Saved contract · '+label(leg)+' · '+date(leg.expiry)]]:[]),
+  ...listed.map(c=>[c.instrumentKey,(c.type==='FUT'?'Future':c.strike+' PE')+' · '+date(c.expiry)+' · '+c.lotSize+' units/lot'])
+ ];
+ const fields=select('leg-listed','Contract',choices,leg.instrumentKey||'')+
+  '<div id="leg-details">'+select('leg-type','Position type',[['FUT','Long future'],['PE','Long protective put']],leg.type)+
+  input('leg-expiry','Expiry on broker record',leg.expiry,'date')+input('leg-strike','Put strike (₹)',leg.strike)+
+  input('leg-size','Units per lot',leg.lotSize)+'</div>'+
+  input('leg-lots','Number of lots',leg.lots)+input('leg-entry','Price paid per share (₹)',leg.entry)+
+  '<details '+(leg.manual!=null?'open':'')+'><summary>Manual price override</summary>'+
+  input('leg-manual','Current price per share (₹)',leg.manual)+'<p>Leave blank to use a market quote when available.</p></details>';
+ let priceEdited=false;
+ modal(old?'Edit recorded position':'Record HAL position',fields,'Save position',()=>{
+  const manual=value('leg-manual');
+  const next={...leg,id:old?.id||'leg-'+Date.now(),type:text('leg-type'),expiry:text('leg-expiry'),
+   strike:text('leg-type')==='PE'?value('leg-strike'):null,lots:value('leg-lots'),lotSize:value('leg-size'),
+   entry:value('leg-entry'),manual,manualAt:manual==null?null:priceEdited||manual!==old?.manual?stamp():old.manualAt,
+   instrumentKey:text('leg-listed')||null};
+  if(next.type==='FUT'&&manual===0)throw Error('Futures price must be greater than zero. Clear the field to use a market quote.');
+  E.validateLeg(next);
+  const updated=clone(book);
+  if(old)updated.legs[updated.legs.findIndex(item=>item.id===old.id)]=next;
+  else updated.legs.push(next);
+  commit(updated);
+  request('contracts','D',true);
+ });
+ function clearPrice(){$('leg-manual').value='';priceEdited=true;}
+ function showFields(){
+  $('leg-details').hidden=Boolean(text('leg-listed'));
+  $('leg-strike').closest('label').hidden=text('leg-type')!=='PE';
+ }
+ $('leg-manual').oninput=()=>{priceEdited=true;};
+ $('leg-listed').onchange=()=>{
+  clearPrice();
+  const contract=listed.find(c=>c.instrumentKey===text('leg-listed'))||(text('leg-listed')===leg.instrumentKey?leg:null);
+  if(contract){
+   $('leg-type').value=contract.type;
+   $('leg-expiry').value=contract.expiry;
+   $('leg-strike').value=contract.strike??'';
+   $('leg-size').value=contract.lotSize;
+  }
+  showFields();
+ };
+ for(const field of ['leg-type','leg-expiry','leg-strike','leg-size']){
+  $(field).oninput=()=>{clearPrice();showFields();};
+ }
+ showFields();
+}
 function closeLeg(id){const l=book.legs.find(l=>l.id===id);modal('Record completed close',`<p>Record a trade or settlement already completed with your broker. This updates your local journal only.</p><div class="form-grid">${input('close-lots','Lots closed',l.lots)}${input('close-exit','Actual exit price (₹)','')}${input('close-fees','Total charges (₹)',0)}${input('close-date','Completed trade date',E.istDate(),'date')}</div><label>Private memo<textarea id="close-note" maxlength="1000"></textarea></label>`,'Record close',()=>commit(E.closeLeg(book,id,value('close-lots'),value('close-exit'),value('close-fees'),text('close-date'),{note:text('close-note')})));}
 function confirmBook(){if(!book.legs.length)throw Error('Record your actual holdings first.');modal('Confirm against your broker',table(['Contract','Expiry','Lots × units','Entry'],book.legs.map(l=>[l.type==='FUT'?'Future':l.strike+' PE',date(l.expiry),l.lots+' × '+l.lotSize,money(l.entry)]))+`<label><input type="checkbox" id="confirm-check">I have checked every open leg and completed close against my broker records.</label>`,'Confirm',()=>{if(!$('confirm-check').checked)throw Error('Check the broker confirmation before saving.');const b=clone(book);b.riskProfile.confirmedAt=stamp();b.riskProfile.confirmedBook=I.confirmationFingerprint(b);if(b.migration)b.migration.reviewRequired=false;commit(b);});}
 function cashEntry(){modal('Record cost or cash',select('cash-kind','Record type',[['fee','Additional transaction / funding cost'],['settlement','Futures settlement cash'],['funding','Funding deposit / withdrawal']],'fee')+input('cash-amount','Amount · cash credits + / debits −')+input('cash-date','Completed date',E.istDate(),'date')+'<label>Private memo<textarea id="cash-note" maxlength="1000"></textarea></label><p class="fine">Costs are deducted once. Settlement and funding cash are separate from investment profit.</p>','Save',()=>commit(E.recordCash(book,text('cash-kind'),value('cash-amount'),text('cash-date'),text('cash-note'))));}
