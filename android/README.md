@@ -4,6 +4,12 @@ This update preserves the Android package and SQLite schema-4 book used by 4.6.0
 
 Personal offline-capable HAL research, risk, history and PAPER option strategies. Android **8.0+**, applicationId `in.smkt.haldesk`, target SDK 35. Direct Upstox Analytics Token and optional Gemini/FinBERT; **read-only, no orders**.
 
+## New in 5.1: Explain the market, do not just display data
+
+**Technicals → Daily Analysis** now provides a dated, evidence-led HAL interpretation: recovery versus confirmed trend, the indicators behind the view, support/resistance and conditional scenarios, same-date Nifty/VIX context when verifiable, source-attributed financial evidence, recent news relevance, and actual-position put/futures expiry-gap warnings. **Position → Overview** carries a summary and direct link.
+
+The analysis runs locally without Gemini and never invents prices, earnings, or option marks. It refuses a directional conclusion with insufficient daily history, labels cached/stale material, and withholds unverified P&L. This is read-only, not execution or trade automation. See [Daily Analysis 5.1 behaviour and verification](docs/DAILY-ANALYSIS-5.1.md).
+
 ## User interface
 
 The five primary tabs remain **Position, History, Technicals, Research and AI Desk**. The real book supports only long futures and protective puts; the isolated Technicals → **Options Lab** supports hypothetical long/short futures, calls and puts, conventional strategies, payoff/risk modelling, model Greeks, IV/OI snapshots, watchlists and virtual journal entries.
