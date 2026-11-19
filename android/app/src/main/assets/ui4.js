@@ -1,4 +1,4 @@
-/* HAL Desk 4 presentation. Finance, persistence, transport and AI policy are separate modules. */
+/* HAL Atlas presentation (HAL Desk schema compatibility preserved). Finance, persistence, transport and AI policy are separate modules. */
 (function(){'use strict';
 const V5=HAL5Risk,Q5=HAL5Quant,B5=HAL5Backtest,H5=HAL5Hedge,L5=HAL5Lenses,P5=HAL5Portfolio,X5=HAL5Expiry,C5=HAL5Reconcile,Z5=HAL5ScenarioPath,M5=HAL5MigrationGuard,R5=HAL5Rollover;
 const E=HAL4Engine,D=HAL4Data,I=HAL4Insights,A5=HAL5Attribution,W=HAL4Workflow,N=window.HALNative,$=id=>document.getElementById(id),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -127,7 +127,7 @@ function v5BrokerPreviewResult(){
 function v5ExpiryPanel(large=false){
  if(!book.legs.length)return '';
  const x=X5.agenda(book,E.istDate()),items=large?x.alerts:x.alerts.slice(0,4);
- return card('HAL Desk 5 · Expiry & settlement review',
+ return card('HAL Atlas · Expiry & settlement review',
   row('Next recorded expiry',date(x.nextExpiry))+
   row('Active futures / put units',num(x.futureUnits,0)+' / '+num(x.putUnits,0))+
   row('Futures units without put quantity',num(x.uncovered,0))+
@@ -230,7 +230,7 @@ function v5RiskPanel(savedBook,valuation){
  const expiryDetail=gap?'After '+date(gap.afterExpiry)+', '+num(gap.uncovered,0)+' futures units lack put quantity protection.':'No additional uncovered futures shown in the dated expiry ladder.';
  const settle=ui.settlementResult,path=ui.settlementPath;
  const lifetimeScenario=V5.lifetimeNet(settle,valuation.realized,valuation.charges);
- return card('HAL Desk 5 · Protection by date',
+ return card('HAL Atlas · Protection by date',
   '<p class="fine">Read-only expiry ladder · dates use IST. It does not change your recorded book.</p>'+
   (relevant.length?table(['From date','Futures units','Put units','Uncovered'],relevant.map(x=>[date(x.onDate),x.futures,x.puts,x.uncovered])):empty('No unexpired futures','Any expired contracts still require broker reconciliation.'))+
   (gap?'<p class="warning fine">'+esc(expiryDetail)+'</p>':'<p class="fine">'+esc(expiryDetail)+'</p>')+
@@ -261,11 +261,11 @@ function v5RiskPanel(savedBook,valuation){
 }
 function v5PortfolioPanel(savedBook,valuation){
  const a=P5.audit(savedBook,valuation);
- if(!a.consistent)return card('HAL Desk 5 · Lifetime accounting audit',
+ if(!a.consistent)return card('HAL Atlas · Lifetime accounting audit',
   '<p class="warning">Recorded and calculated portfolio totals do not reconcile. Financial summaries are withheld in this audit panel.</p>'+
   reviews(a.errors.map(detail=>({title:'Accounting conflict',detail})))+
   '<p class="fine">Preserve the saved book and review completed trades, costs and contract marks against your broker before drawing conclusions.</p>');
- return card('HAL Desk 5 · Lifetime accounting',
+ return card('HAL Atlas · Lifetime accounting',
   '<div class="metrics wide">'+
    tile('Open P&L',money(a.open),a.complete?'All open legs priced':'Incomplete · one or more marks unavailable')+
    tile('Realised gross',money(a.realizedGross))+
@@ -303,7 +303,7 @@ function advancedAssumptions(p){return `<details id="scenario-advanced" ${ui.adv
 function scenarioInputs(m){const p=ui.scenario;return `<div class="form-grid">${input('sc-spot','HAL price to explore (₹)',E.value(p.spot)??m.spot.price)}${input('sc-horizon','On date · blank means now',p.horizon,'date')}</div>${advancedAssumptions(p)}<p class="fine">Uses observed futures basis and valid provider IV when available. Rate ${esc(p.rate)}%, dividend ${esc(p.dividend)}%, IV shift ${esc(p.shift)} points. Open Advanced assumptions to review or supply missing IV.</p>`;}
 function v5MonteCarloPanel(){
  const r=ui.mcResult;
- return card('HAL Desk 5 · Monte Carlo risk',
+ return card('HAL Atlas · Monte Carlo risk',
   '<p>Illustrative distribution of additional P&L from current marks. Select a horizon above and enter assumptions; no historical volatility is inferred.</p>'+
   '<div class="form-grid">'+input('mc-vol','Assumed annual HAL share volatility (%)',ui.mcVol)+
   input('mc-drift','Assumed annual return (%) · 0 = neutral',ui.mcDrift)+'</div>'+
@@ -341,7 +341,7 @@ function businessBoard(){
 function facts(v,path='',out=[]){if(out.length>=120)return out;if(Array.isArray(v))v.slice(0,30).forEach((x,i)=>facts(x,path+' ['+(i+1)+']',out));else if(v&&typeof v==='object')for(const [k,x]of Object.entries(v))facts(x,path?path+' / '+k:k,out);else if(v!=null)out.push([path,String(v)]);return out;}
 function v5BacktestPanel(){
  const p=ui.btParams,r=ui.btReport,g=ui.btRegime,src=ui.btSource;
- return card('HAL Desk 5 · Historical strategy research',
+ return card('HAL Atlas · Historical strategy research',
  '<p>Long-only SMA crossover on completed HAL cash-equity daily candles. Signals from a daily close are filled at the next completed daily bar open. This is PAPER research, not a HAL futures/options strategy or live entry signal.</p>'+
  '<div class="form-grid">'+input('bt-fast','Fast SMA (2–199)',p.fast)+
  input('bt-slow','Slow SMA (3–200)',p.slow)+
@@ -369,7 +369,7 @@ function v5BacktestPanel(){
 }
 function v5EvidencePanel(){
  const r=L5.build(evidence(),Date.now(),isBookConfirmed());
- return card('HAL Desk 5 · Six-Perspective Evidence Map',
+ return card('HAL Atlas · Six-Perspective Evidence Map',
   '<p class="fine">Calculated locally on this phone; opening this panel does not call Gemini or send portfolio data. The map checks evidence readiness, not whether a trade should be taken.</p>'+
   row('Perspectives with available evidence',num(r.available,0)+' of 6')+
   table(['Perspective','Status','Source review'],
@@ -391,7 +391,7 @@ return body;}
 function streamView(){const x=s.stream;return x?row('State',String(x.state).replace(/_/g,' '))+row('Decoded frames',num(x.frames,0))+table(['Instrument','Preview price','Feed time'],(x.rows||[]).map(q=>[q.key||q.instrument_key||q.instrumentKey,money(q.price??q.last_price),when(x.feed_ts?new Date(x.feed_ts).toISOString():null)])):empty('Preview stopped');}
 function drawChart(){const el=$('market-chart'),t=technical(ui.frame);if(!el||!t.rows.length||!window.LightweightCharts)return;const c=getComputedStyle(document.body);chart=LightweightCharts.createChart(el,{width:el.clientWidth,height:300,layout:{background:{color:c.getPropertyValue('--surface').trim()},textColor:c.getPropertyValue('--muted').trim()},grid:{vertLines:{color:c.getPropertyValue('--line').trim()},horzLines:{color:c.getPropertyValue('--line').trim()}},timeScale:{timeVisible:ui.frame!=='D'},handleScroll:{vertTouchDrag:false},localization:{locale:'en-IN',timeFormatter:v=>when(new Date(v*1000).toISOString())}});const cs=chart.addSeries(LightweightCharts.CandlestickSeries,{upColor:'#49b9a3',downColor:'#e88b93',borderVisible:false,wickUpColor:'#49b9a3',wickDownColor:'#e88b93'});cs.setData(t.rows.map(r=>({time:r.t/1000,open:r.o,high:r.h,low:r.l,close:r.c})));const vol=chart.addSeries(LightweightCharts.HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:'volume'});vol.priceScale().applyOptions({scaleMargins:{top:.82,bottom:0}});vol.setData(t.rows.map(r=>({time:r.t/1000,value:r.v,color:r.c>=r.o?'#38786b':'#75424d'})));for(const [k,color]of [['sma20','#bcb4fb'],['sma50','#e2be78'],['sma200','#70c8be']])if(t.series?.[k])chart.addSeries(LightweightCharts.LineSeries,{color,lineWidth:1,priceLineVisible:false,lastValueVisible:false}).setData(t.rows.map((r,i)=>({time:r.t/1000,value:t.series[k][i]})).filter(x=>E.finite(x.value)));for(const l of book.legs)cs.createPriceLine({price:l.type==='FUT'?l.entry:l.strike,color:'#edc78a',lineWidth:1,lineStyle:2,title:l.type==='FUT'?'Futures entry':'Owned put strike'});chart.timeScale().fitContent();}
 function workspace(m,l,r){
- const labels={position:'Current position',history:'Lifetime history',technicals:'Technicals',research:'Fundamentals & news',ai:'AI Desk'};
+ const labels={position:'Current position',history:'Lifetime history',technicals:'Analysis & markets',research:'Fundamentals & news',ai:'AI Desk'};
  const heading=`<div class="desk-heading"><div><small>Hindustan Aeronautics · NSE</small><h1>${esc(labels[ui.screen])}</h1></div>${btn('period-review',ui.reviewOpen?'Close review':'Review periods','class="text-button"')}</div>`;
  if(ui.reviewOpen)return heading+reviewView.view();
  if(ui.screen==='history')return heading+historyView.view()+recoveryView.cards(true);
@@ -407,7 +407,7 @@ function workspace(m,l,r){
  if(ui.screen==='ai')return heading+subnav('aiPage',[['assistant','Assistant'],['coach','Skills coach']])+(ui.aiPage==='coach'?card('Position review',reviews(I.coach(evidence()))):research(m,'ai'));
  return heading+subnav('research',[['company','Business'],['news','News & filings']])+research(m,ui.research);
 }
-function render(){if(chart){chart.remove();chart=null;}const m=market(),l=ledger(),r=risk();$('connection-state').textContent=configured?(s.loading?'Refreshing…':s.failure?'Connection needs review':'Upstox · read only'):'Offline desk · no token';$('session-state').textContent=m.status?.status?String(m.status.status).replace(/_/g,' '):'Market status unavailable';$('refresh').disabled=s.loading;$('notice').textContent=storageError?'Saved book could not be loaded. Existing records preserved. Open Settings → Recovery.':s.failure?D.message(s.failure)+' Previous observations remain visible.':s.cached?'Showing cached observations. Check source and trade timestamps.':'';$('notice').hidden=!$('notice').textContent;document.querySelectorAll('[data-screen]').forEach(b=>b.setAttribute('aria-current',b.dataset.screen===ui.screen?'page':'false'));$('main').innerHTML=storageError&&['position','history'].includes(ui.screen)?intro('Saved book needs recovery','Existing records are preserved.')+card('Financial values withheld',empty('The saved book could not be validated','Recover the previous book before editing or valuing the portfolio.'),btn('recovery','Review recovery','class="text-button"')):workspace(m,l,r);if(ui.screen==='technicals'&&ui.technicals==='markets'&&!ui.reviewOpen)drawChart();}
+function render(){if(chart){chart.remove();chart=null;}const m=market(),l=ledger(),r=risk();$('connection-state').textContent=configured?(s.loading?'Refreshing…':s.failure?'Connection needs review':'Upstox · read only'):'Offline research · no token';$('session-state').textContent=m.status?.status?String(m.status.status).replace(/_/g,' '):'Market status unavailable';$('refresh').disabled=s.loading;$('notice').textContent=storageError?'Saved book could not be loaded. Existing records preserved. Open Settings → Recovery.':s.failure?D.message(s.failure)+' Previous observations remain visible.':s.cached?'Showing cached observations. Check source and trade timestamps.':'';$('notice').hidden=!$('notice').textContent;document.querySelectorAll('[data-screen]').forEach(b=>b.setAttribute('aria-current',b.dataset.screen===ui.screen?'page':'false'));$('main').innerHTML=storageError&&['position','history'].includes(ui.screen)?intro('Saved book needs recovery','Existing records are preserved.')+card('Financial values withheld',empty('The saved book could not be validated','Recover the previous book before editing or valuing the portfolio.'),btn('recovery','Review recovery','class="text-button"')):workspace(m,l,r);if(ui.screen==='technicals'&&ui.technicals==='markets'&&!ui.reviewOpen)drawChart();}
 function modal(title,html,label,fn){returnFocus=document.activeElement;$('modal-title').textContent=title;$('modal-body').innerHTML=html;$('modal-error').textContent='';$('modal-save').textContent=label||'Save';$('modal-save').hidden=!fn;saveModal=fn;$('modal').hidden=false;document.body.style.overflow='hidden';($('modal-body').querySelector('input,select,textarea,button')||$('modal-close')).focus();}
 function closeModal(){$('modal-error').textContent='';$('modal').hidden=true;document.body.style.overflow='';saveModal=null;if(returnFocus?.isConnected)returnFocus.focus();}
 function legEditor(id){const old=book.legs.find(l=>l.id===id),l=old||{type:'FUT',expiry:'',strike:null,lots:1,lotSize:null,entry:null,manual:null,instrumentKey:null},listed=market().contracts.filter(c=>['FUT','PE'].includes(c.type));modal(old?'Edit recorded position':'Record HAL position',`<p class="fine">Use exact broker-recorded entries and contract dates. Provider verification is required for automatic valuation. Manual quantities remain labelled unverified until matched.</p>${select('leg-listed','Fill from listed contract',[['','Enter from broker records'],...(l.instrumentKey&&!listed.some(c=>c.instrumentKey===l.instrumentKey)?[[l.instrumentKey,'Saved contract · currently not listed']]:[]),...listed.map(c=>[c.instrumentKey,(c.type==='FUT'?'Future':c.strike+' PE')+' · '+date(c.expiry)+' · lot '+c.lotSize])],l.instrumentKey||'')}<div class="form-grid">${select('leg-type','Position type',[['FUT','Long future'],['PE','Long protective put']],l.type)}${input('leg-expiry','Exact expiry',l.expiry,'date')}${input('leg-strike','Put strike (₹)',l.strike)}${input('leg-lots','Whole lots',l.lots)}${input('leg-size','Units per lot',l.lotSize)}${input('leg-entry','Actual entry / premium (₹)',l.entry)}${input('leg-manual','Manual mark · blank = REST',l.manual)}</div><p class="fine">A manual zero is valid for puts only. Futures marks must be greater than zero. Expired positions require a recorded close or settlement. Changing a position invalidates confirmation and previous AI conclusions.</p>`,'Save position',()=>{const next={...l,id:old?.id||'leg-'+Date.now(),type:text('leg-type'),expiry:text('leg-expiry'),strike:value('leg-strike'),lots:value('leg-lots'),lotSize:value('leg-size'),entry:value('leg-entry'),manual:value('leg-manual'),manualAt:value('leg-manual')==null?null:stamp(),instrumentKey:text('leg-listed')||null};if(next.type==='FUT'&&next.manual===0)throw Error('Futures manual marks must be greater than zero. Clear the field if unavailable.');E.validateLeg(next);const b=clone(book);if(old)b.legs[b.legs.findIndex(x=>x.id===old.id)]=next;else b.legs.push(next);commit(b);request('contracts','D',true);});$('leg-listed').onchange=()=>{const c=listed.find(c=>c.instrumentKey===text('leg-listed'));if(!c)return;$('leg-type').value=c.type;$('leg-expiry').value=c.expiry;$('leg-strike').value=c.strike??'';$('leg-size').value=c.lotSize;};}
@@ -449,11 +449,11 @@ function importPreview(raw){
   });
 }
 function recovery(){let r;const reviewedRevision=revision;if(N?.previousBook){r=JSON.parse(N.previousBook());if(!r.ok)throw Error(r.message);if(!r.book)throw Error('No previous-book recovery copy exists.');}else{const raw=localStorage.getItem('hal_previous_v4')||localStorage.getItem('hal_before_import_v2');if(!raw)throw Error('No recovery copy exists.');r={book:JSON.parse(raw)};}const b=E.validateBook(r.book);modal('Previous-book recovery',`<p>Restore ${b.legs.length} open legs and ${b.journal.length} journal records from the previous saved book.</p><p>The current native bytes are retained in a recovery quarantine when supported. Legacy WebView storage is not erased.</p>`,'Restore previous book',()=>{if(N?.restorePreviousBook){const x=JSON.parse(N.restorePreviousBook(reviewedRevision));if(!x.ok)throw Error(x.message);book=E.validateBook(x.book);revision=x.revision;storageError='';ui.ai=null;invalidateCalculations();ui.hedgeDraft=null;ui.pattern=null;if(ui.pendingAI)native('aiCancel',ui.pendingAI.id);ui.pendingAI=null;theme();render();}else{storageError='';commit(b);}});}
-function settings(){modal('HAL Desk 4.5.1 · Settings',`<p class="fine">Personal read-only research. Android 8+. Credentials stay encrypted natively; market and AI calls use fixed HTTPS destinations.</p><div class="toolbar">${btn('connection','Upstox connection')}${btn('ai-settings','Gemini settings')}${btn('token-page','Get Analytics Token')}</div>${select('theme','Appearance',[['dark','Graphite dark'],['light','Paper light'],['system','Follow device']],book.preferences.theme)}${select('mark-mode','Put valuation marks',[['ltp','Last traded price'],['bid','Quoted bid']],book.preferences.markMode)}<label><input id="auto-refresh" type="checkbox" ${book.preferences.auto?'checked':''}>Refresh roughly every 60 seconds while foreground</label><p class="fine">Android background monitoring is not guaranteed. No automatic paid AI requests occur.</p><div class="toolbar">${btn('export','Export JSON')}${btn('csv','Journal CSV')}${btn('import','Import backup')}${btn('recovery','Recovery')}${btn('health','Data health')}</div>`,'Save preferences',()=>commit({...book,preferences:{theme:text('theme'),markMode:text('mark-mode'),auto:$('auto-refresh').checked}}));}
+function settings(){modal('HAL Atlas · Settings',`<p class="fine">Personal read-only research. Android 8+. Credentials stay encrypted natively; market and AI calls use fixed HTTPS destinations.</p><div class="toolbar">${btn('connection','Upstox connection')}${btn('ai-settings','Gemini settings')}${btn('token-page','Get Analytics Token')}</div>${select('theme','Appearance',[['dark','Graphite dark'],['light','Paper light'],['system','Follow device']],book.preferences.theme)}${select('mark-mode','Put valuation marks',[['ltp','Last traded price'],['bid','Quoted bid']],book.preferences.markMode)}<label><input id="auto-refresh" type="checkbox" ${book.preferences.auto?'checked':''}>Refresh roughly every 60 seconds while foreground</label><p class="fine">Android background monitoring is not guaranteed. No automatic paid AI requests occur.</p><div class="toolbar">${btn('export','Export JSON')}${btn('csv','Journal CSV')}${btn('import','Import backup')}${btn('recovery','Recovery')}${btn('health','Data health')}</div>`,'Save preferences',()=>commit({...book,preferences:{theme:text('theme'),markMode:text('mark-mode'),auto:$('auto-refresh').checked}}));}
 function v5DataQualityPanel(a){
  if(!a)return '<p class="fine">No normalized market quality report available.</p>';
  const warnings=a.problems||[];
- return '<h3>HAL Desk 5 · Market data integrity</h3>'+
+ return '<h3>HAL Atlas · Market data integrity</h3>'+
   '<p class="fine">Independent provider and exchange clocks are never replaced by HTTP retrieval time. Cache observations cannot become streaming valuation marks. Quality counts overlap and are not a number of affected positions.</p>'+
   row('Quotes observed (including HAL spot)',num(a.total,0))+
   row('Missing or invalid prices',num(a.missingPrice,0))+
