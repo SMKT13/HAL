@@ -80,3 +80,8 @@ test('news responses with empty nested instrument arrays do not manufacture blan
  const s=D.ingest(D.empty(),'research',{section:'news',frame:'D',fetched_at_iso:ts,data:{articles:[{'NSE_EQ|SYNTH_1':[]},{metadata:{page:1}}]}},ts);
  A.deepEqual(D.news(s),[]);
 });
+test('legacy backup history is sanitized during import preview',()=>{
+ const history=[{spot:5000,token:'fixture',nested:{apiKey:'fixture',volume:42}}];
+ const preview=D.previewImport({book:E.emptyBook(),history});
+ A.deepEqual(preview.migration.legacyPriceHistory,[{spot:5000,nested:{volume:42}}]);
+});
