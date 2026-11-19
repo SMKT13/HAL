@@ -1,8 +1,16 @@
-# HAL Atlas Android 5.1.0 (versionCode 34)
+# HAL Atlas Android 5.1.17 (versionCode 51)
 
 This update preserves the Android package and SQLite schema-4 book used by 4.6.0 (versionCode 31).
 
 Personal offline-capable HAL research, risk, history and PAPER option strategies. Android **8.0+**, applicationId `in.smkt.haldesk`, target SDK 35. Direct Upstox Analytics Token and optional Gemini/FinBERT; **read-only, no orders**.
+
+## New in 5.1.17: evidence-led Daily Analysis for Classic Blueprint
+
+Upgraded from the real 5.1.16 Classic Blueprint, **not** the older five-tab HAL Desk branch. The original three tabs **Portfolio / Market / Research**, aircraft portfolio chart, shareholding and company research, and signed upgrade path are retained.
+
+Portfolio shows a read-only interpretation preview and Research opens with a daily explanatory report: completed HAL candle date, moving averages, RSI/MACD/volume reading, conditional support/resistance, bull/range/bear scenarios, timestamp-matched Nifty/VIX context, reported fundamental metrics, headline relevance, and saved-futures/puts hedge gaps. The calculation is deterministic, works without Gemini, and withholds unverifiable broker P&L. A **Daily Analysis** link also opens the full report directly. The report does not place trades or fabricate data.
+
+New Android source version **5.1.17 / 51** is higher than the existing signed **5.1.16 / 50**. The package `in.smkt.haldesk`, local SQLite book and credential alias have not been renamed. **No updated APK has been assembled/signed or installed in this tool session.** See [local verification and acceptance](docs/ATLAS-5.1.17-ANALYSIS.md).
 
 ## HAL Atlas redesign branch
 
