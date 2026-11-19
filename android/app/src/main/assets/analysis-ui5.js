@@ -40,6 +40,24 @@ window.createHalAnalysis=function createHalAnalysis(api){
    btn('go-hedge','Review replacement hedge','class="text-button"')+
    btn('go-risk','Full position risk','class="text-button"'));
  }
+ function fundamental(r){
+  const f=r.fundamentals;
+  const financial=f.readings.length?f.readings.map(x=>'<article class="analysis-signal"><div class="analysis-signal-title"><strong>'+esc(x.title)+'</strong><b>'+esc(num(x.value,2))+'</b></div>'+
+   '<div class="fine">Provider field: '+esc(x.label)+' · Unit: '+esc(x.unit||'Unspecified')+' · Period: '+esc(x.period||'Unspecified')+'</div>'+
+   narrate(x.interpretation)+'<div class="fine">Source: '+esc(x.source)+' · retrieved '+esc(when(x.retrievedAt))+'</div></article>').join(''):
+   empty('Financial comparison unavailable','Connect and refresh Upstox fundamentals to populate real provider fields. No earnings changes are invented.');
+  return card('Fundamentals · what to examine',narrate(f.summary)+financial+
+   '<div class="analysis-review">'+esc(f.driver)+'</div>'+
+   btn('go-company','Open source fundamentals','class="text-button"'));
+ }
+ function benchmarks(r){
+  const b=r.benchmark;
+  return card('The wider market',
+   narrate(b.summary)+
+   row('Nifty 50 · matched date',b.nifty?money(b.nifty.price)+(b.nifty.changePct===null?'':' · '+num(b.nifty.changePct)+'%'):'Unavailable')+
+   row('India VIX · matched date',b.vix?num(b.vix.price)+(b.vix.changePct===null?'':' · '+num(b.vix.changePct)+'%'):'Unavailable')+
+   '<p class="fine">Benchmarks appear only when provider quote timestamps match the daily HAL analysis date. A market-wide gain cannot establish HAL news causation.</p>');
+ }
  function view(){
   const r=report();
   const header='<div class="analysis-report-head '+resultClass(r)+'"><span class="eyebrow">Evidence-led daily report · HAL NSE</span>'+
@@ -72,7 +90,7 @@ window.createHalAnalysis=function createHalAnalysis(api){
    '<p class="fine">'+esc(r.caveats.join(' · '))+'</p>');
   return header+
     card('Why this verdict?',r.signals.map(signalView).join(''))+
-    levelsCard+scenarios+position(r)+news+diagnostics;
+    levelsCard+scenarios+benchmarks(r)+fundamental(r)+position(r)+news+diagnostics;
  }
  return {view,preview,report};
 };
