@@ -7,7 +7,7 @@ const when=v=>v&&Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('en-I
 const btn=(a,t,x='')=>`<button data-action="${a}" ${x}>${t}</button>`,badge=(t,c='')=>`<span class="badge ${esc(c)}">${esc(t)}</span>`,row=(a,b)=>`<div class="row"><span>${esc(a)}</span><strong>${esc(b)}</strong></div>`,tile=(a,b,c='')=>`<div class="metric"><small>${esc(a)}</small><strong>${esc(b)}</strong><span>${esc(c)}</span></div>`,empty=(a,b='')=>`<div class="empty"><strong>${esc(a)}</strong>${esc(b)}</div>`,card=(a,b,c='')=>`<section class="card"><div class="section-heading"><h2>${esc(a)}</h2>${c}</div>${b}</section>`;
 const table=(h,rs)=>`<div class="table-wrap"><table><thead><tr>${h.map(x=>'<th>'+esc(x)+'</th>').join('')}</tr></thead><tbody>${rs.map(r=>'<tr>'+r.map(x=>'<td>'+esc(x)+'</td>').join('')+'</tr>').join('')}</tbody></table></div>`,input=(id,label,v='',type='number')=>`<label>${esc(label)}<input id="${id}" type="${type}" ${type==='number'?'step="any" inputmode="decimal"':''} value="${esc(v??'')}"></label>`,select=(id,label,opts,v)=>`<label>${esc(label)}<select id="${id}">${opts.map(([k,t])=>`<option value="${esc(k)}" ${k===v?'selected':''}>${esc(t)}</option>`).join('')}</select></label>`,value=id=>E.value($(id)?.value),text=id=>$(id)?.value||'';
 let book=E.emptyBook(),revision=0,s=D.empty(),configured=false,started=false,storageError='',chart=null,saveModal=null,returnFocus=null,toastTimer;
-const ui={screen:'position',position:'overview',plan:'stress',research:'company',technicals:'markets',aiPage:'assistant',reviewOpen:false,frame:'D',expiry:'',side:'PE',filter:'all',search:'',statement:'consolidated',scenario:{spot:'',horizon:'',iv:'',shift:0,rate:6,dividend:0,basis:'constant',base:''},result:null,resultAt:null,settlementResult:null,settlementPath:null,settlementAt:null,mcResult:null,mcAt:null,mcVol:'',mcDrift:0,btParams:{fast:20,slow:50,fee:0,slip:0},btReport:null,btRegime:null,btAt:null,btSource:null,reduction:null,compare:{leg:'',lots:1,costs:0},advanced:false,hedges:null,hedgesAt:null,hedgeDraft:null,closePreview:null,rollPreview:null,pattern:null,patternWindow:20,patternForward:10,aiMode:'copilot',question:'Explain the position, expiry gaps, quote reliability and evidence that needs review.',share:true,ai:null,pendingAI:null,aiError:'',aiConfigured:false,model:'',finbert:{state:'not_installed'},sentiments:{}};
+const ui={screen:'position',position:'overview',plan:'stress',research:'company',technicals:'analysis',aiPage:'assistant',reviewOpen:false,frame:'D',expiry:'',side:'PE',filter:'all',search:'',statement:'consolidated',scenario:{spot:'',horizon:'',iv:'',shift:0,rate:6,dividend:0,basis:'constant',base:''},result:null,resultAt:null,settlementResult:null,settlementPath:null,settlementAt:null,mcResult:null,mcAt:null,mcVol:'',mcDrift:0,btParams:{fast:20,slow:50,fee:0,slip:0},btReport:null,btRegime:null,btAt:null,btSource:null,reduction:null,compare:{leg:'',lots:1,costs:0},advanced:false,hedges:null,hedgesAt:null,hedgeDraft:null,closePreview:null,rollPreview:null,pattern:null,patternWindow:20,patternForward:10,aiMode:'copilot',question:'Explain the position, expiry gaps, quote reliability and evidence that needs review.',share:true,ai:null,pendingAI:null,aiError:'',aiConfigured:false,model:'',finbert:{state:'not_installed'},sentiments:{}};
 function native(name,...args){if(typeof N?.[name]==='function')return N[name](...args);if(!['ready','finbertStatus'].includes(name))toast('Available in the installed Android app.');return null;}
 function toast(msg){clearTimeout(toastTimer);$('toast').textContent=msg;$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,6000);}
 function isBookConfirmed(){return I.isBookConfirmed(book);}
@@ -53,7 +53,7 @@ function navigate(screen,sub){
   ui.screen=screen;
   if(sub)ui[screen==='ai'?'aiPage':screen]=sub;
   if(screen==='position'&&ui.position==='overview')captureReview();
-  if(screen==='technicals'){if(ui.technicals==='lab'&&ui.expiry)request('hedges',ui.expiry);else request('candles',ui.technicals==='backtest'?'D':ui.frame);}
+  if(screen==='technicals'){if(ui.technicals==='lab'&&ui.expiry)request('hedges',ui.expiry);else request('candles',ui.technicals==='backtest'||ui.technicals==='analysis'?'D':ui.frame);if(ui.technicals==='analysis'){request('news');request('filings');}}
   if(screen==='research'){
     if(ui.research==='company')request('fundamentals');
     if(ui.research==='news'){request('news');request('filings');}
@@ -151,6 +151,7 @@ function today(m,l,r){
  `<div class="daily-grid"><section class="card hero daily-position"><span class="eyebrow">Your combined position</span><div class="hero-value ${color(verifiedOpen)}">${book.legs.length?money(verifiedOpen):'No open book'}</div><p class="fine">Indicative open P&L · ${l.manual?'manual marks included':l.stale?'older prices':l.complete?'all marks available':'missing contract prices'}</p><p class="fine">Strategy net <strong>${money(verifiedNet)}</strong> · includes recorded realised P&amp;L and charges</p>${btn('go-book','View my position →','class="text-button"')}</section>`+
  `<section class="card next-review"><span class="eyebrow">Next review</span><h2>${esc(next.title)}</h2><p>${esc(next.detail)}</p>${btn(next.action,next.label,'class="primary"')}${book.legs.length?btn('explain-position','Explain my protection','class="text-button"'):''}</section></div>`+
  (audit.consistent?'':card('P&L integrity needs review',reviews(audit.errors.map(detail=>({title:'Accounting mismatch',detail})))))+
+ analysisView.preview()+
  v5ExpiryPanel()+
  card('Since your last visit',changeView())+
  card('Exposure and protection',row('Futures',num(r.futureUnits,0)+' units · '+num(r.futureLots,0)+' lots')+row('Put quantity coverage',pct(r.coverage))+row('Nearest expiry',date(r.nextExpiry))+row('Recorded realised after charges',money(bookedNet)))+recoveryView.cards(false)+
@@ -402,7 +403,7 @@ function workspace(m,l,r){
    if(['stress','compare','hedge'].includes(ui.position)){ui.plan=ui.position;return heading+nav+plan(m);}
    return heading+nav+position(m,l,r);
  }
- if(ui.screen==='technicals')return heading+subnav('technicals',[['markets','Charts & derivatives'],['lab','Options Lab'],['indicators','Indicators'],['insights','Pattern scanner'],['backtest','Backtest']])+(ui.technicals==='lab'?optionsLab.view():research(m,ui.technicals));
+ if(ui.screen==='technicals')return heading+subnav('technicals',[['analysis','Daily Analysis'],['markets','Charts & derivatives'],['lab','Options Lab'],['indicators','Indicators'],['insights','Pattern scanner'],['backtest','Backtest']])+(ui.technicals==='analysis'?analysisView.view():ui.technicals==='lab'?optionsLab.view():research(m,ui.technicals));
  if(ui.screen==='ai')return heading+subnav('aiPage',[['assistant','Assistant'],['coach','Skills coach']])+(ui.aiPage==='coach'?card('Position review',reviews(I.coach(evidence()))):research(m,'ai'));
  return heading+subnav('research',[['company','Business'],['news','News & filings']])+research(m,ui.research);
 }
@@ -552,6 +553,8 @@ const actions={'bt-load':()=>request('candles','D',true),'bt-run':()=>{
 
 Object.assign(actions,{
  'go-book':()=>navigate('position','book'),'go-risk':()=>navigate('position','risk'),
+ 'go-analysis':()=>navigate('technicals','analysis'),
+ 'analysis-refresh':()=>{request('candles','D',true);request('news','D',true);request('filings','D',true);refresh(false);},
  'go-company':()=>navigate('research','company'),'go-compare':()=>navigate('plan','compare'),
  'go-hedge':()=>navigate('plan','hedge'),'go-lab':()=>navigate('technicals','lab'),
  'retry-prices':()=>refresh(),
@@ -567,6 +570,7 @@ Object.assign(actions,{
 });
 const viewAPI={get:()=>({book,market:market(),evidence:evidence(),sessionBaseline:reviewBaseline}),getBook:()=>book,commit,render,modal,esc,money,num,pct,date,when,row,table,card,btn,tile,badge,input,select,empty,native,navigate,backup:()=>actions.export()};
 const historyView=window.HALHistoryViews(viewAPI),recoveryView=window.createHalRecovery(viewAPI),reviewView=window.createHalReview(viewAPI);
+ const analysisView=window.createHalAnalysis({...viewAPI,get:()=>({book,market:market(),valuation:ledger(),technical:technical('D'),news:news(),confirmed:isBookConfirmed(),cached:s.cached,integrityBlocked:s.failure==='market_integrity_review'})});
 const optionsLab=window.createHalOptionsLab({...viewAPI,labContext:()=>({snapshot:s.snapshot||{},chain:D.packet(s,'hedges',ui.expiry)?.data||D.packet(s,'chain',ui.expiry)?.data||{},chains:Object.values(s.research||{}).map(x=>x?.data).filter(x=>x&&Array.isArray(x.option_rows)&&x.option_rows.length>0),expiry:ui.expiry,market:market(),book}),labSetExpiry:d=>{if(!E.validDate(d))return;ui.expiry=d;request('hedges',d);render();},labRefresh:force=>{if(ui.expiry)request('hedges',ui.expiry,!!force);}});
 Object.assign(actions,optionsLab.actions,historyView.actions,recoveryView.actions,reviewView.actions,{'period-review':()=>{ui.reviewOpen=!ui.reviewOpen;render();window.scrollTo(0,0);}});
 document.addEventListener('click',ev=>{const a=ev.target.closest('a[href]');if(a){ev.preventDefault();const u=E.safeURL(a.href);if(u)native('openLink',u);return;}const screen=ev.target.closest('[data-screen]'),sub=ev.target.closest('[data-sub]'),b=ev.target.closest('[data-action]');try{if(screen)navigate(screen.dataset.screen);if(sub)navigate(ui.screen,sub.dataset.sub);if(b)actions[b.dataset.action]?.(b);}catch(e){toast(e.message);}});
