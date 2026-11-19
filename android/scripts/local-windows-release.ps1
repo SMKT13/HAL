@@ -1,5 +1,5 @@
-# HAL Atlas 5.1.17 — local Windows verification without GitHub Actions.
-# Run on your own trusted Windows machine after exporting the installed 5.1.16 ledgers.
+# HAL Atlas 5.1.18 — local Windows verification without GitHub Actions.
+# Run on your own trusted Windows machine after exporting the installed 5.1.17 ledgers.
 # This NEVER installs/uninstalls an app, opens a broker session or uploads keys.
 [CmdletBinding()]
 param(
@@ -19,8 +19,8 @@ $apksigner=Join-Path $buildTools 'apksigner.bat'
 $gradle=Join-Path $repoRoot 'gradlew.bat'
 $release=Join-Path $repoRoot 'app\build\outputs\apk\release\app-release-unsigned.apk'
 $dist=Join-Path $repoRoot 'build'
-$unsigned=Join-Path $dist 'HAL-Atlas-v5.1.17-unsigned.apk'
-$signed=Join-Path $dist 'HAL-Atlas-v5.1.17-signed.apk'
+$unsigned=Join-Path $dist 'HAL-Atlas-v5.1.18-unsigned.apk'
+$signed=Join-Path $dist 'HAL-Atlas-v5.1.18-signed.apk'
 $expected='a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382'
 foreach($path in @($zipalign,$apksigner,$gradle)){
  if(!(Test-Path -LiteralPath $path)){throw "Missing required build tool: $path"}
@@ -37,9 +37,9 @@ Push-Location $repoRoot
 try{
  $buildText=Get-Content -LiteralPath (Join-Path $repoRoot 'app\build.gradle') -Raw
  if(!$buildText.Contains("applicationId 'in.smkt.haldesk'") -or
-    !$buildText.Contains('versionCode 51') -or
-    !$buildText.Contains("versionName '5.1.17'")){
-  throw 'Release identity mismatch: expected in.smkt.haldesk / versionCode 51 / 5.1.17'
+    !$buildText.Contains('versionCode 52') -or
+    !$buildText.Contains("versionName '5.1.18'")){
+  throw 'Release identity mismatch: expected in.smkt.haldesk / versionCode 52 / 5.1.18'
  }
  Write-Host '[VERIFY] Immutable package and upgrade version matched.'
  Run-Checked 'npm.cmd' @('ci','--no-audit','--no-fund')
@@ -58,7 +58,7 @@ try{
  Run-Checked $zipalign @('-c','-P','16','4',$unsigned)
  Write-Host "[OK] Built aligned unsigned candidate: $unsigned"
  if(!$Sign){
-  Write-Host '[STOP] Unsigned only. It cannot update your existing signed HAL Atlas 5.1.16 installation.'
+  Write-Host '[STOP] Unsigned only. It cannot update your existing signed HAL Atlas 5.1.17 installation.'
   return
  }
  $key=$env:HAL_SIGNING_KEY_FILE

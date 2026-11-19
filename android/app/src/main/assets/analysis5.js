@@ -1,5 +1,6 @@
 /* HAL Desk 5: evidence-led post-market interpretation; read-only, deterministic, offline. */
 (function(root){'use strict';
+const engine=typeof module==='object'&&module.exports?require('./engine4.js'):root.HAL4Engine;
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
 const arr=x=>Array.isArray(x)?x:[];
 const number=x=>finite(x)?x:null;
@@ -20,42 +21,45 @@ function fundamentalReview(f={}){
  const metrics=arr(f.metrics).filter(m=>m&&m.kind==='provider'&&typeof m.label==='string'&&finite(m.value));
  const categories=[
   {title:'Revenue / income',match:/revenue|turnover|total income|sales/i,interpretation:'Review execution and delivery progress against the same reported period; a single revenue number cannot establish growth.'},
-  {title:'Net earnings',match:/net profit|profit after tax|profit attributable|\\bpat\\b/i,interpretation:'Earnings durability depends on margins, execution and cash conversion. A single period does not confirm an earnings trend.'},
+  {title:'Net earnings',match:/net profit|profit after tax|profit attributable|\bpat\b/i,interpretation:'Earnings durability depends on margins, execution and cash conversion. A single period does not confirm an earnings trend.'},
   {title:'Profitability margin',match:/ebitda margin|operating margin|net margin|profit margin/i,interpretation:'Compare margins with the same basis and earlier periods before concluding cost efficiency is improving.'},
-  {title:'Valuation',match:/price.to.earnings|p.e ratio|\\bpe ratio\\b|price.earnings/i,interpretation:'A valuation multiple is not a buy signal without earnings quality, peer and historical comparisons.'},
+  {title:'Valuation',match:/price.to.earnings|p.e ratio|\bpe ratio\b|price.earnings/i,interpretation:'A valuation multiple is not a buy signal without earnings quality, peer and historical comparisons.'},
   {title:'Cash flow',match:/cash flow from operat|operating cash flow|net cash from operat/i,interpretation:'Cash conversion and working-capital needs matter even when reported profit is positive.'}
  ];
  const readings=[];
  for(const cat of categories){
-  const m=metrics.find(x=>cat.match.test(x.label));
+  const m=metrics.find(x=>cat.match.test(x.label.split('/').pop().replace(/_/g,' ').trim())&&typeof x.period==='string'&&x.period.trim());
   if(m)readings.push({title:cat.title,label:m.label,value:m.value,unit:typeof m.unit==='string'?m.unit:null,period:typeof m.period==='string'?m.period:null,source:m.source||'Provider financial data',retrievedAt:m.retrievedAt||null,interpretation:cat.interpretation});
  }
  return {available:readings.length>0,readings,summary:readings.length?'Provider-reported financial fields are shown with explicit periods. No YoY growth, margin trend or valuation conclusion is inferred without comparable verified periods.':'No recognizable period-tagged financial fields are loaded. Business-specific earnings claims are withheld.',driver:'For HAL, track verified aircraft and helicopter delivery milestones, order execution, supply-chain constraints and government defence budgets; distinguish firm orders from proposals.'};
 }
-function benchmarkReview(m={},asOf,changePct){
- const valid=q=>q&&finite(q.price)&&q.price>0&&day(q.quoteAt)===asOf;
+function benchmarkReview(m={},asOf,changePct,now=Date.now()){
+ const valid=q=>asOf&&q&&Date.parse(q.quoteAt)<=now&&finite(q.price)&&q.price>0&&day(q.quoteAt)===asOf;
  const nifty=valid(m.nifty)?{price:m.nifty.price,changePct:number(m.nifty.changePct),at:m.nifty.quoteAt}:null;
  const vix=valid(m.vix)?{price:m.vix.price,changePct:number(m.vix.changePct),at:m.vix.quoteAt}:null;
  const relative=nifty&&finite(changePct)&&finite(nifty.changePct)?round(changePct-nifty.changePct):null;
  return {nifty,vix,relative,summary:finite(relative)?'HAL '+(relative>=0?'outperformed':'underperformed')+' Nifty 50 by '+Math.abs(relative)+' percentage points in the same-dated session; this is comparison, not proof of why HAL moved.':'Same-date, timestamped benchmark changes are unavailable, so relative outperformance is withheld.'};
 }
 function positionReview(book,valuation,confirmed,now,cached){
- const legs=arr(book?.legs),today=currentDay(now),active=legs.filter(l=>typeof l.expiry==='string'&&l.expiry>=today);
- const qty=l=>finite(l.lots)&&finite(l.lotSize)&&l.lots>0&&l.lotSize>0?l.lots*l.lotSize:0;
+ const legs=arr(book?.legs),active=legs.filter(l=>l&&engine.expiryTime(l.expiry)>=now);
+ const qty=l=>Number.isSafeInteger(l.lots)&&Number.isSafeInteger(l.lotSize)&&l.lots>0&&l.lotSize>0?l.lots*l.lotSize:0;
  const futures=active.filter(l=>l.type==='FUT'),puts=active.filter(l=>l.type==='PE'),futureUnits=futures.reduce((n,l)=>n+qty(l),0),putUnits=puts.reduce((n,l)=>n+qty(l),0);
  const earliestPut=puts.map(l=>l.expiry).sort()[0]||null;
  const nextFuture=futures.map(l=>l.expiry).sort()[0]||null;
- const laterFutures=futures.filter(l=>earliestPut&&l.expiry>earliestPut);
- const futureUnitsAfter=laterFutures.reduce((n,l)=>n+qty(l),0);
- const putUnitsAfter=puts.filter(l=>earliestPut&&l.expiry>earliestPut).reduce((n,l)=>n+qty(l),0);
- const gap=earliestPut&&futureUnitsAfter>putUnitsAfter;
+ const expiryDates=[...new Set(puts.map(l=>l.expiry))].sort();
+ const unitsAfter=(legs,date)=>legs.filter(l=>l.expiry>date).reduce((sum,l)=>sum+qty(l),0);
+ const gapDate=expiryDates.find(date=>unitsAfter(futures,date)>unitsAfter(puts,date));
+ const reviewDate=gapDate||earliestPut;
+ const futureUnitsAfter=unitsAfter(futures,reviewDate);
+ const putUnitsAfter=unitsAfter(puts,reviewDate);
+ const gap=Boolean(gapDate);
  const invalidQuantity=active.some(l=>!qty(l));
- const expiryDays=earliestPut?Math.ceil((Date.parse(earliestPut+'T15:30:00+05:30')-now)/86400000):null;
+ const expiryDays=earliestPut?Math.ceil((engine.expiryTime(earliestPut)-now)/86400000):null;
  const messages=[];
  if(legs.length&&!confirmed)messages.push('Saved broker positions are not confirmed; verify exact contracts and quantities before using this review.');
  if(invalidQuantity)messages.push('At least one active leg has invalid or missing lot quantity; coverage cannot be trusted.');
- if(futureUnits&&putUnits)messages.push('Nominal put quantity coverage is '+round(putUnits/futureUnits*100)+'%; strike, premium and expiry still affect actual downside protection.');
- if(gap)messages.push('Hedge continuity warning: '+futureUnitsAfter+' future units extend beyond '+earliestPut+', with '+Math.max(0,futureUnitsAfter-putUnitsAfter)+' units without later-dated put quantity protection.');
+ if(!invalidQuantity&&futureUnits&&putUnits)messages.push('Nominal put quantity coverage is '+round(putUnits/futureUnits*100)+'%; strike, premium and expiry still affect actual downside protection.');
+ if(gap)messages.push('Hedge continuity warning: '+futureUnitsAfter+' future units extend beyond '+gapDate+', with '+Math.max(0,futureUnitsAfter-putUnitsAfter)+' units without later-dated put quantity protection.');
  if(expiryDays!==null&&expiryDays<=7&&expiryDays>=0)messages.push('Next recorded put expiry is in '+expiryDays+' calendar day(s). Review rollover, option exercise, physical settlement and broker margin requirements.');
  if(futureUnits&&!puts.length)messages.push('No currently unexpired protective puts are recorded for the open futures.');
  if(futureUnits)messages.push('Futures variation margin and physical-delivery obligations are not eliminated by holding protective puts.');
@@ -66,24 +70,30 @@ function build(context={},now=Date.now()){
  const t=context.technical||{},m=context.market||{},book=context.book||{},rows=arr(t.rows);
  const last=rows[rows.length-1],prev=rows[rows.length-2],asOf=day(t.asOf),today=currentDay(now);
  const position=positionReview(book,context.valuation,context.confirmed===true,now,context.cached===true||context.integrityBlocked===true);
- const fundamentals=fundamentalReview(context.fundamentals),benchmark=benchmarkReview(m,asOf,null);
+ const fundamentals=fundamentalReview(context.fundamentals),benchmark=benchmarkReview(context.integrityBlocked?{}:m,asOf,null,now);
  const base={version:1,generatedAt:new Date(now).toISOString(),asOf:t.asOf||null,date:asOf,source:'Completed HAL daily candles · read-only provider',position,fundamentals,benchmark,headlines:[],signals:[],levels:{supports:[],resistances:[]},scenarios:[],caveats:[],ready:false,quality:'Unavailable',title:'Daily analysis unavailable',verdict:'Insufficient evidence',summary:'Load HAL daily candles to generate a dated, evidence-led report.',price:null,change:null,changePct:null,volumeRatio:null};
- if(!last||!finite(last.c)||last.c<=0||!asOf||asOf>today||(!finite(last.v)&&last.v!==0)){
+ if(!last||!finite(last.c)||last.c<=0||!asOf||asOf>today||Date.parse(t.asOf)>now||!finite(last.v)||last.v<0){
   base.caveats.push('A valid completed daily candle with source date and volume is required. No price or trend conclusion is invented.');
   return base;
  }
  const price=last.c,daily=prev&&finite(prev.c)&&prev.c>0?price-prev.c:null,pct=finite(daily)?daily/prev.c*100:null;
  base.price=price;base.change=daily;base.changePct=pct;base.ready=rows.length>=50&&t.ready!==false;
  if(position.putStrikes.length){const strikes=position.putStrikes.map(x=>x.strike).filter(finite);if(strikes.length){const upper=Math.max(...strikes);if(price>upper)position.messages.push('At the completed HAL equity close of '+fmt(price)+', the highest recorded put strike '+fmt(upper)+' was out of the money by '+fmt(price-upper)+' per share. Quantity coverage alone does not protect that price gap.');}}
- base.benchmark=benchmarkReview(m,asOf,pct);
+ base.benchmark=benchmarkReview(context.integrityBlocked?{}:m,asOf,pct,now);
  const reportStale=context.cached===true||context.integrityBlocked===true||t.stale===true||asOf!==today;
  base.quality=context.integrityBlocked===true?'Source integrity review':reportStale?'Historical / cached evidence':'Current completed daily evidence';
  base.caveats.push('This is a dated interpretation, not a prediction or order signal. Levels are conditional observation zones, not guaranteed fills or stop orders.');
  if(reportStale)base.caveats.push('Data are cached, older, or have incomplete freshness verification. Do not treat this as a live market verdict.');
- if(context.integrityBlocked)base.caveats.push('A provider market-data integrity warning is active; fresh market comparisons must be withheld.');
+ if(context.integrityBlocked){
+  base.ready=false;
+  base.summary='Review the provider integrity warning and refresh before using a directional assessment.';
+  base.caveats.push('Market comparisons and trend scenarios are withheld until the integrity warning clears.');
+  return base;
+ }
  if(!base.ready){base.summary='Only '+rows.length+' completed bars are available. Review observed prices but withhold a trend verdict until at least 50 bars and validated technicals are present.';base.caveats.push('Short history: directional analysis withheld.');return base;}
  const s20=number(t.sma20),s50=number(t.sma50),s200=number(t.sma200),rsi=number(t.rsi),hist=number(t.hist),macd=number(t.macd);
- const avg=rows.length>=21?rows.slice(-21,-1).reduce((s,r)=>s+(finite(r.v)?r.v:0),0)/20:null;
+ const prior=rows.slice(-21,-1);
+ const avg=prior.length===20&&prior.every(r=>finite(r?.v)&&r.v>=0)?prior.reduce((sum,r)=>sum+r.v,0)/20:null;
  const vr=finite(avg)&&avg>0&&finite(last.v)?last.v/avg:null;base.volumeRatio=finite(vr)?round(vr):null;
  const averages=[['20-day SMA',s20],['50-day SMA',s50],['200-day SMA',s200]];
  for(const [label,value]of averages)base.signals.push({label,value,reading:finite(value)?price>value?'Close above':price<value?'Close below':'At average':'Unavailable',interpretation:finite(value)?price>value?'Supportive relative position':'Unrecovered trend level':'Insufficient completed history'});
@@ -109,7 +119,7 @@ function build(context={},now=Date.now()){
  base.levels.supports=candidates.filter(x=>x.price<price-0.5).sort((a,b)=>b.price-a.price).slice(0,4).map(x=>({...x,price:round(x.price)}));
  const up=base.levels.resistances[0],down=base.levels.supports[0];
  if(up)base.scenarios.push({kind:'bullish',title:'Recovery extends',trigger:'Sustained trade and preferably a completed close above '+fmt(up.price),interpretation:'Watch follow-through, price acceptance and volume; a breakout is not confirmed before it happens.',next:base.levels.resistances[1]?fmt(base.levels.resistances[1].price):'Further resistance unavailable'});
- base.scenarios.push({kind:'range',title:'Consolidation',trigger:'Price stays within '+(down?fmt(down.price):'unavailable')+' to '+(up?fmt(up.price):'unavailable'),interpretation:'Mixed evidence favours observation over assuming a trend. A range can fail in either direction.',next:'Wait for a confirmed change'});
+ if(up&&down)base.scenarios.push({kind:'range',title:'Consolidation',trigger:'Price stays within '+(down?fmt(down.price):'unavailable')+' to '+(up?fmt(up.price):'unavailable'),interpretation:'Mixed evidence favours observation over assuming a trend. A range can fail in either direction.',next:'Wait for a confirmed change'});
  if(down)base.scenarios.push({kind:'bearish',title:'Support fails',trigger:'Sustained trade and preferably a completed close below '+fmt(down.price),interpretation:'A break weakens the recovery attempt; evaluate protection and exposure, not a guaranteed outcome.',next:base.levels.supports[1]?fmt(base.levels.supports[1].price):'Further support unavailable'});
  const cutoff=Date.parse(t.asOf),stories=arr(context.news).filter(n=>{
   const p=Date.parse(n?.publishedAt||'');return typeof n?.title==='string'&&Number.isFinite(p)&&p<=now&&(!Number.isFinite(cutoff)||p>=cutoff-30*86400000);

@@ -89,3 +89,28 @@ test('Saved source timestamps cannot convert stale data to live evidence',()=>{
  assert.equal(r.quality,'Historical / cached evidence');
  assert.equal(r.benchmark.relative,0.68);
 });
+test('Integrity failure suppresses comparison and directional scenarios',()=>{
+ const r=call({integrityBlocked:true,market:{nifty:{price:100,quoteAt:technical.asOf,changePct:2}}});
+ assert.equal(r.ready,false);assert.equal(r.benchmark.relative,null);assert.equal(r.scenarios.length,0);
+});
+test('Expiry-day protection ends at the portfolio engine cutoff',()=>{
+ const r=call({book:{legs:[{type:'PE',expiry:'2026-11-19',lots:1,lotSize:150}]}});
+ assert.equal(r.position.putUnits,0);
+});
+test('A same-day future candle and incomplete volume history cannot supply evidence',()=>{
+ assert.equal(call({technical:{...technical,asOf:'2026-11-19T22:00:00+05:30'}}).price,null);
+ const bars=rows.map((r,i)=>i===52?{...r,v:null}:r);
+ assert.equal(call({technical:{...technical,rows:bars}}).volumeRatio,null);
+});
+test('Fundamental labels use their metric and reporting period',()=>{
+ const metric=(label,period)=>({label,kind:'provider',value:5,period});
+ const r=A.fundamentalReview({metrics:[metric('income / PAT','FY26'),metric('ratios / PE ratio','FY26'),metric('income / revenue',null)]});
+ assert.deepEqual(r.readings.map(x=>x.title),['Net earnings','Valuation']);
+});
+test('A second put expiry can be the first actual protection gap',()=>{
+ const leg=(type,expiry)=>({type,expiry,lots:1,lotSize:150});
+ const book={legs:[leg('FUT','2026-12-29'),leg('PE','2026-11-23'),leg('PE','2026-12-01')]};
+ const p=call({book}).position;
+ assert.equal(p.uncoveredUnitsAfter,150);
+ assert.ok(p.messages.some(m=>m.includes('extend beyond 2026-12-01')));
+});
