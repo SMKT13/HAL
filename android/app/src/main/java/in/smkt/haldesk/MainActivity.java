@@ -124,7 +124,7 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return "direct";}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","5.1.18");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","5.1.19");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }

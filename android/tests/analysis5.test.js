@@ -114,3 +114,8 @@ test('A second put expiry can be the first actual protection gap',()=>{
  assert.equal(p.uncoveredUnitsAfter,150);
  assert.ok(p.messages.some(m=>m.includes('extend beyond 2026-12-01')));
 });
+
+test('P/E ratios retain the slash and net profit margins are classified once',()=>{
+ const metrics=['ratios / P/E ratio','income / net profit margin'].map(label=>({kind:'provider',label,value:10,period:'FY26'}));
+ assert.deepEqual(A.fundamentalReview({metrics}).readings.map(x=>x.title),['Profitability margin','Valuation']);
+});

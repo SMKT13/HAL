@@ -2,13 +2,13 @@
 const test=require('node:test'),A=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
-test('5.1.18 upgrade is compatible with signed HAL Atlas 5.1.17',()=>{
+test('5.1.19 upgrade is compatible with signed HAL Atlas 5.1.18',()=>{
  const b=read('app/build.gradle'),native=read('app/src/main/java/in/smkt/haldesk/MainActivity.java');
  A.match(b,/applicationId\s+['"]in\.smkt\.haldesk['"]/);
  A.match(b,/namespace\s+['"]in\.smkt\.haldesk['"]/);
- A.match(b,/versionCode\s+52\b/);
- A.match(b,/versionName\s+['"]5\.1\.18['"]/);
- A.match(native,/obj\.put\("version","5\.1\.18"\)/);
+ A.match(b,/versionCode\s+53\b/);
+ A.match(b,/versionName\s+['"]5\.1\.19['"]/);
+ A.match(native,/obj\.put\("version","5\.1\.19"\)/);
  const manifest=read('app/src/main/AndroidManifest.xml');
  A.match(manifest,/android:label="@string\/app_name"/);
  A.match(read('app/src/main/res/values/atlas.xml'),/<string name="app_name">HAL Atlas<\/string>/);
@@ -46,8 +46,8 @@ test('research and analysis remain read-only and never invoke order placement',(
  A.match(integration,/integrityBlocked:/);
  A.doesNotMatch(integration,/commit\(|saveBook\(|placeOrder|executeOrder/);
  const sdk=read('scripts/local-windows-release.ps1');
- A.match(sdk,/versionCode 52/);
- A.match(sdk,/HAL-Atlas-v5\.1\.18-signed\.apk/);
+ A.match(sdk,/versionCode 53/);
+ A.match(sdk,/HAL-Atlas-v5\.1\.19-signed\.apk/);
  A.match(sdk,/a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382/);
  A.doesNotMatch(sdk,/adb\s+uninstall|pm\s+clear/);
 });

@@ -21,14 +21,14 @@ function fundamentalReview(f={}){
  const metrics=arr(f.metrics).filter(m=>m&&m.kind==='provider'&&typeof m.label==='string'&&finite(m.value));
  const categories=[
   {title:'Revenue / income',match:/revenue|turnover|total income|sales/i,interpretation:'Review execution and delivery progress against the same reported period; a single revenue number cannot establish growth.'},
-  {title:'Net earnings',match:/net profit|profit after tax|profit attributable|\bpat\b/i,interpretation:'Earnings durability depends on margins, execution and cash conversion. A single period does not confirm an earnings trend.'},
+  {title:'Net earnings',match:/^(?!.*\bmargin\b).*(?:net profit|profit after tax|profit attributable|\bpat\b)/i,interpretation:'Earnings durability depends on margins, execution and cash conversion. A single period does not confirm an earnings trend.'},
   {title:'Profitability margin',match:/ebitda margin|operating margin|net margin|profit margin/i,interpretation:'Compare margins with the same basis and earlier periods before concluding cost efficiency is improving.'},
   {title:'Valuation',match:/price.to.earnings|p.e ratio|\bpe ratio\b|price.earnings/i,interpretation:'A valuation multiple is not a buy signal without earnings quality, peer and historical comparisons.'},
   {title:'Cash flow',match:/cash flow from operat|operating cash flow|net cash from operat/i,interpretation:'Cash conversion and working-capital needs matter even when reported profit is positive.'}
  ];
  const readings=[];
  for(const cat of categories){
-  const m=metrics.find(x=>cat.match.test(x.label.split('/').pop().replace(/_/g,' ').trim())&&typeof x.period==='string'&&x.period.trim());
+  const m=metrics.find(x=>cat.match.test(x.label.split(' / ').pop().replace(/_/g,' ').trim())&&typeof x.period==='string'&&x.period.trim());
   if(m)readings.push({title:cat.title,label:m.label,value:m.value,unit:typeof m.unit==='string'?m.unit:null,period:typeof m.period==='string'?m.period:null,source:m.source||'Provider financial data',retrievedAt:m.retrievedAt||null,interpretation:cat.interpretation});
  }
  return {available:readings.length>0,readings,summary:readings.length?'Provider-reported financial fields are shown with explicit periods. No YoY growth, margin trend or valuation conclusion is inferred without comparable verified periods.':'No recognizable period-tagged financial fields are loaded. Business-specific earnings claims are withheld.',driver:'For HAL, track verified aircraft and helicopter delivery milestones, order execution, supply-chain constraints and government defence budgets; distinguish firm orders from proposals.'};
