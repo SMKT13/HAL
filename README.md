@@ -6,12 +6,14 @@ Personal research, derivatives risk and portfolio accounting for **Hindustan Aer
 
 | Application | Source | Version | Storage |
 | --- | --- | --- | --- |
-| Android HAL Atlas | `android/` | **5.1.16**, versionCode **50** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
+| Android HAL Atlas (upgraded Classic Blueprint branch) | `android/` | **5.1.17 source**, versionCode **51** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
 | Desktop/web HAL viewer | `src/`, `backend/`, `server.ts`, `server.py` | Separate web product | Browser-origin-local portfolio, optional local Python market feed |
 
 **The two apps do not automatically share positions, history, model outputs or subscriptions.** Export/import only through documented, validated formats. The web viewer is not the canonical Android portfolio.
 
-The signed Blueprint APK retains the previous native bridge. Automatic public Gemini briefings require a full native build from this source. [Release verification](android/verification/blueprint-5.1.16.md)
+The existing signed HAL Atlas **5.1.16 / 50** APK is preserved. The new **5.1.17 / 51** source adds read-only daily evidence-based analysis on the Classic Blueprint layout, but it is **not yet a signed APK**. Source upgrade branch: [`upgrade/hal-atlas-5.1.17-daily-analysis`](https://github.com/SMKT13/HAL/tree/upgrade/hal-atlas-5.1.17-daily-analysis). [Upgrade checks](android/docs/ATLAS-5.1.17-ANALYSIS.md).
+
+The signed Blueprint APK retains the previous native bridge. Automatic public Gemini briefings require a full native build from this source. [Original 5.1.16 release verification](android/verification/blueprint-5.1.16.md)
 
 ## Getting started on Android
 
