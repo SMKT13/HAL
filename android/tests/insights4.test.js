@@ -85,3 +85,11 @@ test('rewritten order headline joins its filing while a different contract stays
  const grouped=I.newsGroups([news('HAL bags Tejas deal worth Rs 2,400 crore'),news('Contract award for Tejas aircraft at INR 2400 crore',true),news('New Tejas contract worth 900 crore')]);
  assert.equal(grouped.length,2);assert.equal(grouped.find(g=>g.official).duplicates.length,1);
 });
+test('News grouping tolerates malformed rows and a WebView without matchAll',()=>{
+ const original=String.prototype.matchAll;
+ try{
+  String.prototype.matchAll=undefined;
+  const rows=I.newsGroups([null,{title:'HAL receives aircraft order worth Rs 500 crore'}]);
+  assert.equal(rows.length,1);
+ }finally{String.prototype.matchAll=original;}
+});

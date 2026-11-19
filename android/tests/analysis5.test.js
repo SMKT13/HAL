@@ -119,3 +119,23 @@ test('P/E ratios retain the slash and net profit margins are classified once',()
  const metrics=['ratios / P/E ratio','income / net profit margin'].map(label=>({kind:'provider',label,value:10,period:'FY26'}));
  assert.deepEqual(A.fundamentalReview({metrics}).readings.map(x=>x.title),['Profitability margin','Valuation']);
 });
+test('Expiry countdown follows IST calendar dates even before the expiry-day close',()=>{
+ const book={legs:[{type:'PE',lots:1,lotSize:150,expiry:'2026-11-23'}]};
+ for(const [date,expected] of [['2026-11-22',1],['2026-11-23',0]]){
+  const r=A.positionReview(book,null,true,Date.parse(date+'T09:00:00+05:30'),false);
+  assert.equal(r.expiryDays,expected);
+ }
+});
+test('Equal benchmark performance is reported as a match',()=>{
+ const r=A.benchmarkReview({nifty:{price:25000,changePct:1,quoteAt:technical.asOf}},'2026-11-19',1,now);
+ assert.equal(r.relative,0);assert.match(r.summary,/matched/);
+});
+test('Cached session excludes later-session headlines while retaining same-day announcements',()=>{
+ const news=['2026-11-18','2026-11-19'].map(date=>({title:date,publishedAt:date+'T18:00:00+05:30'}));
+ const r=call({technical:{...technical,asOf:'2026-11-18T00:00:00+05:30'},news});
+ assert.deepEqual(r.headlines.map(n=>n.title),['2026-11-18']);
+});
+test('Sales growth and inventory turnover cannot replace reported revenue',()=>{
+ const metrics=['sales growth','inventory turnover','revenue from operations'].map((label,i)=>({kind:'provider',period:'FY26',label,value:i}));
+ assert.equal(A.fundamentalReview({metrics}).readings[0].value,2);
+});

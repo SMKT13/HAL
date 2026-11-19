@@ -1382,12 +1382,15 @@ function blueprintDestination(){
  if(['research','ai'].includes(ui.screen)||ui.screen==='position'&&['brief','analysis'].includes(ui.position))return 'research';
  return ui.screen==='settings'?'settings':'portfolio';
 }
-function atlasTab(){
- if(ui.screen==='position'&&ui.position==='risk')return 'portfolio';
- if(ui.screen==='position'&&ui.position==='fno')return 'plan';
+function currentAtlasRoute(){
  const sub=ui[ui.screen==='ai'?'aiPage':ui.screen];
- return Object.keys(atlasTabs).find(tab=>atlasTabs[tab].some(([screen,key])=>screen===ui.screen&&(!key||key===sub)))||'today';
+ for(const [tab,routes] of Object.entries(atlasTabs)){
+  const route=routes.find(([screen,key])=>screen===ui.screen&&(!key||key===sub));
+  if(route)return {tab,route};
+ }
+ return null;
 }
+function atlasTab(){return currentAtlasRoute()?.tab||'today';}
 function workspace(m,l,r){
  if(upgradeReview?.exists)return card('Installed portfolio',btn('review-installed','Review installed book'));
  const tab=atlasTab(),routes=atlasTabs[tab];
@@ -1781,7 +1784,7 @@ const actions={
   }else if(ui.screen==='technicals'&&ui.technicals==='chain'){
    ui.question='Explain HAL '+(ui.side==='PE'?'puts':'calls')+' for expiry '+ui.expiry+' and how to interpret their bid and ask.';
   }else{
-   const sub=ui[ui.screen],item=Object.values(atlasTabs).flat().find(([screen,key])=>screen===ui.screen&&key===sub);
+   const sub=ui[ui.screen==='ai'?'aiPage':ui.screen],item=currentAtlasRoute()?.route;
    ui.question='Explain '+(item?.[2]||sub||'HAL research')+' for HAL using the available evidence.';
   }
   navigate('ai','assistant');

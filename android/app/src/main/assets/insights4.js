@@ -34,13 +34,15 @@ function marketEvidence(market={}){
  return {spot:quote(market.spot),nifty:quote(market.nifty),vix:quote(market.vix),status:select(market.status,['state','status','market','exchange','source','asOf','retrievedAt']),lastSuccess:stamp(market.lastSuccess),lastFailure:stamp(market.lastFailure),failureReason:text(market.error||market.failureReason)};
 }
 function normalizeNews(raw){
- return array(raw).map(n=>({id:text(n.id,120),title:text(n.title||n.headline,260),url:safeURL(n.url||n.link),source:text(n.source,100),publishedAt:stamp(n.publishedAt||n.published_at||n.date),retrievedAt:stamp(n.retrievedAt||n.retrieved_at),eventDate:typeof n.eventDate==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(n.eventDate)&&stamp(n.eventDate)?.slice(0,10)===n.eventDate?n.eventDate:null,official:n.official===true,topic:text(n.topic,60),summary:text(n.summary,500)})).filter(n=>n.title);
+ return array(raw).filter(n=>n&&typeof n==='object').map(n=>({id:text(n.id,120),title:text(n.title||n.headline,260),url:safeURL(n.url||n.link),source:text(n.source,100),publishedAt:stamp(n.publishedAt||n.published_at||n.date),retrievedAt:stamp(n.retrievedAt||n.retrieved_at),eventDate:typeof n.eventDate==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(n.eventDate)&&stamp(n.eventDate)?.slice(0,10)===n.eventDate?n.eventDate:null,official:n.official===true,topic:text(n.topic,60),summary:text(n.summary,500)})).filter(n=>n.title);
 }
 function eventKey(article){
  const words=(article.title+' '+(article.summary||'')).toLowerCase().replace(/(\d),(?=\d)/g,'$1').replace(/mk[ -]?1a/g,'mk1a');
  const kind=/\b(?:order|orders|contract|contracts|deal|award|awarded)\b/.test(words)?'order':/deliver(?:y|ies|ed)|hand(?:ed)?[ -]?over/.test(words)?'delivery':/quarterly|results|earnings/.test(words)?'results':'';
  const programmes=new Set(words.match(/\b(?:tejas|dhruv|prachand|su[ -]?30mki|htt[ -]?40|dornier|lu[h]|lch)\b/g)||[]);
- const amounts=new Set(Array.from(words.matchAll(/(?:₹|rs\.?|inr)?\s*(\d+(?:\.\d+)?)\s*(?:crores?|cr)\b/g),m=>Number(m[1])));
+ const amounts=new Set(),amountPattern=/(?:₹|rs\.?|inr)?\s*(\d+(?:\.\d+)?)\s*(?:crores?|cr)\b/g;
+ let amount;
+ while((amount=amountPattern.exec(words))!==null)amounts.add(Number(amount[1]));
  const quarters=new Set(words.match(/\bq[1-4]\b/g)||[]);
  return {kind,programmes:new Set([...programmes].map(p=>p.replace(/[ -]/g,''))),amounts,quarters};
 }

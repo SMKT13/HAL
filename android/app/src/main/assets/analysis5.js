@@ -20,7 +20,7 @@ function relativeNews(headline){
 function fundamentalReview(f={}){
  const metrics=arr(f.metrics).filter(m=>m&&m.kind==='provider'&&typeof m.label==='string'&&finite(m.value));
  const categories=[
-  {title:'Revenue / income',match:/revenue|turnover|total income|sales/i,interpretation:'Review execution and delivery progress against the same reported period; a single revenue number cannot establish growth.'},
+  {title:'Revenue / income',match:/^(?:total |net |gross )?(?:revenue(?: from operations)?|turnover|income from operations|sales|total income)$/i,interpretation:'Review execution and delivery progress against the same reported period; a single revenue number cannot establish growth.'},
   {title:'Net earnings',match:/^(?!.*\bmargin\b).*(?:net profit|profit after tax|profit attributable|\bpat\b)/i,interpretation:'Earnings durability depends on margins, execution and cash conversion. A single period does not confirm an earnings trend.'},
   {title:'Profitability margin',match:/ebitda margin|operating margin|net margin|profit margin/i,interpretation:'Compare margins with the same basis and earlier periods before concluding cost efficiency is improving.'},
   {title:'Valuation',match:/price.to.earnings|p.e ratio|\bpe ratio\b|price.earnings/i,interpretation:'A valuation multiple is not a buy signal without earnings quality, peer and historical comparisons.'},
@@ -38,7 +38,7 @@ function benchmarkReview(m={},asOf,changePct,now=Date.now()){
  const nifty=valid(m.nifty)?{price:m.nifty.price,changePct:number(m.nifty.changePct),at:m.nifty.quoteAt}:null;
  const vix=valid(m.vix)?{price:m.vix.price,changePct:number(m.vix.changePct),at:m.vix.quoteAt}:null;
  const relative=nifty&&finite(changePct)&&finite(nifty.changePct)?round(changePct-nifty.changePct):null;
- return {nifty,vix,relative,summary:finite(relative)?'HAL '+(relative>=0?'outperformed':'underperformed')+' Nifty 50 by '+Math.abs(relative)+' percentage points in the same-dated session; this is comparison, not proof of why HAL moved.':'Same-date, timestamped benchmark changes are unavailable, so relative outperformance is withheld.'};
+ return {nifty,vix,relative,summary:relative===0?'HAL matched the Nifty 50 percentage change to two decimal places for the same session.':finite(relative)?'HAL '+(relative>=0?'outperformed':'underperformed')+' Nifty 50 by '+Math.abs(relative)+' percentage points in the same-dated session; this is comparison, not proof of why HAL moved.':'Same-date, timestamped benchmark changes are unavailable, so relative outperformance is withheld.'};
 }
 function positionReview(book,valuation,confirmed,now,cached){
  const legs=arr(book?.legs),active=legs.filter(l=>l&&engine.expiryTime(l.expiry)>=now);
@@ -54,7 +54,7 @@ function positionReview(book,valuation,confirmed,now,cached){
  const putUnitsAfter=unitsAfter(puts,reviewDate);
  const gap=Boolean(gapDate);
  const invalidQuantity=active.some(l=>!qty(l));
- const expiryDays=earliestPut?Math.ceil((engine.expiryTime(earliestPut)-now)/86400000):null;
+ const expiryDays=earliestPut?(Date.parse(earliestPut)-Date.parse(currentDay(now)))/86400000:null;
  const messages=[];
  if(legs.length&&!confirmed)messages.push('Saved broker positions are not confirmed; verify exact contracts and quantities before using this review.');
  if(invalidQuantity)messages.push('At least one active leg has invalid or missing lot quantity; coverage cannot be trusted.');
@@ -122,7 +122,7 @@ function build(context={},now=Date.now()){
  if(up&&down)base.scenarios.push({kind:'range',title:'Consolidation',trigger:'Price stays within '+(down?fmt(down.price):'unavailable')+' to '+(up?fmt(up.price):'unavailable'),interpretation:'Mixed evidence favours observation over assuming a trend. A range can fail in either direction.',next:'Wait for a confirmed change'});
  if(down)base.scenarios.push({kind:'bearish',title:'Support fails',trigger:'Sustained trade and preferably a completed close below '+fmt(down.price),interpretation:'A break weakens the recovery attempt; evaluate protection and exposure, not a guaranteed outcome.',next:base.levels.supports[1]?fmt(base.levels.supports[1].price):'Further support unavailable'});
  const cutoff=Date.parse(t.asOf),stories=arr(context.news).filter(n=>{
-  const p=Date.parse(n?.publishedAt||'');return typeof n?.title==='string'&&Number.isFinite(p)&&p<=now&&(!Number.isFinite(cutoff)||p>=cutoff-30*86400000);
+  const p=Date.parse(n?.publishedAt||'');return typeof n?.title==='string'&&Number.isFinite(p)&&p<=now&&day(n.publishedAt)<=asOf&&p>=cutoff-30*86400000;
  }).sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt)).slice(0,4);
  base.headlines=stories.map(n=>({title:n.title,source:n.source||'Unspecified',publishedAt:n.publishedAt,url:n.url||null,official:n.official===true,interpretation:relativeNews(n.title)}));
  if(!base.headlines.length)base.caveats.push('No date-verified recent headlines are available. Fundamental and news conclusions are withheld.');

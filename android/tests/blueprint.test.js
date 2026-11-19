@@ -53,3 +53,11 @@ test('installed-book review preserves populated records and a recoverable pre-re
  for(const field of ['open','realized','charges','net'])assert.equal(after[field],before[field]);
  assert.equal(after.realized,750);assert.equal(after.charges,7);
 });
+test('Risk, F&O and AI context use the routes registered in the directory',()=>{
+ const routes=ui.slice(ui.indexOf('const atlasTabs='),ui.indexOf('function workspace('));
+ for(const [screen,key,tab,title] of [['position','risk','plan','Current protection'],['position','fno','research','F&O Desk'],['ai','coach','research','Skills coach']]){
+  const context={ui:{screen,[screen==='ai'?'aiPage':screen]:key},researchDesks:{company:[]}};
+  const result=vm.runInNewContext('Array.prototype.flat=undefined;'+routes+';[atlasTab(),currentAtlasRoute().route[2]]',context);
+  assert.deepEqual(Array.from(result),[tab,title]);
+ }
+});
