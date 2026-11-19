@@ -16,6 +16,29 @@ function relativeNews(headline){
  if(/tejas|engine|deliver|production|supply|aircraft|helicopter/.test(s))return 'Delivery schedules and production execution may affect HAL cash flow; check official milestones.';
  return 'Potentially relevant headline; price impact and causation are not established by a headline alone.';
 }
+function fundamentalReview(f={}){
+ const metrics=arr(f.metrics).filter(m=>m&&m.kind==='provider'&&typeof m.label==='string'&&finite(m.value));
+ const categories=[
+  {title:'Revenue / income',match:/revenue|turnover|total income|sales/i,interpretation:'Review execution and delivery progress against the same reported period; a single revenue number cannot establish growth.'},
+  {title:'Net earnings',match:/net profit|profit after tax|profit attributable|\\bpat\\b/i,interpretation:'Earnings durability depends on margins, execution and cash conversion. A single period does not confirm an earnings trend.'},
+  {title:'Profitability margin',match:/ebitda margin|operating margin|net margin|profit margin/i,interpretation:'Compare margins with the same basis and earlier periods before concluding cost efficiency is improving.'},
+  {title:'Valuation',match:/price.to.earnings|p.e ratio|\\bpe ratio\\b|price.earnings/i,interpretation:'A valuation multiple is not a buy signal without earnings quality, peer and historical comparisons.'},
+  {title:'Cash flow',match:/cash flow from operat|operating cash flow|net cash from operat/i,interpretation:'Cash conversion and working-capital needs matter even when reported profit is positive.'}
+ ];
+ const readings=[];
+ for(const cat of categories){
+  const m=metrics.find(x=>cat.match.test(x.label));
+  if(m)readings.push({title:cat.title,label:m.label,value:m.value,unit:typeof m.unit==='string'?m.unit:null,period:typeof m.period==='string'?m.period:null,source:m.source||'Provider financial data',retrievedAt:m.retrievedAt||null,interpretation:cat.interpretation});
+ }
+ return {available:readings.length>0,readings,summary:readings.length?'Provider-reported financial fields are shown with explicit periods. No YoY growth, margin trend or valuation conclusion is inferred without comparable verified periods.':'No recognizable period-tagged financial fields are loaded. Business-specific earnings claims are withheld.',driver:'For HAL, track verified aircraft and helicopter delivery milestones, order execution, supply-chain constraints and government defence budgets; distinguish firm orders from proposals.'};
+}
+function benchmarkReview(m={},asOf,changePct){
+ const valid=q=>q&&finite(q.price)&&q.price>0&&day(q.quoteAt)===asOf;
+ const nifty=valid(m.nifty)?{price:m.nifty.price,changePct:number(m.nifty.changePct),at:m.nifty.quoteAt}:null;
+ const vix=valid(m.vix)?{price:m.vix.price,changePct:number(m.vix.changePct),at:m.vix.quoteAt}:null;
+ const relative=nifty&&finite(changePct)&&finite(nifty.changePct)?round(changePct-nifty.changePct):null;
+ return {nifty,vix,relative,summary:finite(relative)?'HAL '+(relative>=0?'outperformed':'underperformed')+' Nifty 50 by '+Math.abs(relative)+' percentage points in the same-dated session; this is comparison, not proof of why HAL moved.':'Same-date, timestamped benchmark changes are unavailable, so relative outperformance is withheld.'};
+}
 function positionReview(book,valuation,confirmed,now,cached){
  const legs=arr(book?.legs),today=currentDay(now),active=legs.filter(l=>typeof l.expiry==='string'&&l.expiry>=today);
  const qty=l=>finite(l.lots)&&finite(l.lotSize)&&l.lots>0&&l.lotSize>0?l.lots*l.lotSize:0;
@@ -43,13 +66,15 @@ function build(context={},now=Date.now()){
  const t=context.technical||{},m=context.market||{},book=context.book||{},rows=arr(t.rows);
  const last=rows[rows.length-1],prev=rows[rows.length-2],asOf=day(t.asOf),today=currentDay(now);
  const position=positionReview(book,context.valuation,context.confirmed===true,now,context.cached===true||context.integrityBlocked===true);
- const base={version:1,generatedAt:new Date(now).toISOString(),asOf:t.asOf||null,date:asOf,source:'Completed HAL daily candles · read-only provider',position,headlines:[],signals:[],levels:{supports:[],resistances:[]},scenarios:[],caveats:[],ready:false,quality:'Unavailable',title:'Daily analysis unavailable',verdict:'Insufficient evidence',summary:'Load HAL daily candles to generate a dated, evidence-led report.',price:null,change:null,changePct:null,volumeRatio:null};
+ const fundamentals=fundamentalReview(context.fundamentals),benchmark=benchmarkReview(m,asOf,null);
+ const base={version:1,generatedAt:new Date(now).toISOString(),asOf:t.asOf||null,date:asOf,source:'Completed HAL daily candles · read-only provider',position,fundamentals,benchmark,headlines:[],signals:[],levels:{supports:[],resistances:[]},scenarios:[],caveats:[],ready:false,quality:'Unavailable',title:'Daily analysis unavailable',verdict:'Insufficient evidence',summary:'Load HAL daily candles to generate a dated, evidence-led report.',price:null,change:null,changePct:null,volumeRatio:null};
  if(!last||!finite(last.c)||last.c<=0||!asOf||asOf>today||(!finite(last.v)&&last.v!==0)){
   base.caveats.push('A valid completed daily candle with source date and volume is required. No price or trend conclusion is invented.');
   return base;
  }
  const price=last.c,daily=prev&&finite(prev.c)&&prev.c>0?price-prev.c:null,pct=finite(daily)?daily/prev.c*100:null;
  base.price=price;base.change=daily;base.changePct=pct;base.ready=rows.length>=50&&t.ready!==false;
+ base.benchmark=benchmarkReview(m,asOf,pct);
  const reportStale=context.cached===true||context.integrityBlocked===true||t.stale===true||asOf!==today;
  base.quality=context.integrityBlocked===true?'Source integrity review':reportStale?'Historical / cached evidence':'Current completed daily evidence';
  base.caveats.push('This is a dated interpretation, not a prediction or order signal. Levels are conditional observation zones, not guaranteed fills or stop orders.');
@@ -93,7 +118,7 @@ function build(context={},now=Date.now()){
  if(position.hasBook&&!position.confirmed)base.caveats.push('Portfolio review is based on unconfirmed locally saved positions; do not equate the book with live broker holdings.');
  return base;
 }
-const api={build,positionReview,relativeNews};
+const api={build,positionReview,relativeNews,fundamentalReview,benchmarkReview};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 root.HAL5Analysis=api;
 })(typeof globalThis==='undefined'?this:globalThis);
