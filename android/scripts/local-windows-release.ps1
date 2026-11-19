@@ -1,5 +1,5 @@
-# HAL Desk 5.0 — local Windows verification without paid GitHub runners.
-# Run on your own trusted machine, after manually backing up 4.6 data.
+# HAL Atlas 5.1.17 — local Windows verification without GitHub Actions.
+# Run on your own trusted Windows machine after exporting the installed 5.1.16 ledgers.
 # This NEVER installs/uninstalls an app, opens a broker session or uploads keys.
 [CmdletBinding()]
 param(
@@ -58,7 +58,7 @@ try{
  Run-Checked $zipalign @('-c','-P','16','4',$unsigned)
  Write-Host "[OK] Built aligned unsigned candidate: $unsigned"
  if(!$Sign){
-  Write-Host '[STOP] Unsigned only. It cannot update your existing HAL Desk 4.6 installation.'
+  Write-Host '[STOP] Unsigned only. It cannot update your existing signed HAL Atlas 5.1.16 installation.'
   return
  }
  $key=$env:HAL_SIGNING_KEY_FILE
