@@ -1,8 +1,10 @@
-# HAL Atlas 5.1.0 — local build and upgrade instructions
+# HAL Atlas 5.1.17 — local build and upgrade instructions
 
 Build and verify the release locally. Back up both ledgers before an in-place upgrade.
 
-This source builds Android application ID **`in.smkt.haldesk`**, versionCode **34**, versionName **5.1.0**, minimum SDK **26**. The original signing certificate is mandatory for installing **over** an earlier HAL Desk without uninstalling or losing app data.
+This source builds Android application ID **`in.smkt.haldesk`**, versionCode **51**, versionName **5.1.17**, minimum SDK **26**. The original certificate from the signed HAL Atlas 5.1.16 release is mandatory for installing **over** an earlier HAL Desk without uninstalling or losing app data.
+
+The original signed 5.1.16 APK (versionCode 50) remains the reference release. This 5.1.17 code (51) is **source only until the full Android release suite, original-key signing and physical upgrade have passed**. Keep the old APK and exports.
 
 ## 1. Back up your data
 
@@ -20,7 +22,7 @@ npm run test:ui
 HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash build.sh
 ```
 
-The script rebuilds generated WebView assets, runs native tests and lint, assembles, and aligns `build/HAL-Atlas-v5.1.0-unsigned.apk`. A CI artifact is unsigned and cannot upgrade an existing installation.
+The script rebuilds generated WebView assets, runs native tests and lint, assembles, and aligns `build/HAL-Atlas-v5.1.17-unsigned.apk`. A CI artifact is unsigned and cannot upgrade an existing installation.
 
 ## 3. Sign privately with the **original** keystore
 
@@ -38,12 +40,12 @@ ANDROID_SDK_ROOT="$ANDROID_HOME" bash build.sh
 a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382
 ```
 
-The output is `build/HAL-Atlas-v5.1.0-signed.apk`. Signing with a new keystore—even with the same alias—does not make it upgrade-compatible.
+The output is `build/HAL-Atlas-v5.1.17-signed.apk`. Signing with a new keystore—even with the same alias—does not make it upgrade-compatible.
 
 ## 4. Upgrade and verify
 
 1. Keep the installed old HAL Desk; install the verified **signed** APK and choose **Update**.
-2. Confirm the installed version shows 5.1.0 and the open futures/puts have unchanged contract identities, quantities, expiries, entry values and manual marks.
+2. Confirm the installed version shows 5.1.17 and the open futures/puts have unchanged contract identities, quantities, expiries, entry values and manual marks.
 3. Check lifetime realised history, closed October trades, premium costs, charges, funding and journal counts against the exported backup.
 4. Open the Options Lab and confirm saved paper drafts, opened/closed trade records and separate OI/IV history (if previously recorded). Open PAPER positions should be immutable.
 5. Check offline mode; then validate live Upstox spot/futures/options, quote freshness and token-expiry handling. Confirm AI remains opt-in.
