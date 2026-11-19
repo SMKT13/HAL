@@ -7,12 +7,12 @@ test('release build retains package identity, API 26 minimum and higher upgrade 
  A.match(b,/namespace\s+['"]in\.smkt\.haldesk['"]/);
  A.match(b,/minSdk\s+26\b/);
  const code=Number(b.match(/versionCode\s+(\d+)/)?.[1]);
- A.ok(code===33,'5.0 must upgrade both code31 and code32');
+ A.ok(code===34,'5.1 must upgrade code33');
  A.match(b,/versionName\s+['"]5\.0\.0['"]/);
 });
 test('source version matches Gradle and npm lock metadata',()=>{
  const pkg=JSON.parse(read('package.json')),lock=JSON.parse(read('package-lock.json'));
- A.equal(pkg.version,'5.0.0');
+ A.equal(pkg.version,'5.1.0');
  A.equal(lock.version,pkg.version);
  A.equal(lock.packages[''].version,pkg.version);
  A.match(read('app/src/main/java/in/smkt/haldesk/MainActivity.java'),
