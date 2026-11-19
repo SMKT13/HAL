@@ -1,10 +1,16 @@
-# HAL Desk Android — 5.1.0 rebuild branch (versionCode 34)
+# HAL Atlas Android — 5.2.0 source (versionCode 35)
 
 This update preserves the Android package and SQLite schema-4 book used by 4.6.0 (versionCode 31).
 
 Personal offline-capable HAL research, risk, history and PAPER option strategies. Android **8.0+**, applicationId `in.smkt.haldesk`, target SDK 35. Direct Upstox Analytics Token and optional Gemini/FinBERT; **read-only, no orders**.
 
-## New in 5.1: Explain the market, do not just display data
+## New in 5.2: HAL Atlas identity and mobile layout
+
+The installed launcher label, app header, native dialogs and new export filenames now say **HAL Atlas**, with a compass/market-trajectory vector icon and a vivid dark-first five-column navigation. The third navigation button is **Analysis**, opening **Daily Analysis** by default; the existing internal Technicals route and options, indicators, charts, backtests and analysis modules remain intact.
+
+**Compatibility is the priority:** `applicationId in.smkt.haldesk`, Android Keystore alias, existing JSON book schema, SQLite data, paper ledger, native JavaScript bridge and pre-existing backups are not renamed. This change is **source-only until locally built, signed with the original key and installed over the existing app**. [Atlas upgrade details](docs/ATLAS-UPGRADE-5.2.md).
+
+## Inherited from 5.1: Explain the market, do not just display data
 
 **Technicals → Daily Analysis** now provides a dated, evidence-led HAL interpretation: recovery versus confirmed trend, the indicators behind the view, support/resistance and conditional scenarios, same-date Nifty/VIX context when verifiable, source-attributed financial evidence, recent news relevance, and actual-position put/futures expiry-gap warnings. **Position → Overview** carries a summary and direct link.
 
@@ -18,7 +24,7 @@ The five primary tabs remain **Position, History, Technicals, Research and AI De
 
 Actual-book accounting and recovery remain schema 4 in SQLite, with revision checks, checksums, previous-book recovery, cost accounting and confirmed-broker-history reconciliation. In 5.0, JSON backup import first previews the existing-versus-imported open legs, journal, lifetime history, notes, recorded charges and booked net; destructive replacement requires a checkbox plus typing `REPLACE`. Failed native book saves leave the saved book and current calculation state unchanged. Import is a full replacement, not an automatic merge. No migrations delete legacy `hal_desk_v2`/`hal_positions_v1` browser data. Credentials continue using the original Android Keystore alias `hal-upstox-secrets-v1` and app package identity.
 
-## HAL Desk 5 research additions
+## Research modules carried forward from HAL Desk 5
 
 Read-only HAL Desk 5 modules include `risk5.js` (dated option and future settlements), `quant5.js` (conditional Monte Carlo), `backtest5.js` (next-bar-open PAPER strategy research), `hedge5.js` (hedge replacement audit), `lenses5.js` (local evidence readiness), `quality5.js` and `continuity5.js` (market-data identity, clock and refresh safeguards), `attribution5.js` (reconciled contract-by-contract last-visit market movement), `migrate5.js` (book-upgrade preservation), `portfolio5.js` (lifetime P&L reconciliation), `expiry5.js` (dated protection gaps), `reconcile5.js` (read-only broker-close preview), `path5.js` (expiry-specific hypothetical P&L, never a forecast of delivery cash), and `rollover5.js` (read-only, exact-contract bid/ask and fee comparison of later-dated futures). The close preview cannot write to the real journal; actual completed transactions are recorded separately in Position → Book. Today and Performance withhold inconsistent totals. These are compatible vertical slices of the existing architecture, **not yet a fully independent rebuild**.
 
