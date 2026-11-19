@@ -1,4 +1,4 @@
-# HAL Desk Android — 5.0.0 rebuild branch (versionCode 33)
+# HAL Desk Android — 5.1.0 rebuild branch (versionCode 34)
 
 This update preserves the Android package and SQLite schema-4 book used by 4.6.0 (versionCode 31).
 
