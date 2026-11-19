@@ -67,7 +67,7 @@ function navigate(screen,sub,back=false){
   if(screen==='research'&&sub==='events'){request('news');request('fundamentals');}
   if(screen==='position'&&sub==='hedge'){ui.testRoll=null;ui.testPrice=null;const held=book.legs.find(l=>l.id===ui.hedgeHeld)||book.legs.find(l=>l.type==='PE');const end=ui.rollTarget||book.legs.filter(l=>l.type==='FUT'&&held&&l.expiry>held.expiry).map(l=>l.expiry).sort()[0];if(end)request('hedges',end);}
   if(screen==='position'&&sub==='overview')request('filings');
-  if(screen==='position'&&sub==='brief'){request('news');request('fundamentals');}
+  if(screen==='position'&&['brief','analysis'].includes(sub)){request('candles','D');request('news');request('filings');request('fundamentals');request('context');}
   if(screen==='position'&&['snapshot','brief'].includes(sub)){request('candles','D');request('context');request('filings');if(sub==='snapshot'){request('contracts');if(ui.expiry)request('hedges',ui.expiry);}}
   ui.reviewOpen=false;
   ui.screen=screen;
@@ -1201,7 +1201,7 @@ function analogView(){
 }
 
 const researchDesks={
- brief:[['position','brief','Market Brief'],['technicals','markets','Chart'],['technicals','indicators','Technical indicators'],['technicals','insights','Historical patterns'],['technicals','backtest','Backtests']],
+ brief:[['position','brief','Market Brief'],['position','analysis','Daily Analysis'],['technicals','markets','Chart'],['technicals','indicators','Technical indicators'],['technicals','insights','Historical patterns'],['technicals','backtest','Backtests']],
  fno:[['position','fno','F&O Desk'],['technicals','chain','Option chain'],['position','carry','Futures carry & rollover'],['position','risk','Current protection']],
  company:[['research','events','Company & Events'],['research','financials','Company Financials'],['research','orders','Order book & awards'],['research','deliveries','Deliveries'],['research','ownership','Shareholding'],['research','valuation','Valuation'],['research','calendar','Confirmed events'],['research','news','News'],['research','company','Provider statements']]
 };
@@ -1373,13 +1373,13 @@ const atlasTabs={
  today:[['position','overview','Overview'],['position','agenda','Agenda'],['position','changes','Since last review'],],
  portfolio:[['position','book','Open book'],['position','performance','Performance'],['position','break-even','Break-even'],['position','journal','Journal & funding'],['history','','Lifetime history']],
  plan:[['position','risk','Current protection'],['position','hedge','Find a hedge'],['position','one-lot','Replace one lot'],['position','saved-rolls','Saved comparisons'],['position','stress','Stress test'],['position','compare','Compare'],['technicals','lab','Options Lab']],
- research:[['position','brief','Market Brief'],['position','fno','F&O Desk'],['research','events','Company & Events'],['position','carry','Futures carry & rollover'],...researchDesks.company.slice(1,-2),['technicals','chain','Option chain'],['technicals','markets','Chart'],['technicals','indicators','Indicators'],['technicals','insights','Patterns'],['technicals','backtest','Backtest'],['research','news','News & filings'],['research','company','Company'],['ai','assistant','AI Desk'],['ai','coach','Skills coach']],
+ research:[['position','brief','Market Brief'],['position','analysis','Daily Analysis'],['position','fno','F&O Desk'],['research','events','Company & Events'],['position','carry','Futures carry & rollover'],...researchDesks.company.slice(1,-2),['technicals','chain','Option chain'],['technicals','markets','Chart'],['technicals','indicators','Indicators'],['technicals','insights','Patterns'],['technicals','backtest','Backtest'],['research','news','News & filings'],['research','company','Company'],['ai','assistant','AI Desk'],['ai','coach','Skills coach']],
  settings:[['settings','','Settings']]
 };
 const atlasNames={today:'Today',portfolio:'Positions',plan:'Risk & Hedge',research:'Market & Research',settings:'Settings & Data'};
 function blueprintDestination(){
  if(ui.screen==='technicals'||ui.screen==='position'&&['snapshot','carry','fno'].includes(ui.position))return 'market';
- if(['research','ai'].includes(ui.screen)||ui.screen==='position'&&ui.position==='brief')return 'research';
+ if(['research','ai'].includes(ui.screen)||ui.screen==='position'&&['brief','analysis'].includes(ui.position))return 'research';
  return ui.screen==='settings'?'settings':'portfolio';
 }
 function atlasTab(){
@@ -1392,7 +1392,7 @@ function workspace(m,l,r){
  if(upgradeReview?.exists)return card('Installed portfolio',btn('review-installed','Review installed book'));
  const tab=atlasTab(),routes=atlasTabs[tab];
  const current=routes.find(([screen,key])=>screen===ui.screen&&(!key||key===ui[screen==='ai'?'aiPage':screen]));
- const name=ui.screen==='position'&&ui.position==='snapshot'?'Market':ui.screen==='position'&&ui.position==='brief'?'Research':ui.screen==='position'&&ui.position==='book'?'Positions':ui.screen==='technicals'&&ui.technicals==='chain'?'F&O Desk':current?.[2]==='Overview'?'Today':current?.[2]||(ui.position==='risk'&&ui.screen==='position'?'Protection details':atlasNames[tab]);
+ const name=ui.screen==='position'&&ui.position==='analysis'?'Daily Analysis':ui.screen==='position'&&ui.position==='snapshot'?'Market':ui.screen==='position'&&ui.position==='brief'?'Research':ui.screen==='position'&&ui.position==='book'?'Positions':ui.screen==='technicals'&&ui.technicals==='chain'?'F&O Desk':current?.[2]==='Overview'?'Today':current?.[2]||(ui.position==='risk'&&ui.screen==='position'?'Protection details':atlasNames[tab]);
  const heading='<div class="desk-heading"><h1>'+esc(name)+'</h1></div>';
  let view;
  if(ui.screen==='history')view=accountHistory();
@@ -1400,11 +1400,12 @@ function workspace(m,l,r){
  else if(ui.screen==='position'){
    if(ui.position==='snapshot')view=marketSnapshot(m);
    else if(ui.position==='plot')view=portfolioPlot();
-   else if(ui.position==='overview')view=today(m,l,r);
+   else if(ui.position==='overview')view=analysisView.preview()+today(m,l,r);
+   else if(ui.position==='analysis')view=analysisView.view();
    else if(ui.position==='book')view=positionsHome(l);
    else if(ui.position==='hedge')view=hedgeHome(m);
    else if(ui.position==='fno')view=deskView();
-   else if(ui.position==='brief')view=developments()+'<details class="card"><summary>Market summary</summary>'+marketDigest(m)+'</details>';
+   else if(ui.position==='brief')view=analysisView.view()+'<details class="card"><summary>Company updates & source timeline</summary>'+developments()+'</details>'+'<details class="card"><summary>Market summary</summary>'+marketDigest(m)+'</details>';
    else if(ui.position==='carry')view=carryDesk(m);
    else if(ui.position==='changes')view=card('Since last review',changeView());
    else if(ui.position==='agenda')view=agendaView();
@@ -1415,7 +1416,7 @@ function workspace(m,l,r){
  else if(ui.screen==='ai')view=ui.aiPage==='coach'?card('Position review',reviews(I.coach(evidence()))):research(m,'ai');
  else view=researchDesks.company.some(([screen,key])=>screen==='research'&&key===ui.research)&&!['news','company'].includes(ui.research)?companyLanding(ui.research):research(m,ui.research);
  const links=[];
- if(ui.screen==='position'&&ui.position==='brief')links.push(['technicals','markets','Chart'],['technicals','chain','F&O Desk'],['research','events','Company & Events']);
+ if(ui.screen==='position'&&ui.position==='brief')links.push(['position','analysis','Daily Analysis'],['technicals','markets','Chart'],['technicals','chain','F&O Desk'],['research','events','Company & Events']);
  if(ui.screen==='position'&&ui.position==='performance')links.push(['position','break-even','Break-even estimates']);
  if(ui.screen==='technicals'&&ui.technicals==='markets')links.push(['technicals','insights','Explore history']);
  if(ui.screen==='technicals'&&ui.technicals==='insights')links.push(['technicals','backtest','Backtest']);
@@ -1839,6 +1840,8 @@ const actions={
 
 Object.assign(actions,{
  'go-book':()=>navigate('position','book'),'go-risk':()=>navigate('position','risk'),
+ 'go-analysis':()=>navigate('position','analysis'),
+ 'analysis-refresh':()=>{if(!configured){native('settings');return;}refresh(true);request('candles','D',true);request('news','D',true);request('filings','D',true);request('fundamentals','D',true);request('context','D',true);},
  'go-company':()=>navigate('research','company'),'go-compare':()=>navigate('plan','compare'),
  'go-hedge':()=>navigate('plan','hedge'),'go-lab':()=>navigate('technicals','lab'),
  'retry-prices':()=>refresh(),
@@ -1858,6 +1861,7 @@ Object.assign(actions,{
 });
 const viewAPI={get:()=>({book,market:market(),evidence:evidence(),sessionBaseline:reviewBaseline}),getBook:()=>book,commit,render,modal,esc,money,num,pct,date,when,row,table,card,btn,tile,badge,input,select,empty,native,navigate,backup:()=>actions.export()};
 const historyView=window.HALHistoryViews(viewAPI),recoveryView=window.createHalRecovery(viewAPI),reviewView=window.createHalReview(viewAPI);
+const analysisView=window.createHalAnalysis({...viewAPI,get:()=>({book,market:market(),valuation:ledger(),technical:technical('D'),news:news(),fundamentals:I.providerFundamentals(D.packet(s,'fundamentals','D',ui.statement)),confirmed:isBookConfirmed(),cached:s.cached===true||!!s.failure,integrityBlocked:s.failure==='market_integrity_review'})});
 const optionsLab=window.createHalOptionsLab({...viewAPI,labContext:()=>({snapshot:s.snapshot||{},chain:D.packet(s,'hedges',ui.expiry)?.data||D.packet(s,'chain',ui.expiry)?.data||{},chains:Object.values(s.research||{}).map(x=>x?.data).filter(x=>x&&Array.isArray(x.option_rows)&&x.option_rows.length>0),expiry:ui.expiry,market:market(),book}),labSetExpiry:d=>{if(!E.validDate(d))return;ui.expiry=d;request('hedges',d);render();},labRefresh:force=>{if(ui.expiry)request('hedges',ui.expiry,!!force);}});
 Object.assign(actions,optionsLab.actions,historyView.actions,recoveryView.actions,reviewView.actions,{'period-review':()=>{ui.reviewOpen=!ui.reviewOpen;render();window.scrollTo(0,0);}});
 document.addEventListener('click',ev=>{const a=ev.target.closest('a[href]');if(a){ev.preventDefault();const u=E.safeURL(a.href);if(u)native('openLink',u);return;}const sub=ev.target.closest('[data-sub]'),b=ev.target.closest('[data-action]');try{if(sub){if(sub.closest('#modal'))closeModal();navigate(sub.dataset.route||ui.screen,sub.dataset.sub);$('main').focus();}if(b)actions[b.dataset.action]?.(b);}catch(e){toast(e.message);}});
