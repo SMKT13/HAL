@@ -1,23 +1,25 @@
-# HAL Desk
+# HAL Atlas
 
-Personal research, derivatives risk and portfolio accounting for **Hindustan Aeronautics Limited (NSE: HAL)**. This repository contains two **separate** applications: the primary Android desk and an older desktop/browser viewer. Neither application sends orders, reads broker account holdings or transfers funds.
+Personal research, derivatives risk and portfolio accounting for **Hindustan Aeronautics Limited (NSE: HAL)**. This repository contains two **separate** applications: the primary HAL Atlas Android app (formerly HAL Desk) and an older desktop/browser viewer. Neither application sends orders, reads broker account holdings or transfers funds.
 
 ## Current release sources
 
 | Application | Source | Version | Storage |
 | --- | --- | --- | --- |
-| Android HAL Desk | `android/` | **5.0.0**, versionCode **33** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
+| Android HAL Atlas | `android/` | **5.2.0 source**, versionCode **35** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
 | Desktop/web HAL viewer | `src/`, `backend/`, `server.ts`, `server.py` | Separate web product | Browser-origin-local portfolio, optional local Python market feed |
 
 **The two apps do not automatically share positions, history, model outputs or subscriptions.** Export/import only through documented, validated formats. The web viewer is not the canonical Android portfolio.
 
 ## Getting started on Android
 
-1. If upgrading, export your saved book first and install the signed APK over the existing app. HAL Desk 5.0.0 supports Android 8.0 and later.
+1. If upgrading, export your saved book first and install the signed APK over the existing app. HAL Atlas 5.2.0 supports Android 8.0 and later; a new signed build has not been verified.
 2. Open Settings to connect your read-only Upstox Analytics Token. Refresh market data and check the displayed timestamps before using marks.
 3. In **Position → Book**, review your existing legs or enter your HAL futures and protective puts. Check expiry, lots, units per lot and entry prices against your records.
 4. Use **Position** for performance, protection gaps, stress scenarios and hedge or rollover comparisons. Open **History** for completed trades, charges, funding and backups.
-5. Open **Technicals → Options Lab** to model a hypothetical strategy and track it in the PAPER journal. Use **Research** for company and market evidence and **AI Desk** for optional analysis.
+5. Open **Analysis → Options Lab** to model a hypothetical strategy and track it in the PAPER journal. Use **Research** for company and market evidence and **AI Desk** for optional analysis.
+
+Daily interpretations are now available under **Analysis → Daily Analysis** and on **Position → Overview**; the market report uses dated data and describes conditional scenarios, news implications and saved-position hedge gaps without inventing prices. See [Atlas upgrade details](android/docs/ATLAS-UPGRADE-5.2.md).
 
 See the [Android feature guide](android/README.md) for the five tabs, data sources, calculations and backup behaviour.
 
@@ -25,7 +27,7 @@ See the [Android feature guide](android/README.md) for the five tabs, data sourc
 
 - **Position:** exact-contract long HAL futures and protective puts, partial closes, reconciliation, lifetime trading charges, risk and expiry gaps, multi-leg scenarios and break-even.
 - **History:** actual completed trades, broker-reviewed statement imports, charges, funding snapshots, explicit backups and recovery.
-- **Technicals / Options Lab:** expiry-specific chain, standard trading indicators, **PAPER-only** CE/PE/FUT strategies, 38 reference categories (only mathematically defined recipes can be auto-built), payoff graphs, Greek models, OI/IV snapshots, watchlist and paper journal. Opening PAPER trades freezes the position and entry snapshot in 4.6; editing requires a clone, not a retrospective rewrite.
+- **Analysis / Options Lab:** expiry-specific chain, standard trading indicators, **PAPER-only** CE/PE/FUT strategies, 38 reference categories (only mathematically defined recipes can be auto-built), payoff graphs, Greek models, OI/IV snapshots, watchlist and paper journal. Opening PAPER trades freezes the position and entry snapshot in 4.6; editing requires a clone, not a retrospective rewrite.
 - **Research:** corporate disclosures, fundamentals, company news and separately sourced official NSE cash-market observations.
 - **AI Desk:** optional user-authorized Gemini calls and opt-in offline FinBERT. Deterministic calculations remain authoritative.
 
@@ -75,10 +77,12 @@ See [web viewer deployment](docs/WEB-VIEWER.md), [Android architecture](android/
 - **Regression gates:** Node finance tests, Android native/Robolectric tests, AI policy tests, lint, browser simulations, and local unsigned release APK assembly. These tests **do not** establish live Upstox access or a physical-device upgrade.
 - **Android release process:** follow the [local release guide](android/docs/LOCAL-RELEASE.md) to build and verify the APK, then sign with the original certificate.
 
-The signed 5.0.0 APK was built from [release source 9218c0e](https://github.com/SMKT13/HAL/commit/9218c0e7a27b946fe50b5f4c98b30d7087b2feb3). Its SHA-256 is `d6d61285ce24ef9de4249c453b1a005379a51a35e76f178cebf2df303f890a4d`.
+A previous HAL Desk 5.0.0 APK is documented as built from [release source 9218c0e](https://github.com/SMKT13/HAL/commit/9218c0e7a27b946fe50b5f4c98b30d7087b2feb3). Its SHA-256 is `d6d61285ce24ef9de4249c453b1a005379a51a35e76f178cebf2df303f890a4d`.
 
 ## Scope of the 4.6 refactor
 
 The 4.6 source refactor removes stale generated files, adds an immutable PAPER ledger state machine (with backward-compatible old draft migration), requires authentication on the optional Python API, validates complete HTTPS origins for web AI POSTs, and expands regression coverage. **It is not a claim that every historical module was rewritten or every issue is eliminated.** Physical installation, original-key signing and authenticated broker validation remain release acceptance steps.
 
 See [refactor audit and remaining tasks](docs/REFACTOR-4.6.md).
+
+**Atlas 5.2.0 is a source update, not a verified signed APK.** Run the local release checks, retain the original package ID and signing certificate, and compare backup/book values after an in-place install.
