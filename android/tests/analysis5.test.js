@@ -46,6 +46,7 @@ test('Hedge expiry gap uses actual saved leg expiries and nominal quantities',()
  assert.equal(r.position.futureUnits,300);assert.equal(r.position.putUnits,300);
  assert.equal(r.position.coverage,100);assert.equal(r.position.gap,true);
  assert.equal(r.position.uncoveredUnitsAfter,300);
+ assert.ok(r.position.messages.some(x=>/out of the money by ₹260/.test(x)));
  assert.ok(r.position.messages.some(x=>/Hedge continuity warning/.test(x)));
  assert.equal(r.position.openPnl,null);
 });
