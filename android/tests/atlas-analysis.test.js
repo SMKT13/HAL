@@ -1,0 +1,52 @@
+'use strict';
+const test=require('node:test'),A=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
+test('5.1.17 upgrade is compatible with signed HAL Atlas 5.1.16',()=>{
+ const b=read('app/build.gradle'),native=read('app/src/main/java/in/smkt/haldesk/MainActivity.java');
+ A.match(b,/applicationId\s+['"]in\.smkt\.haldesk['"]/);
+ A.match(b,/namespace\s+['"]in\.smkt\.haldesk['"]/);
+ A.match(b,/versionCode\s+51\b/);
+ A.match(b,/versionName\s+['"]5\.1\.17['"]/);
+ A.match(native,/obj\.put\("version","5\.1\.17"\)/);
+ const manifest=read('app/src/main/AndroidManifest.xml');
+ A.match(manifest,/android:label="HAL Atlas"/);
+ A.match(manifest,/android:allowBackup="false"/);
+ A.match(read('app/src/main/java/in/smkt/haldesk/BookStore.java'),/"haldesk_book.db"/);
+ A.match(read('app/src/main/java/in/smkt/haldesk/SecretStore.java'),/"hal-upstox-secrets-v1"/);
+});
+test('original Classic Blueprint three-tab shell and portfolio research are preserved',()=>{
+ const html=read('app/src/main/assets/index.html'),ui=read('app/src/main/assets/ui4.js');
+ for(const section of ['portfolio','market','research'])A.ok(html.includes('data-screen="'+section+'"'));
+ A.match(html,/<title>HAL Atlas<\/title>/);
+ A.match(ui,/ui\.position==='overview'\)view=analysisView\.preview\(\)\+today/);
+ A.match(ui,/ui\.position==='brief'\)view=analysisView\.view\(\)/);
+ A.match(ui,/ui\.position==='analysis'\)view=analysisView\.view\(\)/);
+ A.match(ui,/'go-analysis':\(\)=>navigate\('position','analysis'\)/);
+ A.match(ui,/'analysis-refresh':\(\)=>/);
+ A.match(ui,/ui\.position==='plot'\)view=portfolioPlot\(\)/);
+ A.match(ui,/ui\.position==='book'\)view=positionsHome\(l\)/);
+});
+test('deterministic analysis is included in correct WebView module order',()=>{
+ const bundle=read('scripts/build-assets.js');
+ const e=bundle.indexOf("'analysis5.js'"),v=bundle.indexOf("'analysis-ui5.js'"),ui=bundle.indexOf("'ui4.js'");
+ A.ok(e>0&&v>e&&ui>v,'Model, view, then host UI');
+ const report=read('app/src/main/assets/analysis5.js'),screen=read('app/src/main/assets/analysis-ui5.js');
+ A.match(report,/root\.HAL5Analysis=api/);
+ A.match(screen,/window\.createHalAnalysis=/);
+ A.match(report,/Insufficient evidence/);
+ A.match(screen,/Trend verdict withheld/);
+});
+test('research and analysis remain read-only and never invoke order placement',()=>{
+ const ui=read('app/src/main/assets/ui4.js');
+ const integration=ui.slice(ui.indexOf('const analysisView='),ui.indexOf('const optionsLab='));
+ A.match(integration,/technical\('D'\)/);
+ A.match(integration,/confirmed:isBookConfirmed\(\)/);
+ A.match(integration,/integrityBlocked:/);
+ A.doesNotMatch(integration,/commit\(|saveBook\(|placeOrder|executeOrder/);
+ const sdk=read('scripts/local-windows-release.ps1');
+ A.match(sdk,/versionCode 51/);
+ A.match(sdk,/HAL-Atlas-v5\.1\.17-signed\.apk/);
+ A.match(sdk,/a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382/);
+ A.doesNotMatch(sdk,/adb\s+uninstall|pm\s+clear/);
+});
