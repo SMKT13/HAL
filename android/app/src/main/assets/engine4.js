@@ -450,11 +450,12 @@ function futuresSizing(budgetInput, distanceInput, lotInput) {
  const lots=(budget-unused)/perLot;
  return {lots,units:lots*lotSize,lossPerLot:perLot/100,estimatedLoss:(budget-unused)/100,unusedBudget:unused/100};
 }
+function csvCell(v){if(v==null)return '""';let s=String(v);if(typeof v==='string'&&/^(?:[\t\r\n]|\s*[=+@-])/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
 function journalCSV(book) {
  const b=validateBook(book),columns=['id','kind','date','type','expiry','strike','lots','units_per_lot','entry','exit','gross_realized','charges','cash_movement','note'],rows=[columns];
  for(const j of b.journal)rows.push([j.id,j.kind,j.date,j.leg?.type,j.leg?.expiry,j.leg?.strike,j.leg?.lots,j.leg?.lotSize,j.leg?.entry,j.exit,j.kind==='close'?(j.exit-j.leg.entry)*units(j.leg):null,j.kind==='close'?j.fees:j.kind==='fee'?j.amount:null,['settlement','funding'].includes(j.kind)?j.amount:null,j.note]);
  for(const j of b.legacy?.journal||[])rows.push([j.id,'legacy_'+j.kind,j.date,null,null,null,null,null,null,null,j.kind==='close'?j.amount:null,j.kind==='fee'?j.amount:null,j.kind==='settlement'?j.amount:null,j.note]);
- const cell=v=>{if(v==null)return '""';let s=String(v);if(typeof v==='string'&&/^[=+\-@\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};return '\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n');
+ return '\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
 }
 function nearbyStrikes(strikes,spot){
  const listed=[...new Set(strikes.filter(finite))].sort((a,b)=>a-b);
@@ -464,6 +465,6 @@ function nearbyStrikes(strikes,spot){
  const start=Math.max(0,Math.min(centre-2,listed.length-5));
  return listed.slice(start,start+5);
 }
-const api={nearbyStrikes,DAY,YEAR,finite,value,time,iso,validDate,istDate,expiryTime,units,safeURL,validateLeg,emptyBook,validateBook,normalizeMarket,normQuote,quoteQuality,matchContract,resolveMark,ledger,closeLeg,recordCash,validGreeks,risk,cdf,putPrice,scenario,payoff,hedgePreferences,findHedges,candles,completed,sma,ema,rsi,atr,technicals,patterns,carryComparison,streamFrame,cacheRefresh,marketReviewTriggers,futuresSizing,journalCSV};
+const api={nearbyStrikes,DAY,YEAR,finite,value,time,iso,validDate,istDate,expiryTime,units,safeURL,validateLeg,emptyBook,validateBook,normalizeMarket,normQuote,quoteQuality,matchContract,resolveMark,ledger,closeLeg,recordCash,validGreeks,risk,cdf,putPrice,scenario,payoff,hedgePreferences,findHedges,candles,completed,sma,ema,rsi,atr,technicals,patterns,carryComparison,streamFrame,cacheRefresh,marketReviewTriggers,futuresSizing,csvCell,journalCSV};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.HAL4Engine=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

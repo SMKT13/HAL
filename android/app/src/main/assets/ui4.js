@@ -1755,8 +1755,7 @@ const actions={
 
  'trade-note':()=>modal('Journal note',input('trade-note-date','Date',E.istDate(),'date')+'<label>Note<textarea id="trade-note-body"></textarea></label>','Save',()=>{const note=text('trade-note-body').trim(),day=text('trade-note-date');if(!note||!E.validDate(day))throw Error('Enter a note and date.');commit({...book,notes:[...book.notes,{id:'journal-'+Date.now(),category:'Journal',title:'Journal note',date:day,text:note}]});}),
  'history-export':()=>{const k=ui.historyFilter||'all',match=j=>k==='all'||k==='notes'&&j.note||k==='funding'&&['settlement','funding'].includes(j.kind)||j.kind===k;let csv=E.journalCSV({...book,journal:book.journal.filter(match),legacy:null});
- const cell=v=>'"'+String(v??'').replace(/^[=+@-]/,"'$&").replace(/"/g,'""')+'"';
- for(const n of book.notes.filter(n=>n.category==='Journal'&&(k==='notes'||k==='all')||n.category==='Margin snapshot'&&(k==='funding'||k==='all')))csv+='\r\n'+[n.id,n.category,n.date,...Array(10).fill(''),n.text].map(cell).join(',');
+ for(const n of book.notes.filter(n=>n.category==='Journal'&&(k==='notes'||k==='all')||n.category==='Margin snapshot'&&(k==='funding'||k==='all')))csv+='\r\n'+[n.id,n.category,n.date,...Array(10).fill(''),n.text].map(E.csvCell).join(',');
  native('exportCSV',csv);},
 
  'full-chain':()=>{ui.fullChain=!ui.fullChain;render();}, 'retry-data':()=>{closeModal();refresh();},

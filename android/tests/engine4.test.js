@@ -256,3 +256,7 @@ test('nearby strikes retain two listed neighbours per side with uneven spacing',
  A.deepEqual(E.nearbyStrikes(strikes,104),[100,101,102,103,104]);
  A.deepEqual(E.nearbyStrikes(strikes,null),[]);
 });
+test('Journal and history CSV preserve numeric cells and quote formula-like text after whitespace',()=>{
+ for(const s of ['  =1+1','\nvalue','\tvalue','  @label','  -3'])A.equal(E.csvCell(s),'"\''+s+'"');
+ A.equal(E.csvCell(-3),'"-3"');A.equal(E.csvCell('a,"b"\nc'),'"a,""b""\nc"');
+});
