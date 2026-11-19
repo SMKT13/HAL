@@ -74,6 +74,7 @@ function build(context={},now=Date.now()){
  }
  const price=last.c,daily=prev&&finite(prev.c)&&prev.c>0?price-prev.c:null,pct=finite(daily)?daily/prev.c*100:null;
  base.price=price;base.change=daily;base.changePct=pct;base.ready=rows.length>=50&&t.ready!==false;
+ if(position.putStrikes.length){const strikes=position.putStrikes.map(x=>x.strike).filter(finite);if(strikes.length){const upper=Math.max(...strikes);if(price>upper)position.messages.push('At the completed HAL equity close of '+fmt(price)+', the highest recorded put strike '+fmt(upper)+' was out of the money by '+fmt(price-upper)+' per share. Quantity coverage alone does not protect that price gap.');}}
  base.benchmark=benchmarkReview(m,asOf,pct);
  const reportStale=context.cached===true||context.integrityBlocked===true||t.stale===true||asOf!==today;
  base.quality=context.integrityBlocked===true?'Source integrity review':reportStale?'Historical / cached evidence':'Current completed daily evidence';
