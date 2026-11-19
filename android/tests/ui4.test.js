@@ -299,6 +299,21 @@ await check('REST multi-leg accounting and missing data state',async()=>{await e
 await check('mixed-expiry scenario rejects later horizon, zero spot remains zero',async()=>{await nav(p,'position','stress');await p.locator('#sc-horizon').fill('2026-12-01');await p.locator('#scenario-advanced').evaluate(el=>el.open=true);await p.locator('#sc-iv').fill('30');await click(p,'scenario');A.match(await p.locator('main').innerText(),/Scenario unavailable/);await p.locator('#sc-horizon').fill('');await p.locator('#sc-spot').fill('0');await click(p,'scenario');A.ok(!(await p.locator('main').innerText()).includes('23,460.00'))});
 await check('failed refresh visibly retains observations',async()=>{await emit(p,'error',{code:'network_unavailable'});A.match(await p.locator('#notice').innerText(),/Network unavailable/)});
 await check('completed candles render charts and valid historical pattern dates',async()=>{const candles=Array.from({length:260},(_,i)=>{const c=4000+i*3+Math.sin(i/5)*40;return [new Date(now-(260-i)*E.DAY).toISOString(),c-2,c+15,c-12,c,1000+i]});for(const section of ['candles','patterns'])await emit(p,'research',{section,frame:'D',fetched_at_iso:ts,data:{history:{candles}}});await nav(p,'technicals','markets');A.ok(await p.locator('#market-chart canvas').count());A.ok(!(await p.locator('#toast').innerText()).includes('is not a function'));A.equal(await p.evaluate(()=>document.querySelector('#market-chart').querySelectorAll('canvas').length>=2),true);await nav(p,'technicals','insights');await click(p,'patterns');A.ok(!(await p.locator('main').innerText()).includes('1970'));A.deepEqual(x.errors,[])});
+await check('evidence-led HAL daily analysis renders and never changes the broker book',async()=>{
+ const before=await p.evaluate(()=>JSON.stringify(saved));
+ await nav(p,'technicals','analysis');
+ const content=await p.locator('main').innerText();
+ A.match(content,/Evidence-led daily report/);
+ A.match(content,/Why this verdict/);
+ A.match(content,/What would change the view/);
+ A.match(content,/Fundamentals/);
+ A.match(content,/Your hedge/);
+ await nav(p,'position','overview');
+ await click(p,'go-analysis');
+ A.match(await p.locator('main').innerText(),/Evidence-led daily report/);
+ A.equal(await p.evaluate(()=>JSON.stringify(saved)),before);
+ A.deepEqual(x.errors,[]);
+});
 await check('HAL Desk 5 completed-candle backtest runs locally without changing the real book',async()=>{
  const before=await p.evaluate(()=>JSON.stringify(saved));
  await nav(p,'technicals','backtest');
