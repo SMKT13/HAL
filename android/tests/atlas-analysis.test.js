@@ -10,7 +10,8 @@ test('5.1.17 upgrade is compatible with signed HAL Atlas 5.1.16',()=>{
  A.match(b,/versionName\s+['"]5\.1\.17['"]/);
  A.match(native,/obj\.put\("version","5\.1\.17"\)/);
  const manifest=read('app/src/main/AndroidManifest.xml');
- A.match(manifest,/android:label="HAL Atlas"/);
+ A.match(manifest,/android:label="@string\/app_name"/);
+ A.match(read('app/src/main/res/values/atlas.xml'),/<string name="app_name">HAL Atlas<\/string>/);
  A.match(manifest,/android:allowBackup="false"/);
  A.match(read('app/src/main/java/in/smkt/haldesk/BookStore.java'),/"haldesk_book.db"/);
  A.match(read('app/src/main/java/in/smkt/haldesk/SecretStore.java'),/"hal-upstox-secrets-v1"/);
