@@ -65,3 +65,26 @@ test('Headline interpretation is conditional and never establishes order causati
  const r=call({news:[{title:'Defence ministry proposes larger procurement allocation',publishedAt:'2026-11-19T13:00:00+05:30',source:'Source A'},{title:'Future unverified results',publishedAt:'2026-11-20T13:00:00+05:30'}]});
  assert.equal(r.headlines.length,1);assert.match(r.headlines[0].interpretation,/verify/);
 });
+
+test('Fundamental report uses only actual provider fields and does not manufacture growth',()=>{
+ const f=A.fundamentalReview({metrics:[
+  {kind:'provider',label:'income / revenue',value:7613,unit:'INR crore',period:'Q2 FY27',source:'Upstox',retrievedAt:'2026-11-19T12:00:00Z'},
+  {kind:'note',label:'net profit',value:999999}
+ ]});
+ assert.equal(f.available,true);
+ assert.equal(f.readings.length,1);
+ assert.equal(f.readings[0].value,7613);
+ assert.match(f.summary,/No YoY growth/);
+ assert.ok(!f.readings.some(x=>x.value===999999));
+});
+test('Benchmark outperformance is withheld without matched quote timestamps',()=>{
+ const unaligned=A.benchmarkReview({nifty:{price:25514,changePct:1.14,quoteAt:'2026-11-18T15:30:00+05:30'}},'2026-11-19',1.82);
+ assert.equal(unaligned.relative,null);
+ const aligned=A.benchmarkReview({nifty:{price:25514,changePct:1.14,quoteAt:'2026-11-19T15:30:00+05:30'}},'2026-11-19',1.82);
+ assert.equal(aligned.relative,0.68);
+});
+test('Saved source timestamps cannot convert stale data to live evidence',()=>{
+ const r=call({cached:true,market:{nifty:{price:25514,changePct:1.14,quoteAt:'2026-11-19T15:30:00+05:30'}}});
+ assert.equal(r.quality,'Historical / cached evidence');
+ assert.equal(r.benchmark.relative,0.68);
+});
