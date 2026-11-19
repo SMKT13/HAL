@@ -1,6 +1,25 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#0B1217" android:pathData="M0,0h108v108h-108z" />
-    <path android:fillColor="#A8EE96" android:pathData="M28,29h11v20h30v-20h11v50h-11v-20h-30v20h-11z" />
-    <path android:fillColor="#A8EE96" android:pathData="M49,24l5,-8l5,8zM49,84l5,8l5,-8z" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- HAL Atlas: a market compass and upward research trajectory. API 26 safe. -->
+    <path android:fillColor="#10172D"
+        android:pathData="M21,5H87A16,16 0,0 1,103 21V87A16,16 0,0 1,87 103H21A16,16 0,0 1,5 87V21A16,16 0,0 1,21 5Z"/>
+    <path android:fillColor="#24305C"
+        android:pathData="M17,73C29,89 48,94 67,90C83,86 93,74 95,58L103,68V87A16,16 0,0 1,87 103H21A16,16 0,0 1,5 87V71Z"/>
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="#8D78FF" android:strokeWidth="2"
+        android:pathData="M54,17A37,37 0,1 1,53.99 17Z"/>
+    <path android:fillColor="#65E5F2"
+        android:fillType="evenOdd"
+        android:pathData="M53,29L32,78H44L48,68H60L64,78H76L56,29ZM51,59H57L54,49Z"/>
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFCE78" android:strokeWidth="4"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M26,67L40,55L49,60L78,34"/>
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFCE78" android:strokeWidth="4"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M67,34H78V45"/>
+    <path android:fillColor="#A78BFA"
+        android:pathData="M53,10L56,15L53,20L50,15Z"/>
 </vector>
-
