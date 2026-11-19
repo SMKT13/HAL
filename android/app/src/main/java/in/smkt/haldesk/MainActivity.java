@@ -85,7 +85,7 @@ public final class MainActivity extends Activity {
             setContentView(root);
             new AlertDialog.Builder(this)
                 .setTitle("Android WebView unavailable")
-                .setMessage("Enable or update Android System WebView or Chrome in Android settings, then reopen HAL Desk. Your saved book stays on this device.")
+                .setMessage("Enable or update Android System WebView or Chrome in Android settings, then reopen HAL Atlas. Your saved book stays on this device.")
                 .setPositiveButton("Retry", (dialog, which) -> recreate())
                 .setNegativeButton("Close", (dialog, which) -> finish())
                 .setCancelable(false)
@@ -124,13 +124,13 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return "direct";}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","5.0.0");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","5.1.0");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
     private void aiStatus() {
         JSONObject data=object("configured",secrets.has("gemini"));
-        try{data.put("direct",true);data.put("model",prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));data.put("revision",aiGeneration.get());}catch(Exception ignored){}
+        try{data.put("autoBrief",prefs.getBoolean("public_story_briefings",false));data.put("direct",true);data.put("model",prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));data.put("revision",aiGeneration.get());}catch(Exception ignored){}
         send("ai_connection",data);
     }
     private void aiRequest(String request,boolean config){
@@ -138,7 +138,7 @@ public final class MainActivity extends Activity {
         final String id=args.optString("id");if(!id.matches("[A-Za-z0-9_-]{1,80}"))return;
         try{final String model=AiPolicy.model(prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));
             if(config){JSONObject info=object("aiEnabled",secrets.has("gemini"));info.put("model",model);info.put("direct",true);info.put("researchEnabled",true);send("ai_config",withId(id,"data",info));return;}
-            if(!foreground)throw new Exception("Open HAL Desk before requesting an AI review.");
+            if(!foreground)throw new Exception("Open HAL Atlas before requesting an AI review.");
             if(!Boolean.TRUE.equals(args.opt("consent")))throw new Exception("Confirm sharing the selected evidence with Gemini.");
             if(!secrets.has("gemini"))throw new Exception("Enter your Gemini API key in AI settings first.");
             final String mode=args.optString("mode"),question=args.optString("message");final JSONObject evidence=AiPolicy.sanitizeEvidence(args.optJSONObject("evidence"),mode);AiPolicy.prompt(mode,question,evidence.toString());final int current=aiGeneration.get();
@@ -387,6 +387,38 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void research(String request){MainActivity.this.research(request);}
         @JavascriptInterface public void aiConfig(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,true));}
         @JavascriptInterface public void ai(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,false));}
+        @JavascriptInterface public void briefingSettings(){
+            runOnUiThread(()->{
+                if(!foreground)return;
+                boolean enabled=prefs.getBoolean("public_story_briefings",false);
+                new AlertDialog.Builder(MainActivity.this).setTitle("Automatic story briefings")
+                    .setMessage("While Atlas is open, send each new public HAL lead story and market context to Gemini once. Uses your key and quota. Holdings are excluded. Saved explanations are available offline.")
+                    .setPositiveButton(enabled?"Disable":"Enable",(dialog,which)->{
+                        prefs.edit().putBoolean("public_story_briefings",!enabled).apply();
+                        if(enabled)invalidateAi("Automatic briefings disabled.");
+                        aiStatus();
+                    }).setNegativeButton("Cancel",null).show();
+            });
+        }
+        @JavascriptInterface public void autoBrief(String request){
+            runOnUiThread(()->{
+                if(request==null||request.length()>65536)return;
+                String id="";
+                try{
+                    JSONObject args=new JSONObject(request);
+                    id=args.optString("id");
+                    if(!id.matches("brief-[0-9]{1,20}"))return;
+                    if(!prefs.getBoolean("public_story_briefings",false)||!foreground||!secrets.has("gemini"))
+                        throw new Exception("Automatic briefings unavailable.");
+                    JSONObject evidence=AiPolicy.sanitizeEvidence(args.getJSONObject("evidence"),"research");
+                    if(evidence.optBoolean("portfolioIncluded")||evidence.getJSONArray("news").length()!=1)
+                        throw new Exception("Expected one public story.");
+                    String model=AiPolicy.model(prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));
+                    String question="Explain this public HAL publication. Separate reported facts from interpretation and price movement.";
+                    runAi(id,model,"research",question,evidence,aiGeneration.get());
+                }catch(Exception e){send("ai_error",withId(id,"message","Public briefing could not be generated."));}
+            });
+        }
         @JavascriptInterface public void aiSettings(){runOnUiThread(()->showAiSettings());}
         @JavascriptInterface public void finbertStatus(){offlineStatus();}
         @JavascriptInterface public void finbertInstall(){runOnUiThread(()->{if(!foreground)return;if(offlineFinbert.ready()){offlineStatus();return;}new AlertDialog.Builder(MainActivity.this).setTitle("Download offline FinBERT?").setMessage("Download approximately 111 MB of model/tokenizer data. Mobile-data charges may apply. Pinned files are checksum verified. English headline classification runs locally and does not predict prices. Models are excluded from backups. Model license: CC BY-NC-SA 4.0 for personal noncommercial use.").setPositiveButton("Download",(d,w)->installOfflineFinbert()).setNegativeButton("Cancel",null).show();});}
@@ -401,7 +433,7 @@ public final class MainActivity extends Activity {
                 if (!foreground || isFinishing() || web == null) return;
                 try {
                     android.print.PrintManager printer = (android.print.PrintManager) getSystemService(PRINT_SERVICE);
-                    String name = "HAL Desk review " + java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"));
+                    String name = "HAL Atlas review " + java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"));
                     printer.print(name, web.createPrintDocumentAdapter(name), null);
                 } catch (RuntimeException error) {
                     send("file_error", object("message", "Android printing is unavailable."));

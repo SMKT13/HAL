@@ -36,14 +36,39 @@ function marketEvidence(market={}){
 function normalizeNews(raw){
  return array(raw).map(n=>({id:text(n.id,120),title:text(n.title||n.headline,260),url:safeURL(n.url||n.link),source:text(n.source,100),publishedAt:stamp(n.publishedAt||n.published_at||n.date),retrievedAt:stamp(n.retrievedAt||n.retrieved_at),eventDate:typeof n.eventDate==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(n.eventDate)&&stamp(n.eventDate)?.slice(0,10)===n.eventDate?n.eventDate:null,official:n.official===true,topic:text(n.topic,60),summary:text(n.summary,500)})).filter(n=>n.title);
 }
-function newsGroups(raw){
- const groups=new Map();
- for(const n of normalizeNews(raw)){
-  const key=n.title.toLowerCase().replace(/\bhal\b/g,'hindustan aeronautics').replace(/[^a-z0-9]+/g,' ').trim();
-  if(!groups.has(key))groups.set(key,{...n,duplicates:[]});
-  else{const group=groups.get(key);group.duplicates.push(n);if(n.official&&!group.official){const old={...group};delete old.duplicates;Object.assign(group,n);group.duplicates=[old,...group.duplicates.filter(x=>x!==n)];}}
+function eventKey(article){
+ const words=(article.title+' '+(article.summary||'')).toLowerCase().replace(/(\d),(?=\d)/g,'$1').replace(/mk[ -]?1a/g,'mk1a');
+ const kind=/\b(?:order|orders|contract|contracts|deal|award|awarded)\b/.test(words)?'order':/deliver(?:y|ies|ed)|hand(?:ed)?[ -]?over/.test(words)?'delivery':/quarterly|results|earnings/.test(words)?'results':'';
+ const programmes=new Set(words.match(/\b(?:tejas|dhruv|prachand|su[ -]?30mki|htt[ -]?40|dornier|lu[h]|lch)\b/g)||[]);
+ const amounts=new Set(Array.from(words.matchAll(/(?:₹|rs\.?|inr)?\s*(\d+(?:\.\d+)?)\s*(?:crores?|cr)\b/g),m=>Number(m[1])));
+ const quarters=new Set(words.match(/\bq[1-4]\b/g)||[]);
+ return {kind,programmes:new Set([...programmes].map(p=>p.replace(/[ -]/g,''))),amounts,quarters};
+}
+function sameEvent(a,b){
+ if(!a.kind||a.kind!==b.kind)return false;
+ let anchors=0;
+ for(const key of ['programmes','amounts','quarters']){
+  if(!a[key].size||!b[key].size)continue;
+  if(![...a[key]].some(value=>b[key].has(value)))return false;
+  anchors++;
  }
- return [...groups.values()].sort((a,b)=>(Date.parse(b.publishedAt)||0)-(Date.parse(a.publishedAt)||0));
+ return anchors>=2;
+}
+function newsGroups(raw){
+ const groups=[],articles=normalizeNews(raw).sort((a,b)=>Number(b.official)-Number(a.official));
+ for(const n of articles){
+  const title=n.title.toLowerCase().replace(/\bhal\b/g,'hindustan aeronautics').replace(/[^a-z0-9]+/g,' ').trim();
+  const signature=eventKey(n);
+  const nearby=g=>Math.abs(Date.parse(n.publishedAt)-Date.parse(g.item.publishedAt))<=3*86400000;
+  let hit=groups.find(g=>g.title===title&&(!n.publishedAt||!g.item.publishedAt||nearby(g)));
+  if(!hit&&!n.official){
+   const candidates=groups.filter(g=>g.item.official&&nearby(g)&&sameEvent(signature,g.signature));
+   if(candidates.length===1)hit=candidates[0];
+  }
+  if(hit)hit.item.duplicates.push(n);
+  else groups.push({title,signature,item:{...n,duplicates:[]}});
+ }
+ return groups.map(g=>g.item).sort((a,b)=>(Date.parse(b.publishedAt)||0)-(Date.parse(a.publishedAt)||0));
 }
 function technicalEvidence(t={}){
  const out=select(t,['bias','frame','completedCount','vol','asOf','interval','bars','ready','stale','reason','trend','momentum','sma20','sma50','sma200','ema12','ema26','rsi','rsi14','atr','atr14','mfi','mfi14','historicalVolatility','hv','volumeTrend']);

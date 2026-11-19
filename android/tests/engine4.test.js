@@ -203,3 +203,56 @@ test('backup normalization and completed journal refuse zero futures exit but pr
  A.equal(result.journal[0].exit,0);
  A.equal(result.journal[0].gross,-750000);
 });
+
+test('futures sizing floors to whole lots and respects paise boundaries',()=>{
+ A.deepEqual(E.futuresSizing('7500','25','150'),{
+  lots:2,units:300,lossPerLot:3750,estimatedLoss:7500,unusedBudget:0
+ });
+ A.equal(E.futuresSizing('7499.99','25','150').lots,1);
+ A.equal(E.futuresSizing('3749.99','25','150').lots,0);
+ A.equal(E.futuresSizing('0.30','0.10','3').lots,1);
+ for(const args of [['','25','150'],['7500','0','150'],['7500','0.001','150'],['7500','25','1.5'],['7500','25','']]){
+  A.throws(()=>E.futuresSizing(...args));
+ }
+});
+
+test('ARENA review thresholds use fresh daily RSI and the local expiry date',()=>{
+ const settings={rsiBelow:30,rsiAbove:70,expiryReviewDays:2};
+ const p=E.validateBook({...E.emptyBook(),riskProfile:settings}).riskProfile;
+ A.equal(p.rsiAbove,70);
+ A.equal(E.marketReviewTriggers(p,{frame:'D',rsi:72,stale:false},'2026-10-30',NOW).length,2);
+ A.equal(E.marketReviewTriggers(p,{frame:'D',rsi:72,stale:true},'2026-10-30',NOW).length,1);
+ A.equal(E.marketReviewTriggers(p,{frame:'1h',rsi:72,stale:false},'2026-10-27',NOW).length,0);
+ A.throws(()=>E.validateBook({...E.emptyBook(),riskProfile:{rsiBelow:70,rsiAbove:30}}),/Lower RSI/);
+ A.throws(()=>E.validateBook({...E.emptyBook(),riskProfile:{expiryReviewDays:1.5}}),/expiry reminder/);
+});
+
+test('fresh and current require successful REST retrieval, quote and trade clocks',()=>{
+ for(const overrides of [{source:'CACHE'},{failure:'network'},{tradeAt:null},{retrievedAt:null},{retrievedAt:new Date(NOW-300000).toISOString()}]){
+  const result=E.quoteQuality(Q(5000,overrides),opts);
+  A.equal(result.fresh,false);
+  A.equal(result.status,'stale');
+ }
+ A.equal(E.quoteQuality(Q(5000),opts).fresh,true);
+});
+
+test('November put coverage ends before December futures and October closes reconcile once',()=>{
+ const E=require('../app/src/main/assets/engine4.js');
+ const now=Date.parse('2026-11-18T06:30:00Z');
+ const leg=(id,type,expiry,lots,entry,strike=null)=>({id,type,expiry,lots,lotSize:150,entry,strike});
+ let book=E.emptyBook();
+ for(const [id,strike,entry,exit] of [['old4500',4500,57.4,.3],['old4300',4300,24.1,.1]]){
+  book.legs.push(leg(id,'PE','2026-10-27',1,entry,strike));
+  book=E.closeLeg(book,id,1,exit,0,'2026-10-26');
+ }
+ book.legs.push(leg('f','FUT','2026-12-29',2,4927.35),leg('p','PE','2026-11-23',1,38.9,4500),leg('p2','PE','2026-11-23',1,24.1,4400));
+ const risk=E.risk(book,{},now),ledger=E.ledger(book,{},{now});
+ require('node:assert/strict').deepEqual([risk.coveredUnits,risk.futureUnits,risk.timeline[0].date,risk.timeline[0].uncoveredUnits,ledger.realized,ledger.net],[300,300,'2026-11-23',300,-12165,null]);
+});
+
+test('nearby strikes retain two listed neighbours per side with uneven spacing',()=>{
+ const strikes=[80,90,100,101,102,103,104];
+ A.deepEqual(E.nearbyStrikes(strikes,100),[80,90,100,101,102]);
+ A.deepEqual(E.nearbyStrikes(strikes,104),[100,101,102,103,104]);
+ A.deepEqual(E.nearbyStrikes(strikes,null),[]);
+});

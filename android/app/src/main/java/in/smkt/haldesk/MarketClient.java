@@ -407,7 +407,7 @@ final class MarketClient {
         }
     }
     synchronized String index(String name,String token)throws Exception{
-        if(!name.equals("Nifty 50")&&!name.equals("India VIX"))throw new Failure("invalid_index");if(indices.containsKey(name))return indices.get(name);
+        if(!name.equals("Nifty 50")&&!name.equals("India VIX")&&!name.equals("Nifty India Defence"))throw new Failure("invalid_index");if(indices.containsKey(name))return indices.get(name);
         String expected=name.toUpperCase(java.util.Locale.ROOT).replaceAll("[^A-Z0-9]","");
         for(int page=1;page<=5;page++){
             JSONArray rows=array(api("/instruments/search","query="+enc(name)+"&exchanges=NSE&segments=INDEX&records=30&page_number="+page,token));
@@ -420,7 +420,7 @@ final class MarketClient {
     }
     JSONObject contextQuotes(String token)throws Exception{
         JSONObject out=new JSONObject(),errors=new JSONObject();StringBuilder keys=new StringBuilder();
-        for(String name:new String[]{"Nifty 50","India VIX"})try{String key=index(name,token);if(keys.length()>0)keys.append(',');keys.append(key);}catch(Failure e){if(fatal(e))throw e;errors.put(name,e.code);}
+        for(String name:new String[]{"Nifty 50","India VIX","Nifty India Defence"})try{String key=index(name,token);if(keys.length()>0)keys.append(',');keys.append(key);}catch(Failure e){if(fatal(e))throw e;errors.put(name,e.code);}
         Object raw=keys.length()==0?new JSONObject():apiData("/v3/market-quote/quotes","instrument_key="+enc(keys.toString()),token);
         if(!(raw instanceof JSONObject))throw new Failure("bad_response");
         out.put("indices",normalizedContext((JSONObject)raw,indices,System.currentTimeMillis()));out.put("errors",errors);return out;

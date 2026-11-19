@@ -79,3 +79,9 @@ test('legacy version-4 checkpoint remains readable with no contract mark data',(
  assert.equal(c.version,4);
  assert.deepEqual(c.positionMarks,[]);
 });
+
+test('rewritten order headline joins its filing while a different contract stays separate',()=>{
+ const news=(title,official=false)=>({title,official,publishedAt:'2026-11-01T08:00:00Z'});
+ const grouped=I.newsGroups([news('HAL bags Tejas deal worth Rs 2,400 crore'),news('Contract award for Tejas aircraft at INR 2400 crore',true),news('New Tejas contract worth 900 crore')]);
+ assert.equal(grouped.length,2);assert.equal(grouped.find(g=>g.official).duplicates.length,1);
+});

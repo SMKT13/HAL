@@ -1,12 +1,20 @@
-# HAL Desk Android — 5.0.0 rebuild branch (versionCode 33)
+# HAL Atlas Android 5.1.0 (versionCode 34)
 
 This update preserves the Android package and SQLite schema-4 book used by 4.6.0 (versionCode 31).
 
 Personal offline-capable HAL research, risk, history and PAPER option strategies. Android **8.0+**, applicationId `in.smkt.haldesk`, target SDK 35. Direct Upstox Analytics Token and optional Gemini/FinBERT; **read-only, no orders**.
 
+## HAL Atlas redesign branch
+
+On the Atlas branch, open **Today → Since last review → Mark reviewed** to set the comparison the next time you check your position. Current REST prices and trade timestamps are required for HAL and every open leg. Contracts with missing, stale or manual marks are listed for inspection. Refreshing, switching tabs and reopening the app preserve the chosen comparison. Existing HAL Desk review observations remain available when upgrading.
+
+Open **Today → Agenda** to see expiry dates, dated company notes, disclosures with a supplied event date and personal reminders. Tap **Inspect legs** to see the contracts and units expiring together. For an official filing with only a publication date, **Research → News & filings → Add event date** lets you enter the scheduled date from the document. Reminders appear in the app and travel with the saved-book backup.
+
+In **Research → Chart**, select a completed candle or use **Earlier / Later**. **Table** shows neighbouring OHLC and volume rows. The detail lists timestamped REST observations from saved checkpoints or the review baseline within the selected interval, and journal closes on that IST date. Each timeframe remembers its selection during the session.
+
 ## User interface
 
-The five primary tabs remain **Position, History, Technicals, Research and AI Desk**. The real book supports only long futures and protective puts; the isolated Technicals → **Options Lab** supports hypothetical long/short futures, calls and puts, conventional strategies, payoff/risk modelling, model Greeks, IV/OI snapshots, watchlists and virtual journal entries.
+The four primary tabs are **Today, Portfolio, Plan and Research**. The real book supports only long futures and protective puts; the isolated Plan → **Options Lab** supports hypothetical long/short futures, calls and puts, conventional strategies, payoff/risk modelling, model Greeks, IV/OI snapshots, watchlists and virtual journal entries.
 
 **PAPER ledger v1 is now a state machine.** A draft can be edited. Marking it OPEN freezes its validated entry legs, quantity, price and opening charges. An open trade can be closed with explicit hypothetical prices and cumulative fees, but cannot be retroactively edited; clone to create another draft. Old 4.4/4.5 records load with unchanged schema 1 and establish a read-only opening snapshot on migration. This is not an executed order ledger.
 

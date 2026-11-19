@@ -170,6 +170,9 @@ root.createHalOptionsLab=function(api){
   api.render();return true;
  }
  const actions={...base.actions};for(const n of ['page','build','refresh','capture','watch','event-add','event-delete','note-add','note-delete','recalc'])actions['lab6-'+n]=b=>action('lab6-'+n,b);
- return {view:render,actions,change};
+ return {view:render,actions,change,getDraft:base.getDraft,loadStrategy(legs,options){
+   st.page='core';st.message='';st.error='';
+   base.loadStrategy(legs,options);
+ }};
 };
 })(typeof globalThis!=='undefined'?globalThis:this);

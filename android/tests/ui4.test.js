@@ -2,11 +2,140 @@
 const fs=require('fs'),path=require('path'),A=require('assert/strict');let pw;try{pw=require(process.env.HAL_PLAYWRIGHT_MODULE||'playwright')}catch(_){pw=require('/opt/codex/runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright')};const E=require('../app/src/main/assets/engine4.js');
 const origin='https://appassets.androidplatform.net/',root=path.resolve(__dirname,'../app/src/main/assets'),now=Date.parse('2026-11-01T06:30:00Z'),ts=new Date(now-1000).toISOString();const FUT={id:'f',type:'FUT',expiry:'2026-12-29',lots:2,lotSize:150,entry:4927.35,manual:null,instrumentKey:'SYNTH_F'},PUT={id:'p',type:'PE',expiry:'2026-11-23',strike:4500,lots:1,lotSize:150,entry:38.9,manual:null,instrumentKey:'SYNTH_P'};
 const q=p=>({last_price:p,bid:p-.5,ask:p+.5,bid_quantity:900,ask_quantity:900,quote_as_of:ts,last_trade_at:ts,retrieved_at:ts,volume:1000,open_interest:5000});const snap={fetched_at_iso:ts,spot:{...q(4950),prev_close:4900},futures:[{instrument_key:'SYNTH_F',expiry:FUT.expiry,lot_size:150,quote:q(5000)}],option_expiry:PUT.expiry,available_expiries:[PUT.expiry],option_rows:[{strike:4500,put:{instrument_key:'SYNTH_P',lot_size:150,iv:30,delta:-.3,theta:-.2,quote:q(50)}}]};let browser,checks=0;
-const click=(p,a)=>p.locator(`[data-action="${a}"]`).first().click(),nav=async(p,a,b)=>{await p.locator(`[data-screen="${a}"]`).click();if(b)await p.locator(`[data-sub="${b}"]`).click()},emit=(p,event,data)=>p.evaluate(({event,data})=>HALApp.receive(event,data),{event,data});
+const click=(p,a)=>p.locator(`[data-action="${a}"]`).first().click(),nav=async(p,screen,sub)=>{
+ const key=sub??({position:'overview',technicals:'markets',ai:'assistant',research:'company',history:''}[screen]);
+ await p.locator('#atlas-menu').click();
+ const dest=p.locator(`[data-route="${screen}"][data-sub="${key}"]`);if(!await dest.isVisible())await p.locator("#menu-filter").fill(await dest.textContent());await dest.click();
+},emit=(p,event,data)=>p.evaluate(({event,data})=>HALApp.receive(event,data),{event,data});
 async function save(p){await p.locator('#modal-save').click();A.equal(await p.locator('#modal-error').innerText(),'');A.equal(await p.locator('#modal').isVisible(),false)}async function check(name,fn){await fn();console.log('PASS '+name);checks++}
-async function pageFor(seed={}){const context=await browser.newContext({viewport:{width:390,height:844}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route(origin+'**',r=>{const name=new URL(r.request().url()).pathname.slice(1)||'index.html',file=path.join(root,name);return fs.existsSync(file)?r.fulfill({path:file,contentType:name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':'application/javascript'}):r.abort()});await page.clock.install({time:new Date(now)});await page.addInitScript(seed=>{window.saved=seed.book||null;window.rev=0;window.previous=null;window.calls=[];window.corrupt=seed.corrupt;window.forceSaveFailure=false;window.reviewCache=seed.cache||{};window.forceCacheFailure=false;if(seed.legacy)localStorage.setItem('hal_desk_v2',JSON.stringify(seed.legacy));const validCacheKey=k=>/^(snapshot|research|health)(:[A-Za-z0-9_-]{1,40}){0,4}$/.test(k);const log=(n,...a)=>calls.push([n,...a]);window.HALNative={loadBook:()=>JSON.stringify(corrupt?{ok:false,revision:rev,message:'checksum invalid'}:{ok:true,book:saved,revision:rev}),saveBook:(s,r)=>{if(forceSaveFailure)return JSON.stringify({ok:false,message:'synthetic disk failure'});if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});previous=saved;saved=JSON.parse(s);return JSON.stringify({ok:true,revision:++rev})},previousBook:()=>JSON.stringify({ok:true,book:previous}),restorePreviousBook:r=>{if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});saved=previous;corrupt=false;return JSON.stringify({ok:true,book:saved,revision:++rev})},cacheGet:key=>JSON.stringify(validCacheKey(key)?{ok:true,data:reviewCache[key]||null}:{ok:false}),cachePut:(key,value)=>{if(forceCacheFailure||!validCacheKey(key))return JSON.stringify({ok:false});reviewCache[key]=JSON.parse(value);return JSON.stringify({ok:true})},ready:()=>{},finbertStatus:()=>{}};for(const n of ['research','refresh','nseRefresh','settings','aiSettings','openTokenPage','exportBackup','exportCSV','importBackup','importHistory','printReview','ai','aiCancel','finbertInstall','finbertCancel','finbertRemove','finbertScore','streamStart','streamStop','openLink','minimize'])HALNative[n]=(...a)=>log(n,...a)},seed);await page.goto(origin);await page.locator('h1').waitFor();return {page,context,errors}}
+async function pageFor(seed={},startTime=now){const context=await browser.newContext({viewport:{width:390,height:844}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route(origin+'**',r=>{const name=new URL(r.request().url()).pathname.slice(1)||'index.html',file=path.join(root,name);return fs.existsSync(file)?r.fulfill({path:file,contentType:name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':'application/javascript'}):r.abort()});await page.clock.install({time:new Date(startTime)});await page.addInitScript(seed=>{window.saved=seed.book||null;window.rev=0;window.previous=null;window.calls=[];window.corrupt=seed.corrupt;window.forceSaveFailure=false;window.reviewCache=seed.cache||{};window.forceCacheFailure=false;if(seed.legacy)localStorage.setItem('hal_desk_v2',JSON.stringify(seed.legacy));const validCacheKey=k=>/^(snapshot|research|health)(:[A-Za-z0-9_-]{1,40}){0,4}$/.test(k);const log=(n,...a)=>calls.push([n,...a]);window.HALNative={loadBook:()=>JSON.stringify(corrupt?{ok:false,revision:rev,message:'checksum invalid'}:{ok:true,book:saved,revision:rev}),saveBook:(s,r)=>{if(forceSaveFailure)return JSON.stringify({ok:false,message:'synthetic disk failure'});if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});previous=saved;saved=JSON.parse(s);return JSON.stringify({ok:true,revision:++rev})},previousBook:()=>JSON.stringify({ok:true,book:previous}),restorePreviousBook:r=>{if(r!==rev)return JSON.stringify({ok:false,message:'conflict'});saved=previous;corrupt=false;return JSON.stringify({ok:true,book:saved,revision:++rev})},cacheGet:key=>JSON.stringify(validCacheKey(key)?{ok:true,data:reviewCache[key]||null}:{ok:false}),cachePut:(key,value)=>{if(forceCacheFailure||!validCacheKey(key))return JSON.stringify({ok:false});reviewCache[key]=JSON.parse(value);return JSON.stringify({ok:true})},ready:()=>{},finbertStatus:()=>{}};for(const n of ['research','refresh','nseRefresh','settings','aiSettings','openTokenPage','exportBackup','exportCSV','importBackup','importHistory','printReview','ai','aiCancel','finbertInstall','finbertCancel','finbertRemove','finbertScore','streamStart','streamStop','openLink','minimize'])HALNative[n]=(...a)=>log(n,...a)},seed);await page.goto(origin);await page.locator('h1').waitFor();return {page,context,errors}}
 const launch=()=>pw.chromium.launch({executablePath:process.env.HAL_BROWSER,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});(async()=>{browser=await launch();try{let x=await pageFor(),p=x.page;
-await check('fresh empty book and every primary/subsection renders',async()=>{A.match(await p.locator('main').innerText(),/No open book/);A.deepEqual(await p.locator('.bottom-nav button').evaluateAll(nodes=>nodes.map(n=>n.dataset.screen)),['position','history','technicals','research','ai']);for(const [a,bs]of [['position',['overview','book','performance','risk','journal','stress','compare','hedge','break-even']],['history',[]],['technicals',['markets','indicators','insights']],['research',['company','news']],['ai',['assistant','coach']]]){await nav(p,a);for(const b of bs)await nav(p,a,b);}A.deepEqual(x.errors,[]);A.equal((await p.evaluate(()=>calls.filter(c=>['ai','finbertInstall'].includes(c[0])))).length,0)});
+await check('fresh empty book and every primary/subsection renders',async()=>{A.match(await p.locator('main').innerText(),/No open book/);await p.locator('#atlas-menu').click();A.equal(await p.locator('.atlas-directory [data-route]').count(),35);await p.locator('#modal-close').click();for(const [a,bs]of [['position',['overview','book','performance','risk','journal','stress','compare','hedge','break-even']],['history',[]],['technicals',['markets','indicators','insights']],['research',['company','news']],['ai',['assistant','coach']]]){await nav(p,a);for(const b of bs)await nav(p,a,b);}A.deepEqual(x.errors,[]);A.equal((await p.evaluate(()=>calls.filter(c=>['ai','finbertInstall'].includes(c[0])))).length,0)});
+await check('portfolio opens an isolated PAPER copy and preserves the real book',async()=>{
+ const {page,context,errors}=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT]}});
+ const before=await page.evaluate(()=>JSON.stringify(saved));
+ await nav(page,'position','book');
+ await click(page,'atlas-paper');
+ A.equal(await page.locator('main h1').innerText(),'Options Lab');
+ A.equal(await page.locator('[data-action="lab-remove"]').count(),2);
+ await click(page,'lab-remove');
+ await nav(page,'position','book');
+ await click(page,'atlas-paper');
+ A.equal(await page.locator('#modal-title').innerText(),'Replace current PAPER workspace?');
+ await page.locator('#modal-cancel').click();
+ await nav(page,'technicals','lab');
+ A.equal(await page.locator('[data-action="lab-remove"]').count(),1);
+ A.equal(await page.evaluate(()=>JSON.stringify(saved)),before);
+ A.deepEqual(errors,[]);
+ await context.close();
+});
+await check('select an owned put, load a later expiry and inspect a one-lot cash comparison',async()=>{
+ const second={...PUT,id:'other',instrumentKey:'SYNTH_OTHER',strike:4400};
+ const {page,context,errors}=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT,second]}});
+ const before=await page.evaluate(()=>JSON.stringify(saved));
+ const expiry=FUT.expiry;
+ await emit(page,'snapshot',{...snap,available_expiries:[PUT.expiry,expiry],option_rows:[...snap.option_rows,{strike:4400,put:{instrument_key:'SYNTH_OTHER',lot_size:150,quote:q(20)}}]});
+ await nav(page,'position','book');await page.locator('[data-action="one-start"][data-id="other"]').click();
+ A.equal(await page.locator('#one-owned').inputValue(),'other');
+ await page.selectOption('#one-expiry',expiry);
+ await emit(page,'research',{section:'hedges',frame:expiry,fetched_at_iso:ts,data:{option_expiry:expiry,option_rows:[{strike:4500,put:{instrument_key:'SYNTH_NEXT',lot_size:150,quote:q(60)}}]}});
+ await page.selectOption('#one-candidate','SYNTH_NEXT');
+ A.match(await page.locator('main').innerText(),/Estimated net cash required/);
+ A.match(await page.locator('main').innerText(),/Sell 4,400 PE/);
+ await click(page,'roll-save');await page.fill('#roll-name','First estimate');await page.fill('#roll-note','Review after results');await save(page);
+ const cacheKey='research:atlas_rolls_v1';
+ const first=await page.evaluate(k=>reviewCache[k].records[0],cacheKey);
+ A.equal(first.name,'First estimate');
+ await click(page,'roll-reprice');
+ A.match(await page.locator('main').innerText(),/saved version’s cost/);
+ await emit(page,'research',{section:'hedges',frame:expiry,fetched_at_iso:ts,data:{option_expiry:expiry,option_rows:[{strike:4500,put:{instrument_key:'SYNTH_NEXT',lot_size:150,quote:q(65)}}]}});
+ await click(page,'roll-save');await page.fill('#roll-name','Updated estimate');
+ await page.evaluate(()=>{window.forceCacheFailure=true;});await page.locator('#modal-save').click();
+ A.match(await page.locator('#modal-error').innerText(),/Could not save/);
+ await page.evaluate(()=>{window.forceCacheFailure=false;});await save(page);
+ const archive=await page.evaluate(k=>reviewCache[k],cacheKey);
+ A.deepEqual(archive.records[0],first);A.equal(archive.records.length,2);
+ A.ok(archive.records[1].result.netCash>first.result.netCash);
+ const restarted=await pageFor({cache:{[cacheKey]:archive}});
+ await restarted.page.locator('#atlas-menu').click();
+ await restarted.page.locator('[data-sub="saved-rolls"]').click();
+ await restarted.page.selectOption('#roll-second',first.id);
+ A.match(await restarted.page.locator('main').innerText(),/Review after results/);
+ A.match(await restarted.page.locator('main').innerText(),/Updated estimate/);
+ await click(restarted.page,'roll-delete');await save(restarted.page);
+ A.deepEqual(await restarted.page.evaluate(k=>reviewCache[k].records,cacheKey),[first]);
+ A.deepEqual(restarted.errors,[]);await restarted.context.close();
+ A.equal(await page.evaluate(()=>JSON.stringify(saved)),before);
+ A.deepEqual(errors,[]);await context.close();
+});
+await check('Today agenda orders event dates, opens affected legs and keeps personal reminders through restart',async()=>{
+ const b={...E.emptyBook(),legs:[FUT,PUT,{...PUT,id:'p2',strike:4400,instrumentKey:'P2'}]};
+ const x=await pageFor({book:b}),p=x.page;
+ const openAgenda=async page=>{await page.locator('#atlas-menu').click();await page.locator('[data-sub="agenda"]').click();};
+ await openAgenda(p);
+ await emit(p,'research',{section:'filings',frame:'D',fetched_at_iso:ts,data:{items:[
+  {title:'Meeting scheduled',url:'https://nseindia.com/results',published:ts,event_date:'2026-11-15'},
+  {title:'Undated disclosure',url:'https://nseindia.com/filing',published:ts}]}});
+ A.deepEqual(await p.locator('.agenda-day h3').allTextContents(),['15 Nov 2026','23 Nov 2026','29 Dec 2026']);
+ A.doesNotMatch(await p.locator('main').innerText(),/Undated disclosure/);
+ await click(p,'agenda-expiry');A.match(await p.locator('#modal-body').innerText(),/4,400 PE/);A.match(await p.locator('#modal-body').innerText(),/4,500 PE/);await p.locator('#modal-close').click();
+ await click(p,'agenda-reminder');await p.fill('#agenda-title','Review hedge coverage');await p.fill('#agenda-date','2026-11-10');await save(p);
+ const stored=await p.evaluate(()=>saved);A.deepEqual(stored.legs.map(l=>l.id),b.legs.map(l=>l.id));
+ const restarted=await pageFor({book:stored});await openAgenda(restarted.page);
+ A.match(await restarted.page.locator('main').innerText(),/Review hedge coverage/);
+ await click(restarted.page,'agenda-done');await save(restarted.page);
+ A.doesNotMatch(await restarted.page.locator('main').innerText(),/Review hedge coverage/);
+ A.deepEqual(x.errors,[]);A.deepEqual(restarted.errors,[]);await x.context.close();await restarted.context.close();
+});
+await check('Overview shows timestamped NSE cash data without an Upstox token',async()=>{
+ await nav(p,'position','overview');
+ await p.locator('#nse-overview-slot #nse-insights').waitFor();
+ await emit(p,'nse_snapshot',{source:'NSE official MCP (personal research only)',retrieved_at:ts,
+  live:{stock:{lastTradedPrice:4843.4,perChange:-2.13,exchange_time_iso:ts}}});
+ A.match(await p.locator('#nse-overview-slot').innerText(),/4,843.40/);
+ A.match(await p.locator('main').innerText(),/No open book/);
+ await emit(p,'nse_snapshot',{source:'NSE official MCP (personal research only)',retrieved_at:ts,
+  live:{stock:{lastTradedPrice:5000,exchange_time_iso:new Date(now+60000).toISOString()}}});
+ A.match(await p.locator('#nse-overview-slot').innerText(),/timestamp-verified HAL trade is unavailable/);
+});
+await check('hedge assumptions stay open on refresh and retained chain prices carry an age warning',async()=>{
+ const {page,context}=await pageFor();
+ await nav(page,'position','hedge');
+ await page.locator('#hedge-advanced summary').click();
+ await page.locator('#hg-rate').fill('5.75');
+ await page.locator('#hg-rate').blur();
+ await emit(page,'snapshot',snap);
+ A.equal(await page.locator('#hedge-advanced').getAttribute('open'),'');
+ A.equal(await page.locator('#hg-rate').inputValue(),'5.75');
+ await nav(page,'technicals','chain');
+ await emit(page,'research',{section:'hedges',frame:PUT.expiry,fetched_at_iso:new Date(now-3600000).toISOString(),data:{option_rows:snap.option_rows}});
+ A.match(await page.locator('main').innerText(),/Last-known chain/);
+ await page.setViewportSize({width:360,height:390});
+ await page.addStyleTag({content:'body{font-size:125%}'});
+ await nav(page,'position','book');await click(page,'add');
+ await page.locator('#leg-entry').fill('4900');
+ await page.locator('#modal-save').scrollIntoViewIfNeeded();
+ A.ok(await page.locator('#modal-save').isVisible());
+ await page.evaluate(()=>HALApp.back());
+ A.equal(await page.locator('#modal').isVisible(),false);
+ await context.close();
+});
+await check('offline futures sizing calculates whole lots without changing the book',async()=>{
+ await nav(p,'position','risk');
+ await click(p,'open-futures-sizing');
+ await p.locator('#sizing-budget').fill('7500');
+ await p.locator('#sizing-distance').fill('25');
+ await p.locator('#sizing-lot').fill('150');
+ await click(p,'calculate-futures-sizing');
+ A.match(await p.locator('#sizing-result').innerText(),/Whole lots within budget\s+2/);
+ A.match(await p.locator('#sizing-result').innerText(),/Futures units\s+300/);
+ await p.locator('#sizing-budget').fill('7499.99');
+ A.equal(await p.locator('#sizing-result').innerText(),'');
+ await click(p,'calculate-futures-sizing');
+ A.match(await p.locator('#sizing-result').innerText(),/Whole lots within budget\s+1/);
+ A.equal(await p.evaluate(()=>rev),0);
+ await p.locator('#modal-close').click();
+});
 await check('local six-perspective evidence map does not call AI or change holdings',async()=>{
  await nav(p,'ai','assistant');
  A.match(await p.locator('main').innerText(),/Six-Perspective Evidence Map/);
@@ -54,6 +183,9 @@ await check('HAL Desk 5 lifetime recovery reconciles closed October puts, charge
   {id:'extra-fee',kind:'fee',date:'2026-10-27',amount:50}]};
  const {page:ap,context:ac,errors:ae}=await pageFor({book:b});
  const before=await ap.evaluate(()=>JSON.stringify(saved));
+ await click(ap,'atlas-performance');
+ await click(ap,'atlas-history');
+ A.equal(await ap.locator('[data-route="history"]').getAttribute('aria-pressed'),'true');
  await nav(ap,'position','performance');
  A.match(await ap.locator('main').innerText(),/Lifetime accounting/);
  A.match(await ap.locator('main').innerText(),/Open-trade P&L needed to offset booked loss/);
@@ -78,9 +210,10 @@ await check('HAL Desk 5 expiry agenda warns ahead of a put/future gap without ch
  const before=await ep.evaluate(()=>JSON.stringify(saved));
  await nav(ep,'position','overview');
  const overview=await ep.locator('main').innerText();
- A.match(overview,/Expiry & settlement review/);
- A.match(overview,/Upcoming protective puts expiry/);
- A.match(overview,/Protection gap after put expiry/);
+ A.match(overview,/Put coverage/);
+ await nav(ep,'position','risk');
+ A.match(await ep.locator('main').innerText(),/Upcoming protective puts expiry/);
+ A.match(await ep.locator('main').innerText(),/Protection gap after put expiry/);
  await nav(ep,'position','risk');
  A.match(await ep.locator('main').innerText(),/Expiry & settlement review/);
  A.equal(await ep.evaluate(()=>JSON.stringify(saved)),before);
@@ -159,7 +292,7 @@ await check('eligible protective-put comparison audits cash and December coverag
  await hp.locator('#hg-budget').fill('1000000');
  await hp.locator('#hg-loss').fill('100000000');
  await hp.locator('#hg-through').fill('2026-12-29');
- await hp.locator('summary').filter({hasText:'Costs, liquidity & model assumptions'}).click();
+ await hp.locator('summary').filter({hasText:'Advanced assumptions'}).click();
  await hp.locator('#hg-iv-assumption').fill('30');
  await click(hp,'hedge-rank');
  const detail=hp.locator('[data-action="hedge-detail"]').first();
@@ -265,7 +398,7 @@ await check('official NSE lens is independent, cacheable, escaped and never a de
  await nav(p,'position','overview');A.match(await p.locator('main').innerText(),/No open book/);
 });
 await check('empty scenario blocked',async()=>{await nav(p,'position','stress');await click(p,'scenario');A.match(await p.locator('#toast').innerText(),/Record/)});
-await check('offline futures editor blocks zero mark and accepts positive manual price',async()=>{await nav(p,'position','book');await click(p,'add');for(const [k,v]of Object.entries({expiry:'2026-12-29',lots:'2',size:'150',entry:'4927.35',manual:'0'}))await p.locator('#leg-'+k).fill(v);await p.locator('#modal-save').click();A.match(await p.locator('#modal-error').innerText(),/greater than zero/);A.equal(await p.locator('#modal').isVisible(),true);await p.locator('#leg-manual').fill('5000');await save(p);A.equal(await p.evaluate(()=>saved.legs[0].manual),5000);A.match(await p.locator('main').innerText(),/21,795/);A.ok(!(await p.locator('main').innerText()).includes('14,78,205'))});
+await check('offline futures editor blocks zero mark and accepts positive manual price',async()=>{await nav(p,'position','book');await click(p,'add');await p.getByText('Manual price override',{exact:true}).click();for(const [k,v]of Object.entries({expiry:'2026-12-29',lots:'2',size:'150',entry:'4927.35',manual:'0'}))await p.locator('#leg-'+k).fill(v);await p.locator('#modal-save').click();A.match(await p.locator('#modal-error').innerText(),/greater than zero/);A.equal(await p.locator('#modal').isVisible(),true);await p.locator('#leg-manual').fill('5000');await save(p);A.equal(await p.evaluate(()=>saved.legs[0].manual),5000);A.match(await p.locator('main').innerText(),/21,795/);A.ok(!(await p.locator('main').innerText()).includes('14,78,205'))});
 await check('partial close retains realised history and fees',async()=>{await click(p,'close');await p.locator('#close-lots').fill('1');await p.locator('#close-exit').fill('5000');await p.locator('#close-fees').fill('10');await p.locator('#close-note').fill('PRIVATE_MEMO');await save(p);const b=await p.evaluate(()=>saved);A.equal(b.legs[0].lots,1);A.equal(b.journal[0].fees,10)});
 await check('explicit book confirmation then edit invalidation',async()=>{await click(p,'confirm');await p.locator('#confirm-check').check();await save(p);A.ok(await p.evaluate(()=>saved.riskProfile.confirmedAt));await click(p,'edit');await p.locator('#leg-manual').fill('4900');await save(p);A.equal(await p.evaluate(()=>saved.riskProfile.confirmedAt),null)});
 await check('backup export and previous-book recovery',async()=>{await nav(p,'position','journal');await click(p,'export');const b=await p.evaluate(()=>JSON.parse(calls.find(c=>c[0]==='exportBackup')[1]));A.equal(b.schema,4);A.equal(b.book.journal.length,1);await click(p,'recovery');await save(p);A.equal(await p.evaluate(()=>saved.legs[0].manual),5000)});
@@ -298,6 +431,25 @@ await check('destructive import previews ledger loss and failed native save neve
 await check('REST multi-leg accounting and missing data state',async()=>{await emit(p,'snapshot',snap);await nav(p,'position','overview');A.match(await p.locator('main').innerText(),/23,460/);await emit(p,'snapshot',{...snap,option_rows:[]});A.match(await p.locator('main').innerText(),/Unavailable/);await emit(p,'snapshot',snap)});
 await check('mixed-expiry scenario rejects later horizon, zero spot remains zero',async()=>{await nav(p,'position','stress');await p.locator('#sc-horizon').fill('2026-12-01');await p.locator('#scenario-advanced').evaluate(el=>el.open=true);await p.locator('#sc-iv').fill('30');await click(p,'scenario');A.match(await p.locator('main').innerText(),/Scenario unavailable/);await p.locator('#sc-horizon').fill('');await p.locator('#sc-spot').fill('0');await click(p,'scenario');A.ok(!(await p.locator('main').innerText()).includes('23,460.00'))});
 await check('failed refresh visibly retains observations',async()=>{await emit(p,'error',{code:'network_unavailable'});A.match(await p.locator('#notice').innerText(),/Network unavailable/)});
+await check('research candle cursor retains selection and matches saved marks to the exact 15-minute interval',async()=>{
+ const start=Date.parse('2026-10-30T09:15:00+05:30'),quarter=900000,at=new Date(start+quarter+1000).toISOString();
+ const mark={...PUT,instrumentKey:'SYNTH_P',price:43.25,source:'REST bid',status:'current',quoteAt:at,tradeAt:at,retrievedAt:at};
+ const seed={...E.emptyBook(),checkpoints:[{version:4,savedAt:at,positionMarks:[null,mark,{...mark,instrumentKey:'MANUAL',source:'Manual',price:987}]}]};
+ const x=await pageFor({book:seed}),p=x.page;
+ const candles=[0,1,2].map(i=>[new Date(start+i*quarter).toISOString(),4900+i,4904+i,4897,4902+i,300+i]);
+ await emit(p,'research',{section:'candles',frame:'15m',fetched_at_iso:ts,data:{history:{candles}}});
+ await nav(p,'technicals','markets');await p.locator('[data-action="frame"][data-id="15m"]').click();
+ const info=p.locator('#atlas-candle-detail');
+ await p.selectOption('#atlas-candle',String(start+quarter));
+ A.match(await info.innerText(),/43.25/);A.doesNotMatch(await info.innerText(),/987/);
+ await p.locator('[data-action="chart-mode"][data-id="table"]').click();
+ A.equal(await p.locator('#atlas-candle').inputValue(),String(start+quarter));A.match(await info.innerText(),/Candle · IST/i);
+ await p.locator('[data-action="chart-step"][data-id="1"]').click();
+ A.match(await info.innerText(),/No saved contract quotes/);
+ await nav(p,'research','company');await nav(p,'technicals','markets');
+ A.equal(await p.locator('#atlas-candle').inputValue(),String(start+2*quarter));
+ A.equal(await p.evaluate(()=>rev),0);A.deepEqual(x.errors,[]);await x.context.close();
+});
 await check('completed candles render charts and valid historical pattern dates',async()=>{const candles=Array.from({length:260},(_,i)=>{const c=4000+i*3+Math.sin(i/5)*40;return [new Date(now-(260-i)*E.DAY).toISOString(),c-2,c+15,c-12,c,1000+i]});for(const section of ['candles','patterns'])await emit(p,'research',{section,frame:'D',fetched_at_iso:ts,data:{history:{candles}}});await nav(p,'technicals','markets');A.ok(await p.locator('#market-chart canvas').count());A.ok(!(await p.locator('#toast').innerText()).includes('is not a function'));A.equal(await p.evaluate(()=>document.querySelector('#market-chart').querySelectorAll('canvas').length>=2),true);await nav(p,'technicals','insights');await click(p,'patterns');A.ok(!(await p.locator('main').innerText()).includes('1970'));A.deepEqual(x.errors,[])});
 await check('HAL Desk 5 completed-candle backtest runs locally without changing the real book',async()=>{
  const before=await p.evaluate(()=>JSON.stringify(saved));
@@ -312,20 +464,31 @@ await check('HAL Desk 5 completed-candle backtest runs locally without changing 
 await check('stream display never overwrites REST mark',async()=>{await emit(p,'snapshot',snap);await nav(p,'technicals','markets');await emit(p,'stream',{state:'decoded_quotes',frames:2,feed_ts:now,rows:[{key:'SYNTH_F',price:7777}]});A.match(await p.locator('#stream-view').innerText(),/7,777/);await nav(p,'position','overview');A.match(await p.locator('main').innerText(),/23,460/)});
 await check('news HTML remains escaped',async()=>{await emit(p,'research',{section:'news',frame:'D',fetched_at_iso:ts,data:{articles:{articles:{SYNTH:[{heading:'HAL <img src=x onerror="window.pwned=1"> contract',article_link:'https://example.com/hal',published_time:now-1000}]}}}});await nav(p,'research','news');A.match(await p.locator('main').innerText(),/HAL <img/);A.equal(await p.locator('main img').count(),0);A.equal(await p.evaluate(()=>window.pwned),undefined)});
 await check('AI exact evidence consent, research exclusion, reply and cancellation',async()=>{await nav(p,'ai','assistant');await p.locator('#ai-mode').selectOption('research');await click(p,'ai-review');const e=JSON.parse(await p.locator('#modal-body pre').innerText());A.equal(e.evidence.portfolioIncluded,false);A.ok(!JSON.stringify(e).includes('PRIVATE_MEMO'));await p.locator('#modal-save').click();A.match(await p.locator('#modal-error').innerText(),/consent/);A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='ai'))).length,0);await p.locator('#ai-consent').check();await save(p);const req=await p.evaluate(()=>JSON.parse(calls.filter(c=>c[0]==='ai').at(-1)[1]));await emit(p,'ai_result',{id:req.id,data:{reply:'Synthetic answer',portfolioIncluded:false}});A.match(await p.locator('main').innerText(),/Synthetic answer/);await click(p,'ai-review');await p.locator('#ai-consent').check();await save(p);await click(p,'ai-cancel');A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='aiCancel'))).length,1)});
-await check('FinBERT stays opt-in and light/dark responsive layouts fit',async()=>{A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='finbertInstall'))).length,0);await nav(p,'research','news');await click(p,'model-install');A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='finbertInstall'))).length,1);await p.locator('#settings').click();await p.locator('#theme').selectOption('light');await save(p);A.ok(await p.locator('body.light').count());for(const width of [320,390,768]){await p.setViewportSize({width,height:844});await nav(p,'position','overview');A.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))}const qa=path.resolve(__dirname,'../../qa');fs.mkdirSync(qa,{recursive:true});await p.setViewportSize({width:390,height:844});await p.screenshot({path:qa+'/today-light.png',fullPage:true});await p.locator('#settings').click();await p.locator('#theme').selectOption('dark');await save(p);await p.screenshot({path:qa+'/today-dark.png',fullPage:true});A.deepEqual(x.errors,[])});
+await check('FinBERT stays opt-in and light/dark responsive layouts fit',async()=>{A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='finbertInstall'))).length,0);await nav(p,'research','news');await click(p,'model-install');A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='finbertInstall'))).length,1);await p.locator('#settings').click();await p.locator('#theme').selectOption('light');await click(p,'save-workspace-preferences');A.ok(await p.locator('body.light').count());for(const width of [320,360,390,768,1080]){await p.setViewportSize({width,height:844});await nav(p,'position','overview');A.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))}const qa=path.resolve(__dirname,'../../qa');fs.mkdirSync(qa,{recursive:true});await p.setViewportSize({width:390,height:844});await p.screenshot({path:qa+'/today-light.png',fullPage:true});await p.locator('#settings').click();await p.locator('#theme').selectOption('dark');await click(p,'save-workspace-preferences');await nav(p,'position','overview');await p.screenshot({path:qa+'/today-dark.png',fullPage:true});A.deepEqual(x.errors,[])});
 
 await check('hedge assumptions and pattern inputs survive refresh rendering',async()=>{await nav(p,'position','hedge');await p.locator('#hg-budget').fill('12345');await p.locator('#hg-through').fill('2026-11-23');await p.locator('#hg-budget').blur();await emit(p,'research',{section:'status',fetched_at_iso:ts,data:{status:'NORMAL_OPEN'}});A.equal(await p.locator('#hg-budget').inputValue(),'12345');A.equal(await p.locator('#hg-through').inputValue(),'2026-11-23');await nav(p,'technicals','insights');await p.locator('#pattern-window').fill('30');await p.locator('#pattern-forward').fill('5');await p.locator('#pattern-forward').blur();await emit(p,'idle',{});A.equal(await p.locator('#pattern-window').inputValue(),'30');A.equal(await p.locator('#pattern-forward').inputValue(),'5');});
 await check('resume clears a cancelled loading state',async()=>{await emit(p,'loading',{});A.equal(await p.locator('#refresh').isDisabled(),true);await emit(p,'lifecycle',{state:'resumed'});A.equal(await p.locator('#refresh').isDisabled(),false)});
-await check('option chain displays nested provider volume and OI',async()=>{await emit(p,'snapshot',snap);await nav(p,'technicals','markets');const card=p.locator('section.card').filter({has:p.getByRole('heading',{name:'Option chain',exact:true})});A.match(await card.innerText(),/1,000/);A.match(await card.innerText(),/5,000/);});
+await check('option chain displays nested provider volume and OI',async()=>{await emit(p,'snapshot',snap);await nav(p,'technicals','chain');const card=p.locator('section.card').filter({has:p.getByRole('heading',{name:'HAL option chain',exact:true})});await card.locator('summary').click();A.match(await card.innerText(),/1,000/);A.match(await card.innerText(),/5,000/);});
 await check('new quote invalidates prior computed scenario',async()=>{await nav(p,'position','stress');await p.locator('#sc-spot').fill('4800');await p.locator('#scenario-advanced').evaluate(el=>el.open=true);await p.locator('#sc-iv').fill('30');await click(p,'scenario');A.match(await p.locator('main').innerText(),/Scenario results/);await emit(p,'snapshot',snap);A.match(await p.locator('main').innerText(),/Choose a question to begin/);});
 await check('failed persistence keeps saved book intact',async()=>{await nav(p,'position','book');const before=await p.evaluate(()=>JSON.stringify(saved));await click(p,'edit');await p.locator('#leg-entry').fill('4000');await p.evaluate(()=>window.forceSaveFailure=true);await p.locator('#modal-save').click();A.match(await p.locator('#modal-error').innerText(),/synthetic disk failure/);A.equal(await p.evaluate(()=>JSON.stringify(saved)),before);await p.evaluate(()=>window.forceSaveFailure=false);await p.locator('#modal-cancel').click();});
 await check('recovery conflicts reject rather than overwrite a newer book',async()=>{await nav(p,'position','journal');await click(p,'recovery');const before=await p.evaluate(()=>{window.rev++;return JSON.stringify(saved)});await p.locator('#modal-save').click();A.match(await p.locator('#modal-error').innerText(),/conflict/);A.equal(await p.evaluate(()=>JSON.stringify(saved)),before);await p.locator('#modal-cancel').click();});
 await browser.close();browser=await launch();await check('stale imported confirmation cannot enable hedge ranking',async()=>{const b={...E.emptyBook(),legs:[FUT,PUT],riskProfile:{...E.emptyBook().riskProfile,confirmedAt:ts,confirmedBook:'rev-wrong'}};x=await pageFor({book:b});p=x.page;await nav(p,'position','book');A.match(await p.locator('main').innerText(),/Not confirmed/);await nav(p,'position','hedge');await click(p,'hedge-rank');A.match(await p.locator('#toast').innerText(),/Confirm the current book/);await x.context.close();});
-await browser.close();browser=await launch();await check('unlisted saved contract identity survives manual edit',async()=>{x=await pageFor({book:{...E.emptyBook(),legs:[FUT]}});p=x.page;await nav(p,'position','book');await click(p,'edit');A.equal(await p.locator('#leg-listed').inputValue(),'SYNTH_F');await p.locator('#leg-manual').fill('4999');await save(p);A.equal(await p.evaluate(()=>saved.legs[0].instrumentKey),'SYNTH_F');A.deepEqual(x.errors,[]);await x.context.close();});
+await check('manual price date survives a quantity edit and clears on contract change',async()=>{
+ const seed={...FUT,manual:4999,manualAt:ts,instrumentKey:null};
+ const x=await pageFor({book:{...E.emptyBook(),legs:[seed]}}),p=x.page;
+ await nav(p,'position','book');await click(p,'edit');
+ await p.locator('#leg-lots').fill('3');await save(p);
+ A.equal(await p.evaluate(()=>saved.legs[0].manualAt),ts);
+ await click(p,'edit');await p.locator('#leg-expiry').fill('2027-01-28');await save(p);
+ A.equal(await p.evaluate(()=>saved.legs[0].manual),null);
+ A.equal(await p.evaluate(()=>saved.legs[0].manualAt),null);
+ await x.context.close();
+});
+await browser.close();browser=await launch();await check('unlisted saved contract identity survives manual edit',async()=>{x=await pageFor({book:{...E.emptyBook(),legs:[FUT]}});p=x.page;await nav(p,'position','book');await click(p,'edit');A.equal(await p.locator('#leg-listed').inputValue(),'SYNTH_F');await p.getByText('Manual price override',{exact:true}).click();await p.locator('#leg-manual').fill('4999');await save(p);A.equal(await p.evaluate(()=>saved.legs[0].instrumentKey),'SYNTH_F');A.deepEqual(x.errors,[]);await x.context.close();});
 await browser.close();browser=await launch();await check('v2 migration preserves completed October history and storage keys',async()=>{x=await pageFor({legacy:{...E.emptyBook(),version:2,legs:[FUT,PUT],journal:[{id:'oct',kind:'close',date:'2026-10-27',leg:{...PUT,expiry:'2026-10-27'},exit:.3,fees:12,note:'Closed October'}]}});const b=await x.page.evaluate(()=>saved);A.equal(b.version,4);A.equal(b.journal[0].leg.expiry,'2026-10-27');A.ok(await x.page.evaluate(()=>localStorage.getItem('hal_desk_v2')));A.deepEqual(x.errors,[]);await x.context.close()});
 await browser.close();browser=await launch();await check('corrupt saved book withholds misleading zero values',async()=>{x=await pageFor({corrupt:true});A.match(await x.page.locator('main').innerText(),/Financial values withheld/);A.ok(!(await x.page.locator('main').innerText()).includes('₹0.00'));await nav(x.page,'technicals','markets');A.deepEqual(x.errors,[]);await x.context.close()});await browser.close();browser=await launch();await check('both manually recorded puts recover from cached key mismatch without changing holdings',async()=>{const p1={...PUT,instrumentKey:null},p2={...PUT,id:'p2',strike:4400,entry:24.1,instrumentKey:null};x=await pageFor({book:{...E.emptyBook(),legs:[p1,p2]}});p=x.page;await emit(p,'connection',{configured:true});const req=await p.evaluate(()=>calls.filter(c=>c[0]==='research').map(c=>JSON.parse(c[1])).find(r=>r.section==='contracts'));A.equal(req.legs.length,2);A.ok(req.legs.every(l=>!Object.prototype.hasOwnProperty.call(l,'instrument_key')));const before=await p.evaluate(()=>JSON.stringify(saved));await emit(p,'research',{section:'contracts',frame:'D',fetched_at_iso:ts,data:{contracts:[4500,4400].map(strike=>({type:'PE',expiry:PUT.expiry,strike,requested_lot_size:150,lot_size:150,verified:false,reason:'instrument_key_mismatch'}))}});await emit(p,'snapshot',{...snap,option_rows:[...snap.option_rows,{strike:4400,put:{instrument_key:'SYNTH_P2',lot_size:150,quote:q(30)}}]});await nav(p,'position','book');A.ok(!(await p.locator('main').innerText()).includes('Exact listed contract unavailable'));A.match(await p.locator('main').innerText(),/₹50.00/);A.match(await p.locator('main').innerText(),/₹30.00/);A.equal(await p.evaluate(()=>JSON.stringify(saved)),before);A.deepEqual(x.errors,[]);await x.context.close();});
 await browser.close();browser=await launch();await check('wrong saved expiry stays unavailable and shows provider dates for review',async()=>{x=await pageFor({book:{...E.emptyBook(),legs:[{...PUT,instrumentKey:null,expiry:'2026-11-24'}]}});p=x.page;await emit(p,'snapshot',snap);await nav(p,'position','book');A.match(await p.locator('main').innerText(),/Exact listed contract unavailable/);A.match(await p.locator('main').innerText(),/Provider lists 23 Nov 2026/);A.equal(await p.evaluate(()=>saved.legs[0].expiry),'2026-11-24');A.deepEqual(x.errors,[]);await x.context.close();});
-await browser.close();browser=await launch();await check('obsolete chain selection resets to listed expiry and exposes failure inline',async()=>{x=await pageFor();p=x.page;await emit(p,'snapshot',{...snap,option_expiry:'2026-10-27',available_expiries:['2026-10-27']});await emit(p,'connection',{configured:true});await emit(p,'snapshot',{...snap,option_expiry:'2026-10-27',option_rows:[],chain_error:'expiry_not_listed'});await nav(p,'technicals','markets');A.equal(await p.locator('#chain-expiry').inputValue(),PUT.expiry);const calls=await p.evaluate(()=>window.calls.filter(c=>c[0]==='research').map(c=>JSON.parse(c[1])));A.ok(calls.some(r=>r.section==='hedges'&&r.frame===PUT.expiry));await emit(p,'research_error',{key:'hedges:'+PUT.expiry+':consolidated',code:'upstox_permission_denied'});const card=p.locator('section.card').filter({has:p.getByRole('heading',{name:'Option chain',exact:true})});A.match(await card.innerText(),/cannot access this feed/);A.deepEqual(x.errors,[]);await x.context.close();});
+await browser.close();browser=await launch();await check('obsolete chain selection resets to listed expiry and exposes failure inline',async()=>{x=await pageFor();p=x.page;await emit(p,'snapshot',{...snap,option_expiry:'2026-10-27',available_expiries:['2026-10-27']});await emit(p,'connection',{configured:true});await emit(p,'snapshot',{...snap,option_expiry:'2026-10-27',option_rows:[],chain_error:'expiry_not_listed'});await nav(p,'technicals','chain');A.equal(await p.locator('#chain-expiry').inputValue(),PUT.expiry);const calls=await p.evaluate(()=>window.calls.filter(c=>c[0]==='research').map(c=>JSON.parse(c[1])));A.ok(calls.some(r=>r.section==='hedges'&&r.frame===PUT.expiry));await emit(p,'research_error',{key:'hedges:'+PUT.expiry+':consolidated',code:'upstox_permission_denied'});const card=p.locator('section.card').filter({has:p.getByRole('heading',{name:'HAL option chain',exact:true})});A.match(await card.innerText(),/cannot access this feed/);A.deepEqual(x.errors,[]);await x.context.close();});
 
 await browser.close();browser=await launch();
 await check('same-book daily review explains futures and put price moves without recording trades',async()=>{
@@ -341,7 +504,8 @@ await check('same-book daily review explains futures and put price moves without
   risk:E.risk(b,oldMarket,at)},at);
  const x=await pageFor({book:b,cache:{'snapshot:review':{version:1,current:previous}}});
  await emit(x.page,'connection',{configured:true});await emit(x.page,'snapshot',snap);
- const review=x.page.locator('section.card').filter({has:x.page.getByRole('heading',{name:'Since your last visit',exact:true})});
+ await nav(x.page,'position','changes');
+ const review=x.page.locator('section.card').filter({has:x.page.getByRole('heading',{name:'Since last review',exact:true})});
  A.match(await review.innerText(),/2,250.00/);
  await review.locator('summary').filter({hasText:'Per-leg P&L change'}).click();
  const output=await review.innerText();
@@ -377,24 +541,34 @@ await check('HAL Desk 5 rollover compares exact fresh futures quotes without cha
  A.deepEqual(x.errors,[]);
  await x.context.close();
 });
-await check('daily review saves fresh observations separately and keeps the prior visit fixed',async()=>{
+await check('Mark reviewed preserves a legacy baseline across refresh, navigation and resume until explicitly replaced',async()=>{
  const I=require('../app/src/main/assets/insights4.js');const b=E.validateBook({...E.emptyBook(),legs:[FUT,PUT]});
  const previous={version:4,savedAt:new Date(now-3600000).toISOString(),quoteAsOf:new Date(now-3601000).toISOString(),bookRevision:I.materialFingerprint(b),spot:4900,open:22000,complete:true,newsURLs:[]};
- x=await pageFor({book:b,cache:{'snapshot:review':{version:1,current:previous}}});p=x.page;
+ const legacy={version:1,current:previous},key='snapshot:review';
+ x=await pageFor({book:b,cache:{[key]:legacy}});p=x.page;
  await emit(p,'connection',{configured:true});await emit(p,'snapshot',snap);
- const state=await p.evaluate(()=>({revision:rev,previous,review:reviewCache['snapshot:review'],book:saved}));
- A.equal(state.revision,0);A.equal(state.previous,null);A.equal(state.book.checkpoints.length,0);A.ok(Math.abs(state.review.current.open-23460)<1e-6);
+ await nav(p,'position','book');await nav(p,'position','changes');
+ await emit(p,'lifecycle',{state:'resumed',awayMs:360000});
  A.match(await p.locator('main').innerText(),/1,460.00/);
- const baseline=JSON.stringify(state.review);await emit(p,'snapshot',{...snap,spot:{...snap.spot,last_price:4960}});
- A.equal(await p.evaluate(()=>JSON.stringify(reviewCache['snapshot:review'])),baseline);
- await nav(p,'position','book');await nav(p,'position','overview');A.match(await p.locator('main').innerText(),/1,460.00/);
- await emit(p,'lifecycle',{state:'resumed',awayMs:360000});const changed=await p.locator('section.card').filter({has:p.getByRole('heading',{name:'Since your last visit',exact:true})}).innerText();A.match(changed,/₹0.00/);A.ok(!changed.includes('1,460.00'));await emit(p,'snapshot',snap);A.equal(await p.evaluate(()=>rev),0);
- await x.context.close();
+ A.deepEqual(await p.evaluate(k=>reviewCache[k],key),legacy);
+ await p.evaluate(()=>window.forceCacheFailure=true);await click(p,'mark-reviewed');
+ A.match(await p.locator('#toast').innerText(),/could not be saved/i);
+ A.deepEqual(await p.evaluate(k=>reviewCache[k],key),legacy);
+ await p.evaluate(()=>window.forceCacheFailure=false);await click(p,'mark-reviewed');
+ const pinned=await p.evaluate(k=>reviewCache[k],key);
+ A.equal(pinned.version,2);A.ok(Math.abs(pinned.current.open-23460)<1e-6);
+ A.equal(await p.evaluate(()=>rev),0);A.equal(await p.evaluate(()=>saved.checkpoints.length),0);
+ const restart=await pageFor({book:b,cache:{[key]:pinned}},Date.parse(pinned.current.savedAt)+1000);
+ await emit(restart.page,'snapshot',snap);
+ await nav(restart.page,'position','changes');
+ const review=restart.page.locator('section.card').filter({has:restart.page.getByRole('heading',{name:'Since last review',exact:true})});
+ A.match(await review.innerText(),/₹0.00/);A.deepEqual(await restart.page.evaluate(k=>reviewCache[k],key),pinned);
+ await restart.context.close();await x.context.close();
 });
 await browser.close();browser=await launch();
 await check('offline, incomplete and failed refreshes do not advance the review baseline',async()=>{
  x=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT]}});p=x.page;
- await emit(p,'snapshot',{...snap,option_rows:[]});A.equal(await p.evaluate(()=>reviewCache['snapshot:review']),undefined);
+ await emit(p,'snapshot',{...snap,option_rows:[]});A.ok(await p.locator('[data-action="mark-reviewed"]').isDisabled());A.match(await p.locator('details').filter({hasText:'Contracts needing fresh prices'}).textContent(),/4,500 PE/);A.equal(await p.evaluate(()=>reviewCache['snapshot:review']),undefined);
  await emit(p,'error',{code:'network_unavailable'});A.equal(await p.evaluate(()=>reviewCache['snapshot:review']),undefined);
  await p.evaluate(()=>window.forceCacheFailure=true);await emit(p,'snapshot',snap);
  A.equal(await p.evaluate(()=>rev),0);A.equal(await p.evaluate(()=>saved.legs.length),2);
@@ -423,7 +597,7 @@ await check('exposure comparison preserves holdings and history and clears obsol
 await browser.close();browser=await launch();
 await check('contextual AI reviews exact evidence before any request and keeps research private',async()=>{
  x=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT],notes:[{id:'private',title:'PRIVATE TITLE',text:'PRIVATE MEMO',date:'2026-10-31',category:'Other'}]}});p=x.page;
- await emit(p,'snapshot',snap);await click(p,'explain-position');A.equal(await p.locator('#modal').isVisible(),true);
+ await emit(p,'snapshot',snap);await nav(p,'position','book');await click(p,'explain-position');A.equal(await p.locator('#modal').isVisible(),true);
  let packet=JSON.parse(await p.locator('#modal-body pre').innerText());A.equal(packet.evidence.portfolioIncluded,true);
  A.equal((await p.evaluate(()=>calls.filter(c=>c[0]==='ai'))).length,0);await p.locator('#modal-cancel').click();
  await emit(p,'research',{section:'news',frame:'D',fetched_at_iso:ts,data:{articles:[{heading:'HAL engine delivery update',article_link:'https://example.org/filing',published_time:now-1000,source:'Synthetic news'}]}});
@@ -445,8 +619,8 @@ await check('updated daily and planning layouts fit phone widths in both themes'
  x=await pageFor({book:{...E.emptyBook(),legs:[FUT,PUT]}});p=x.page;await emit(p,'connection',{configured:true});await emit(p,'snapshot',snap);await emit(p,'research',{section:'news',frame:'D',fetched_at_iso:ts,data:{articles:[{heading:'HAL delivery milestone: evidence to review',article_link:'https://example.org/hal-fixture',published_time:now-1000,source:'Synthetic preview'}]}});
  const qa=path.resolve(__dirname,'../../qa');fs.mkdirSync(qa,{recursive:true});
  for(const theme of ['dark','light']){
-  await p.locator('#settings').click();await p.locator('#theme').selectOption(theme);await save(p);
-  for(const width of [320,390,768]){await p.setViewportSize({width,height:844});for(const [a,b]of [['position','overview'],['position','book'],['position','stress'],['position','compare'],['research','company']]){
+  await p.locator('#settings').click();await p.locator('#theme').selectOption(theme);await click(p,'save-workspace-preferences');
+  for(const width of [320,360,390,768,1080]){await p.setViewportSize({width,height:844});for(const [a,b]of [['position','overview'],['position','book'],['position','stress'],['position','compare'],['research','company']]){
    await nav(p,a,b);A.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${theme} ${width} ${a}/${b}`);
    if(width===390)await p.screenshot({path:qa+`/daily-${theme}-${a}${b?'-'+b:''}.png`,fullPage:true});
   }}

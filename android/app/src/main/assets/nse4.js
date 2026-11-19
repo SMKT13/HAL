@@ -100,17 +100,35 @@
     if(Array.isArray(s.errors)&&s.errors.length)html+=small('Unavailable NSE modules: '+s.errors.length+'. Values are intentionally omitted rather than estimated.');
     return html+'<p class="fine">Source: NSE Market Data MCP (cash equities and Bhavcopy), for personal research only. Not for trade execution or investment advice.</p>';
   }
+  function overviewPanel(){
+    const data=snapshot||{},live=data.live||{},quote=live.stock||{},retrieved=Date.parse(data.retrieved_at);
+    const tradeTime=Date.parse(quote.exchange_time_iso),now=Date.now();
+    const valid=Number.isFinite(retrieved)&&retrieved<=now+5000&&Number.isFinite(tradeTime)&&
+      tradeTime<=Math.min(retrieved,now)+5000&&num(quote.lastTradedPrice)>0;
+    const status=pending?'Fetching NSE snapshot…':error?'NSE request failed':fromCache?'Saved NSE snapshot':'NSE snapshot';
+    let html='<div class="section-heading"><h2>NSE cash snapshot</h2><button id="nse-refresh" class="text-button"'+(pending?' disabled':'')+'>Refresh</button></div>';
+    html+=valid?val('Last trade',money(quote.lastTradedPrice)+' · '+percent(quote.perChange)):small('A timestamp-verified HAL trade is unavailable.');
+    if(pending||error||fromCache)html+=small(status);
+    if(valid)html+='<details><summary>Quote details</summary>'+val('Exchange trade',when(quote.exchange_time_iso))+val('Retrieved',when(data.retrieved_at))+'</details>';
+    return html;
+  }
   function mount(){
-    if(!root||document.querySelector('.bottom-nav [data-screen="technicals"][aria-current="page"]')===null)return;
-    if(document.getElementById('nse-insights'))return;
+    if(!root||document.getElementById('nse-insights'))return;
+    const slot=document.getElementById('nse-overview-slot');
+    const markets=document.getElementById('nse-market-slot');
+    if(!slot&&!markets)return;
     const section=document.createElement('section');
-    section.id='nse-insights';section.className='card';section.setAttribute('aria-label','Official NSE market research');
-    section.innerHTML=panel();
-    const nav=root.querySelector('.subnav');
-    if(nav)nav.insertAdjacentElement('afterend',section);else root.appendChild(section);
+    section.id='nse-insights';section.className='card';
+    section.setAttribute('aria-label','Official NSE market research');
+    section.innerHTML=slot?overviewPanel():panel();
+    if(slot)slot.appendChild(section);
+    else markets.appendChild(section);
     if(!opened){opened=true;refresh();}
   }
-  function paint(){const section=document.getElementById('nse-insights');if(section)section.innerHTML=panel();}
+  function paint(){
+    const section=document.getElementById('nse-insights');
+    if(section)section.innerHTML=section.closest('#nse-overview-slot')?overviewPanel():panel();
+  }
   function refresh(){
     if(pending)return;
     if(!native||typeof native.nseRefresh!=='function'){

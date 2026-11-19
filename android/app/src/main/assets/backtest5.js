@@ -64,8 +64,12 @@ function backtestSma(input,settings={}){
  const markedUnrealized=open?bars[bars.length-1].c-open.price:0;
  const netPerShare=realizedGross+markedUnrealized-charged;
  const wins=trades.filter(x=>x.netPerShare>0).length;
- const basis=bars[slow+1].o;
- return {strategy:'SMA crossover, long-only',fast,slow,
+ const basis=bars[slow+1].o,holdingCost=basis*(1+(feeBps+slippageBps)/10000);
+ let holdingPeak=basis,holdingDrawdown=0;
+ for(const bar of bars.slice(slow+1)){const equity=basis+bar.c-holdingCost;holdingPeak=Math.max(holdingPeak,equity);holdingDrawdown=Math.max(holdingDrawdown,holdingPeak-equity);}
+ const benchmark={returnPct:100*(bars.at(-1).c-holdingCost)/basis,drawdownPct:100*holdingDrawdown/basis,trades:1};
+
+ return {benchmark,strategy:'SMA crossover, long-only',fast,slow,
   sample:{from:bars[0].t,to:bars[bars.length-1].t,bars:bars.length,firstEligibleFillAt:bars[slow+1].t},
   closedTrades:trades,events,openPosition:open?{entryAt:open.at,entryPrice:open.price,markedAt:bars[bars.length-1].t,mark:bars[bars.length-1].c}:null,
   metrics:{closedTrades:trades.length,wins,winRate:trades.length?wins/trades.length:null,

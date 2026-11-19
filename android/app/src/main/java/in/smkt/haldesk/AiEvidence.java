@@ -25,7 +25,7 @@ final class AiEvidence {
             copy(safeMarket,market,"lastSuccess lastFailure failureReason",300);
         }
         out.put("market",safeMarket);
-        JSONObject tech=source.optJSONObject("technical"),safeTech=pick(tech,"bias frame completedCount vol asOf interval bars ready stale reason trend momentum sma20 sma50 sma200 ema12 ema26 rsi rsi14 atr atr14 mfi mfi14 historicalVolatility hv volumeTrend",300);
+        JSONObject tech=source.optJSONObject("technical"),safeTech=pick(tech,"bias frame completedCount vol asOf interval bars ready stale reason trend momentum sma20 sma50 sma200 ema12 ema26 rsi rsi14 atr atr14 mfi mfi14 historicalVolatility hv volume volumeTrend",300);
         if(tech!=null){
             for(String key:new String[]{"macd","bollinger","pivots"})if(tech.optJSONObject(key)!=null)safeTech.put(key,pick(tech.optJSONObject(key),"value macd signal histogram upper middle lower pivot r1 r2 r3 s1 s2 s3",80));
             for(String key:new String[]{"support","resistance"}){

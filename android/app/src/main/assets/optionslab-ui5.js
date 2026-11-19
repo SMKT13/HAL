@@ -192,6 +192,6 @@ root.createHalOptionsLab=function(api){
   return false;
  }
  const actions={};for(const name of ['tab','refresh','add','use-template','import-actual','clear','remove','edit','duplicate','paper-rename','paper-clone','manual','recalc','paper-save','load','open','close-start','close-confirm','delete','export','recover','import']){const k='lab-'+name;actions[k]=b=>action(k,b);}
- return {view,actions,change,getDraft:()=>({legs:state.legs.map(E.leg),fees:Number(state.fees)||0}),loadStrategy:legs=>{state.legs=legs.map(E.leg);state.editing=null;state.view='builder';api.render();},setView:page=>{if(['chain','builder','payoff','oi','paper'].includes(page))state.view=page;api.render();}};
+ return {view,actions,change,getDraft:()=>({legs:state.legs.map(E.leg),fees:Number(state.fees)||0}),loadStrategy:(legs,{fresh=false}={})=>{if(fresh){state.fees=0;state.error='';state.spotManuallySet=false;state.horizon='';state.closeId=null;}state.legs=legs.map(E.leg);state.editing=null;state.view='builder';api.render();},setView:page=>{if(['chain','builder','payoff','oi','paper'].includes(page))state.view=page;api.render();}};
 };
 })(typeof globalThis!=='undefined'?globalThis:this);
