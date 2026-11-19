@@ -200,7 +200,7 @@ function ledger(book,input={},opts={}) {
  const b=validateBook(book);const rows=b.legs.map(leg=>{const mark=resolveMark(leg,input,{...opts,markMode:opts.markMode||b.preferences.markMode});return {leg,mark,units:units(leg),pnl:finite(mark.price)?(mark.price-leg.entry)*units(leg):null};});
  const complete=rows.every(r=>finite(r.pnl)),open=complete?sum(rows.map(r=>r.pnl)):null;
  const {realized, charges} = H.totals(b);
- return {rows,open,realized,charges,net:complete?realized+open-charges:null,complete,openPutPremium:sum(b.legs.filter(l=>l.type==='PE').map(l=>l.entry*units(l))),settlements:sum(b.journal.filter(j=>j.kind==='settlement').map(j=>j.amount)),fundingMovements:sum(b.journal.filter(j=>j.kind==='funding').map(j=>j.amount)),unavailableLegs:rows.filter(r=>r.pnl===null).map(r=>r.leg.id),manual:rows.some(r=>r.mark.source==='Manual'),stale:rows.some(r=>r.mark.status==='stale')};
+ return {rows,open,realized,charges,net:complete?realized+open-charges:null,complete,openPutPremium:sum(b.legs.filter(l=>l.type==='PE').map(l=>l.entry*units(l))),settlements:sum([...b.journal,...(b.legacy?.journal||[])].filter(j=>j.kind==='settlement').map(j=>j.amount)),fundingMovements:sum(b.journal.filter(j=>j.kind==='funding').map(j=>j.amount)),unavailableLegs:rows.filter(r=>r.pnl===null).map(r=>r.leg.id),manual:rows.some(r=>r.mark.source==='Manual'),stale:rows.some(r=>r.mark.status==='stale')};
 }
 function closeLeg(book, idOrIndex, lots, exit, fees, date, options={}) {
  const b=validateBook(book),index=typeof idOrIndex==='number'?idOrIndex:b.legs.findIndex(l=>l.id===idOrIndex),leg=b.legs[index],now=options.now==null?Date.now():time(options.now);

@@ -260,3 +260,8 @@ test('Journal and history CSV preserve numeric cells and quote formula-like text
  for(const s of ['  =1+1','\nvalue','\tvalue','  @label','  -3'])A.equal(E.csvCell(s),'"\''+s+'"');
  A.equal(E.csvCell(-3),'"-3"');A.equal(E.csvCell('a,"b"\nc'),'"a,""b""\nc"');
 });
+test('Settlement cash combines imported and current movements independently of fees and funding',()=>{
+ let b={...E.emptyBook(),legacy:{realized:0,costs:0,journal:[{id:'old',kind:'settlement',amount:250,date:'2026-10-01'}]}};
+ for(const [kind,amount] of [['settlement',-40],['fee',7],['funding',100],['funding',-30]])b=E.recordCash(b,kind,amount,'2026-10-20','',opts);
+ const l=E.ledger(b);A.equal(l.settlements,210);A.equal(l.fundingMovements,70);A.equal(l.charges,7);A.equal(l.net,-7);
+});
