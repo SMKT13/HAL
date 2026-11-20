@@ -402,7 +402,7 @@ function aiBrief(m,l,r){
   ['News Impact','Review verified sources, dated announcements and any missing filings.']
  ];
  return card('Intelligence Brief',banner)+
-  '<div class="ai-card-grid">'+boxes.map((b,i)=>'<section class="ai-mini-card"><h3>'+esc(b[0])+'</h3><p>'+b[1]+'</p><div class="toolbar">'+btn(i===0?'go-analysis':i===1?'explain-position':i===2?'history':'go-company',i===1?'Ask Atlas':'Open details')+'</div></section>').join('')+'</div>'+
+  '<div class="ai-card-grid">'+boxes.map((b,i)=>'<section class="ai-mini-card"><h3>'+esc(b[0])+'</h3><p>'+b[1]+'</p><div class="toolbar">'+btn(i===0?'go-analysis':i===1?'explain-position':i===2?'go-history':'go-company',i===1?'Ask Atlas':'Open details')+'</div></section>').join('')+'</div>'+
   card('What changed?','<p class="fine">Compare verified checkpoints; do not treat historical observations as current forecasts.</p>'+btn('period-review','Review checkpoints'))+
   card('Next Review','<p class="fine">'+esc(markState?'Position marks are incomplete.':p.detail)+'</p>');
 }
@@ -546,7 +546,7 @@ function quickScenario(kind){
  ui.screen='position';ui.position='stress';ui.plan='stress';ui.result=E.scenario(book,m,scenarioParams());ui.resultAt=stamp();ui.reduction=null;
  if(!ui.result.complete)ui.advanced=true;render();window.scrollTo(0,0);
 }
-const actions={'ai-brief':()=>aiReview({mode:'copilot',question:'Prepare my daily HAL intelligence brief. Explain verified market signals, my position and hedge risks, lifetime recovery implications only when supported, contrary evidence and next review conditions. Do not invent missing financial figures.'}),'ai-deep':()=>aiReview({mode:'deliberate',question:'Review my HAL position, market evidence, hedge and lifetime recovery from six perspectives. Compare alternatives and highlight invalidation and missing data.'}),'bt-load':()=>request('candles','D',true),'bt-run':()=>{
+const actions={'ai-brief':()=>aiReview({mode:'copilot',question:'Prepare my daily HAL intelligence brief. Explain verified market signals, my position and hedge risks, lifetime recovery implications only when supported, contrary evidence and next review conditions. Do not invent missing financial figures.'}),'ai-deep':()=>aiReview({mode:'deliberate',question:'Review my HAL position, market evidence, hedge and lifetime recovery from six perspectives. Compare alternatives and highlight invalidation and missing data.'}),'go-history':()=>navigate('history'),'bt-load':()=>request('candles','D',true),'bt-run':()=>{
  const p=D.rawCandles(s,'D');
  if(p.error)throw Error('Daily candle request failed. Refresh provider data before backtesting.');
  const cleaned=E.candles(p.raw),bars=E.completed(cleaned,'D',Date.now()).slice(-2000);
