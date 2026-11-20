@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.text.NumberFormat
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -108,6 +109,18 @@ private fun readSnapshot(context: Context): Snapshot = try {
                     state.savedAt?.let{
                         val time=DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm 'IST'").withZone(ZoneId.of("Asia/Kolkata")).format(Instant.ofEpochMilli(it))
                         Text("Last saved: "+time,color=muted,fontSize=11.sp)
+                    }
+                }
+                if (!state.loading && state.issue == null) {
+                    val c = nominalCoverage(state.legs.map { ExposureLeg(it.type, it.expiry, it.lots, it.lotSize) },
+                        LocalDate.now(ZoneId.of("Asia/Kolkata")))
+                    Panel("Hedge coverage & expiry") {
+                        Text("Futures shares: " + (c.futures?.toString() ?: "Unavailable"), color=muted)
+                        Text("Put shares: " + (c.puts?.toString() ?: "Unavailable"), color=muted)
+                        Text("Nominal uncovered shares: " + (c.uncovered?.toString() ?: "Unavailable"), color=cyan)
+                        c.notes.forEach { Text(it, color=muted, fontSize=12.sp) }
+                        Text("Share-count coverage is not guaranteed downside protection. Strike, expiry and settlement matter.",
+                            color=cyan,fontSize=12.sp)
                     }
                 }
                 Panel("Analysis and market data"){
