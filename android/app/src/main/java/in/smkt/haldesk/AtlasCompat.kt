@@ -11,11 +11,27 @@ import java.security.MessageDigest
  * Invoked only for already-migrated v2 databases, never creates Room v2 on v1.
  */
 object AtlasCompat {
+    private fun requireColumns(db:SQLiteDatabase,table:String,columns:Map<String,String>) {
+        val actual=mutableMapOf<String,String>()
+        db.rawQuery("PRAGMA table_info(${table})",null).use { cursor ->
+            while(cursor.moveToNext()) {
+                actual[cursor.getString(1)]=cursor.getString(2).uppercase(java.util.Locale.ROOT)
+            }
+        }
+        require(actual==columns) { "room_v2_schema_layout_mismatch" }
+    }
+
     @JvmStatic fun track(db: SQLiteDatabase) {
         for (name in arrayOf("FoPositionEntity","TradeLedgerEntity","PriceAlertEntity","CachedSnapshotEntity")) {
             require(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", arrayOf(name))
                 .use { it.moveToFirst() }) { "room_v2_missing_tables" }
         }
+        // A populated Room master hash alone is insufficient: reject altered
+        // column layouts before opening legacy editor writes.
+        requireColumns(db,"FoPositionEntity",linkedMapOf("id" to "TEXT","payload" to "TEXT"))
+        requireColumns(db,"TradeLedgerEntity",linkedMapOf("id" to "TEXT","payload" to "TEXT","gross" to "INTEGER","fees" to "INTEGER"))
+        requireColumns(db,"PriceAlertEntity",linkedMapOf("id" to "TEXT","kind" to "TEXT","threshold" to "REAL","enabled" to "INTEGER"))
+        requireColumns(db,"CachedSnapshotEntity",linkedMapOf("id" to "TEXT","payload" to "TEXT","at" to "INTEGER"))
         require(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='room_master_table'",null).use { it.moveToFirst() }) {
             "room_v2_identity_missing"
         }

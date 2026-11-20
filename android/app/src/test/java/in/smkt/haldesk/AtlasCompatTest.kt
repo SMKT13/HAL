@@ -41,6 +41,22 @@ class AtlasCompatTest {
         }
         return c
     }
+    @Test fun alteredRoomColumnLayoutIsRejectedWithoutSchemaWrites(){
+        val c=setup()
+        c.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null).use { db ->
+            db.execSQL("ALTER TABLE TradeLedgerEntity ADD COLUMN unexpected TEXT")
+        }
+        try{ BookStore(c).use { store ->
+            store.load(false);fail("Altered Room schema should be rejected")
+        }}catch(expected:Exception){
+            assertTrue(expected.message?.contains("room_v2_schema_layout_mismatch")==true)
+        }
+        c.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null).use { db ->
+            db.rawQuery("PRAGMA table_info(TradeLedgerEntity)",null).use { cursor ->
+                assertEquals(5,cursor.count)
+            }
+        }
+    }
     @Test fun nativeOnlyExposuresBlockIncompleteLegacyLifetimeAccounting(){
         val c=setup()
         BookStore(c).use { store ->
