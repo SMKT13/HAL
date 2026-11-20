@@ -60,8 +60,10 @@ private fun readSnapshot(context: Context): Snapshot = try {
                 finite(row.getDouble("entry")),finite(row.optDouble("strike",Double.NaN)),
                 row.getString("side"))
         }
-        Snapshot(issue = room.getString("message") + " · Native-only contracts: " +
-            room.getInt("nativeOnly") + " · Ledger entries retained: " + room.getLong("ledgerRows"),
+        Snapshot(issue = room.getString("message") + " · Native-only: " +
+            room.getInt("nativeOnly") + " · Changed: " + room.getInt("contractDifferences") +
+            " · Legacy-only: " + room.getInt("legacyOnly") +
+            " · Ledger entries retained: " + room.getLong("ledgerRows"),
             legs = visible)
     } else BookStore(context).use { store ->
         val original = store.load(false)
