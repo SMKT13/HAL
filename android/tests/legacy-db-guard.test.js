@@ -28,6 +28,7 @@ test('Room v2 bridge preserves native rows and historical reconciliations',()=>{
  A.match(bridge,/room_v2_contract_id_conflict/);
  A.match(bridge,/room_v2_history_mismatch/);
  A.match(bridge,/room_v2_journal_mismatch/);
+ A.match(bridge,/room_v2_mirror_amount_mismatch/);
  A.match(bridge,/room_v2_native_exposure_requires_review/);
  A.match(bridge,/room_v2_opening_mismatch/);
 });

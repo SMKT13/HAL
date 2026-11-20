@@ -147,18 +147,24 @@ object AtlasCompat {
             throw IllegalStateException("room_v2_history_mismatch")
         // Missing source rows must never silently erase history or lifetime charges.
         if(original!=null) {
-            val available=mirroredRows(db)
+            val mirrors=mutableMapOf<String,Pair<Long,Long>>()
+            db.rawQuery("SELECT id,gross,fees FROM TradeLedgerEntity",null).use { cursor ->
+                while(cursor.moveToNext())mirrors[cursor.getString(0)]=cursor.getLong(1) to cursor.getLong(2)
+            }
             for(row in project(original)) {
-                if(row.id.startsWith("history/") && row.id !in available)
-                    throw IllegalStateException("room_v2_history_mismatch")
-                if(row.id=="opening" && row.id !in available)
-                    throw IllegalStateException("room_v2_opening_mismatch")
-                // A missing journal mirror cannot be assumed to mean that a
-                // trade was legitimately deleted. Room-native closes can
-                // mirror journal/id as a bare id, so accept either identity.
-                if(row.id.startsWith("journal/") &&
-                   row.id !in available && row.id.removePrefix("journal/") !in available)
-                    throw IllegalStateException("room_v2_journal_mismatch")
+                val matching=mirrors[row.id]
+                    ?: if(row.id.startsWith("journal/"))mirrors[row.id.removePrefix("journal/")] else null
+                if(matching==null) {
+                    when {
+                        row.id.startsWith("history/")->throw IllegalStateException("room_v2_history_mismatch")
+                        row.id=="opening"->throw IllegalStateException("room_v2_opening_mismatch")
+                        row.id.startsWith("journal/")->throw IllegalStateException("room_v2_journal_mismatch")
+                    }
+                } else if(matching.first!=row.gross || matching.second!=row.fees) {
+                    // Conflicting realised amounts or charges must never be
+                    // silently overwritten by either ledger implementation.
+                    throw IllegalStateException("room_v2_mirror_amount_mismatch")
+                }
             }
         }
         val book=original?:JSONObject().put("version",4)

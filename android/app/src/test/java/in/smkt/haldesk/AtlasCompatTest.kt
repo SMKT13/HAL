@@ -73,6 +73,28 @@ class AtlasCompatTest {
             }
         }
     }
+    @Test fun conflictingMirrorFeeAmountsWithholdLegacyBookWithoutRepair(){
+        val c=setup()
+        c.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null).use { db ->
+            removeUnsupportedRows(db)
+            val raw="""{"version":4,"legs":[{"id":"f","type":"FUT","expiry":"2026-12-29","lots":1,"lotSize":150,"entry":4927.35}],"journal":[{"id":"prior-fee","kind":"fee","date":"2026-11-19","amount":25.0}]}"""
+            val sha=MessageDigest.getInstance("SHA-256").digest(raw.toByteArray()).joinToString(""){"%02x".format(it)}
+            db.execSQL("UPDATE book SET payload=?,digest=? WHERE id=1",arrayOf(raw,sha))
+            db.execSQL("INSERT INTO TradeLedgerEntity VALUES(?,?,?,?)",
+                arrayOf<Any>("journal/prior-fee","{\"id\":\"prior-fee\",\"kind\":\"fee\",\"date\":\"2026-11-19\",\"amount\":25.0}",0L,2501L))
+        }
+        BookStore(c).use { store ->
+            try{store.load(false);fail("Inconsistent ledger fees must be blocked")}
+            catch(expected:Exception) {
+                assertTrue(expected.message?.contains("room_v2_mirror_amount_mismatch")==true)
+            }
+        }
+        c.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null).use { db ->
+            db.rawQuery("SELECT fees FROM TradeLedgerEntity WHERE id='journal/prior-fee'",null).use {
+                assertTrue(it.moveToFirst());assertEquals(2501L,it.getLong(0))
+            }
+        }
+    }
     @Test fun missingOriginalJournalMirrorBlocksProjectionWithoutRewritingBook(){
         val c=setup()
         c.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null).use { db ->
