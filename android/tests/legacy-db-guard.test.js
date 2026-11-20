@@ -17,7 +17,7 @@ test('detect installed schema exactly once and surface a clear fail-closed messa
  const main=read('app/src/main/java/in/smkt/haldesk/MainActivity.java');
  A.match(code,/BookStore\(Context context\)\{this\(context,schemaOf\(context\)\);\}/);
  A.match(code,/schemaAtOpen=observedSchema/);
- A.match(main,/This installation has a newer Room trading database/);
+ A.match(main,/The installed Room tradebook needs a compatibility review/);
 });
 
 test('Room v2 bridge preserves native rows and historical reconciliations',()=>{

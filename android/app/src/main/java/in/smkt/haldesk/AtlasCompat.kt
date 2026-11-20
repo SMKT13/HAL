@@ -113,6 +113,8 @@ object AtlasCompat {
             }
         }
         if(original==null&&legs.length()==0&&journal.length()==0&&historic.length()==0)return null
+        if(historic.length()>0 && original?.optJSONObject("history")==null)
+            throw IllegalStateException("room_v2_history_mismatch")
         // Missing source rows must never silently erase history or lifetime charges.
         if(original!=null) {
             val available=mirroredRows(db)
