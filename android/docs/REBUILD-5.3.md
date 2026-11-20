@@ -16,7 +16,7 @@ The legacy editor validates mirrored history and charges before enabling writes.
 
 ## Release status
 
-The target is an unsigned candidate. Release signing remains gated on validating a backed-up in-place upgrade on Android. Keep the installed app and its data during that check.
+The signed 5.3.0 candidate is available for an in-place upgrade test. Production release approval is pending a backed-up in-place upgrade on Android. Keep the installed app and its data during that check.
 
 ## Local verification, 20 November 2026
 
@@ -34,4 +34,11 @@ The unsigned release was built from `505ea68673bd13397916d78c9bad2ce3ef77b90f` w
 
 The aligned APK is 43,079,879 bytes. Its SHA-256 is `73f4320a24ee15c4922203439fe1d07108f7a1dc1da1beb52adf9acafa362046`.
 
-**Still unverified on a device.** The environment had no attached Android device. Physical upgrade from the signed 5.1.24 installation, preservation of the user's actual ledger and Keystore entries, live authenticated Upstox/NSE responses, and background notification delivery on the user's phone require device checks. The original APK certificate was verified independently. The unsigned candidate cannot be installed over that signed app.
+**Still unverified on a device.** The environment had no attached Android device. Physical upgrade from the signed 5.1.24 installation, preservation of the user's actual ledger and Keystore entries, live authenticated Upstox/NSE responses, and background notification delivery on the user's phone require device checks. The original APK certificate was verified independently. The signed candidate is ready for that test.
+
+## Signed upgrade-test APK
+
+The original HAL signing key signed the verified build as `HAL-Atlas-5.3.0-signed.apk` (43,085,031 bytes). APK signature schemes v2 and v3 passed verification against the 5.1.24 certificate. The package is `in.smkt.haldesk`, version code 59.
+
+- Signed APK SHA-256: `04e2920b5c7924ae142ac6d84618cd34d2eae7d73d5098b70392cc228204e4c1`
+- Signer certificate SHA-256: `a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382`
