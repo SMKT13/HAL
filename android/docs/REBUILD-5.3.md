@@ -24,3 +24,6 @@
 6. Review branch changes and obtain explicit approval before updating `main`.
 
 **No orders or fund transfers.** All source and screen changes are read-only with respect to the broker.
+
+## BLOCKER: Library 5.1.24 Room v2 compatibility
+The Library 5.1.24 Android archive contains a SQLiteOpenHelper at version 2 with Room tables FoPositionEntity and TradeLedgerEntity. This branch still uses GitHub's BookStore version 1. Installing this candidate over a device that used Library 5.1.24 can make the app unable to open the existing database. **Do not sign or install a v5.3 release until a non-destructive v2 compatibility plan and tests preserve both the legacy book and native transactions.** VersionCode 59 is for development identity only.

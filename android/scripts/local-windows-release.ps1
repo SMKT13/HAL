@@ -8,6 +8,7 @@ param(
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+if($Sign){throw 'HAL Atlas 5.3.0 signing is blocked until both legacy and Library Room v2 database upgrades are verified.'}
 if($Sign -and $SkipBrowser){throw 'Signed candidate requires browser tests. Omit -SkipBrowser.'}
 $repoRoot=Split-Path -Parent $PSScriptRoot
 $sdk=$env:ANDROID_SDK_ROOT

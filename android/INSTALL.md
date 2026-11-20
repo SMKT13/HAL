@@ -1,5 +1,7 @@
 # HAL Atlas 5.3.0 — local build and upgrade instructions
 
+> **5.3 development warning:** Do not install this branch over a Library HAL Atlas 5.1.24 device. That release may use Room database schema 2, while this integration still runs the original BookStore schema 1. A compatible migration and preserved-history test are required first. A higher versionCode does not establish storage compatibility.
+
 Build and verify the release locally. Back up both ledgers before an in-place upgrade.
 
 This source builds Android application ID **`in.smkt.haldesk`**, versionCode **59**, versionName **5.3.0**, minimum SDK **26**. The original HAL Desk signing certificate is mandatory for installing **over** an earlier HAL Desk without uninstalling or losing app data.

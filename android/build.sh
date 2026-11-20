@@ -12,6 +12,9 @@ if [ -x ./gradlew ]; then gradle_command=./gradlew; else gradle_command=gradle; 
 mkdir -p build
 "$bt/zipalign" -f -P 16 4 app/build/outputs/apk/release/app-release-unsigned.apk build/HAL-Atlas-v5.3.0-unsigned.apk
 if [ "${HAL_UNSIGNED_ONLY:-0}" = 1 ]; then echo "Unsigned build ready"; exit 0; fi
+echo "HAL Atlas 5.3.0 signing is blocked: verify legacy schema 1 and Library Room schema 2 upgrade compatibility first." >&2
+exit 1
+# Original signing implementation retained below for re-enabling only after migration verification.
 : "${HAL_SIGNING_KEY_FILE:?Path to original private keystore required}"
 : "${HAL_SIGNING_PASSWORD_FILE:?Path to private password file required}"
 "$bt/apksigner" sign --ks "$HAL_SIGNING_KEY_FILE" --ks-key-alias hal-personal --ks-pass "file:$HAL_SIGNING_PASSWORD_FILE" --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true --out build/HAL-Atlas-v5.3.0-signed.apk build/HAL-Atlas-v5.3.0-unsigned.apk
