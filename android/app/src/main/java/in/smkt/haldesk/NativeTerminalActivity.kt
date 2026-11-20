@@ -44,9 +44,10 @@ private val edge = Color(0xFF2C4563)
 private val cyan = Color(0xFF68E7E8)
 private val muted = Color(0xFFB1C4DA)
 private data class Leg(val type: String, val expiry: String, val lots: Int?, val lotSize: Int?, val entry: Double?, val strike: Double?, val side: String = "BUY")
-private data class Snapshot(val loading: Boolean = false, val issue: String? = null, val savedAt: Long? = null, val legs: List<Leg> = emptyList())
+private data class Snapshot(val loading: Boolean = false, val issue: String? = null, val savedAt: Long? = null, val legs: List<Leg> = emptyList(), val ledgerGross: Long? = null, val ledgerFees: Long? = null, val ledgerNet: Long? = null, val ledgerRows: Long? = null, val nativeRows: Long? = null)
 private fun finite(v: Double): Double? = v.takeIf { it.isFinite() && it >= 0.0 }
 private fun money(v: Double?): String = v?.let { NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(it) } ?: "Not recorded"
+private fun paiseMoney(value: Long?): String = value?.let { NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(java.math.BigDecimal.valueOf(it, 2)) } ?: "Not reconciled"
 private fun readSnapshot(context: Context): Snapshot = try {
     // When Library 5.1.24 migrated the database to Room v2, read its native
     // position table WITHOUT triggering the legacy helper's schema downgrade.
@@ -64,7 +65,7 @@ private fun readSnapshot(context: Context): Snapshot = try {
             room.getInt("nativeOnly") + " · Changed: " + room.getInt("contractDifferences") +
             " · Legacy-only: " + room.getInt("legacyOnly") +
             " · Ledger entries retained: " + room.getLong("ledgerRows"),
-            legs = visible)
+            legs = visible, ledgerGross = room.getLong("ledgerGrossPaise"), ledgerFees = room.getLong("ledgerFeesPaise"), ledgerNet = room.getLong("ledgerNetPaise"), ledgerRows = room.getLong("ledgerRows"), nativeRows = room.getLong("nativeLedgerRows"))
     } else BookStore(context).use { store ->
         val original = store.load(false)
         val book = original.optJSONObject("book")
@@ -138,6 +139,15 @@ private fun readSnapshot(context: Context): Snapshot = try {
                         c.notes.forEach { Text(it, color=muted, fontSize=12.sp) }
                         Text("Share-count coverage is not guaranteed downside protection. Strike, expiry and settlement matter.",
                             color=cyan,fontSize=12.sp)
+                    }
+                }
+                if(state.ledgerRows != null) {
+                    Panel("Recorded Room ledger · pending reconciliation") {
+                        Text("Gross ledger amount: " + paiseMoney(state.ledgerGross), color=muted)
+                        Text("Recorded fees: " + paiseMoney(state.ledgerFees), color=muted)
+                        Text("Recorded net: " + paiseMoney(state.ledgerNet), color=cyan)
+                        Text("Rows: " + state.ledgerRows + " · Native-only ledger rows: " + state.nativeRows, color=muted)
+                        Text("Ledger totals are raw saved entries, not verified lifetime P&L or a market valuation. Reconcile original history, charges and completed contracts before relying on them.", color=muted, fontSize=12.sp)
                     }
                 }
                 Panel("Analysis and market data"){

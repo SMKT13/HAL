@@ -38,6 +38,10 @@ public class RoomReadOnlyPreviewTest {
   assertEquals(2,view.getInt("schema"));
   assertEquals(1,view.getInt("nativeOnly"));
   assertEquals(1,view.getLong("ledgerRows"));
+  assertEquals(1000L,view.getLong("ledgerGrossPaise"));
+  assertEquals(15L,view.getLong("ledgerFeesPaise"));
+  assertEquals(985L,view.getLong("ledgerNetPaise"));
+  assertEquals(1L,view.getLong("nativeLedgerRows"));
   assertEquals("SELL",view.getJSONArray("legs").getJSONObject(0).getString("side"));
   assertEquals("PE",view.getJSONArray("legs").getJSONObject(0).getString("type"));
   try(SQLiteDatabase db=SQLiteDatabase.openDatabase(context.getDatabasePath("haldesk_book.db").getPath(),null,SQLiteDatabase.OPEN_READONLY)) {
@@ -73,6 +77,21 @@ public class RoomReadOnlyPreviewTest {
   assertEquals(0,result.getInt("nativeOnly"));
   assertEquals(1,result.getInt("contractDifferences"));
   assertEquals(0,result.getInt("legacyOnly"));
+ }
+ @Test public void invalidLedgerFeesFailClosed() throws Exception {
+  SQLiteDatabase db=fixture(false);
+  db.execSQL("UPDATE TradeLedgerEntity SET fees=-1");
+  db.close();
+  try{RoomReadOnlyPreview.read(context);fail("Negative saved fees must be rejected");}
+  catch(Exception expected){assertEquals("room_v2_invalid_ledger_fees",expected.getMessage());}
+ }
+ @Test public void ledgerAmountsCannotOverflowSilently() throws Exception {
+  SQLiteDatabase db=fixture(false);
+  db.execSQL("UPDATE TradeLedgerEntity SET gross=?",new Object[]{Long.MAX_VALUE});
+  db.execSQL("INSERT INTO TradeLedgerEntity VALUES(?,?,?,?)",new Object[]{"extra","{\"kind\":\"close\"}",3L,0L});
+  db.close();
+  try{RoomReadOnlyPreview.read(context);fail("Overflow must block summaries");}
+  catch(Exception expected){assertEquals("room_v2_ledger_overflow",expected.getMessage());}
  }
  @Test public void corruptBookCannotBeSilentlyPreviewed() throws Exception {
   fixture(true).close();

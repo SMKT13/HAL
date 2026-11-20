@@ -71,3 +71,14 @@ test('Room v2 storage notice offers safe native preview rather than destructive 
  A.match(ui,/open-native-terminal/);
  A.match(ui,/'open-native-terminal':\(\)=>native\('terminal'\)/);
 });
+
+test('read-only Room ledger breakdown rejects malformed amounts and avoids P&L claims',()=>{
+ const reader=read('app/src/main/java/in/smkt/haldesk/RoomReadOnlyPreview.java');
+ const ui=read('app/src/main/java/in/smkt/haldesk/NativeTerminalActivity.kt');
+ A.match(reader,/Math\.addExact/);
+ A.match(reader,/Math\.subtractExact/);
+ A.match(reader,/room_v2_invalid_ledger_fees/);
+ A.match(reader,/nativeLedgerRows/);
+ A.match(ui,/pending reconciliation/);
+ A.match(ui,/not verified lifetime P&L/);
+});

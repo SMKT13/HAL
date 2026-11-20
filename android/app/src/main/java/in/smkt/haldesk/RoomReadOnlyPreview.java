@@ -77,17 +77,41 @@ public final class RoomReadOnlyPreview {
                     else if(!sameContract(originalById.get(id),item))changed++;
                 }
             }
-            // Do not invent a P&L or hide any native-only transactions.
-            long ledgerCount;
-            try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM TradeLedgerEntity",null)){
-                if(!c.moveToFirst())throw new Exception("room_v2_ledger_unavailable");
-                ledgerCount=c.getLong(0);
+            // Ledger is stored bookkeeping, not market-derived unrealised P&L.
+            long ledgerCount=0,ledgerGross=0,ledgerFees=0;
+            long legacyJournalCount=0,historyCount=0,openingCount=0,nativeLedgerCount=0;
+            try(Cursor c=db.rawQuery("SELECT id,payload,gross,fees FROM TradeLedgerEntity",null)){
+                if(c.getCount()>50000)throw new Exception("room_v2_ledger_too_large");
+                while(c.moveToNext()){
+                    String id=c.getString(0),payload=c.getString(1);
+                    if(id==null||id.isEmpty()||payload==null || c.isNull(2)||c.isNull(3) ||
+                       c.getType(2)!=Cursor.FIELD_TYPE_INTEGER || c.getType(3)!=Cursor.FIELD_TYPE_INTEGER)
+                        throw new Exception("room_v2_invalid_ledger");
+                    new JSONObject(payload);
+                    long gross=c.getLong(2),fee=c.getLong(3);
+                    if(fee<0)throw new Exception("room_v2_invalid_ledger_fees");
+                    try {
+                        ledgerGross=Math.addExact(ledgerGross,gross);
+                        ledgerFees=Math.addExact(ledgerFees,fee);
+                        ledgerCount=Math.addExact(ledgerCount,1L);
+                    }catch(ArithmeticException overflow){throw new Exception("room_v2_ledger_overflow");}
+                    if(id.equals("opening"))openingCount++;
+                    else if(id.startsWith("journal/"))legacyJournalCount++;
+                    else if(id.startsWith("history/"))historyCount++;
+                    else nativeLedgerCount++;
+                }
             }
+            long ledgerNet;
+            try{ledgerNet=Math.subtractExact(ledgerGross,ledgerFees);}
+            catch(ArithmeticException overflow){throw new Exception("room_v2_ledger_overflow");}
             int legacyOnly=0;
             for(String id:original)if(!seen.contains(id))legacyOnly++;
             return new JSONObject().put("schema",2).put("legs",visible)
                 .put("nativeOnly",nativeOnly).put("contractDifferences",changed).put("legacyOnly",legacyOnly)
-                .put("ledgerRows",ledgerCount)
+                .put("ledgerRows",ledgerCount).put("ledgerGrossPaise",ledgerGross)
+                .put("ledgerFeesPaise",ledgerFees).put("ledgerNetPaise",ledgerNet)
+                .put("journalRows",legacyJournalCount).put("historyRows",historyCount)
+                .put("openingRows",openingCount).put("nativeLedgerRows",nativeLedgerCount)
                 .put("message","Room v2 saved contracts (read-only). Full ledger, recovery P&L and edits require reconciliation. No database changes were made.");
         }
     }
