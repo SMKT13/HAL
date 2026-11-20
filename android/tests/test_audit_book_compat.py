@@ -71,7 +71,7 @@ class AuditTests(unittest.TestCase):
             db=sqlite3.connect(p)
             payload=sample_document()['legs'][0].copy()
             payload['note']='display-only'
-            db.execute("INSERT INTO FoPositionEntity VALUES(?,?)",(payload['id'],json.dumps(payload)))
+            db.execute("UPDATE FoPositionEntity SET payload=? WHERE id=?",(json.dumps(payload),payload['id']))
             db.commit();db.close()
             r=audit_database(p)
             self.assertEqual(0,r['counts']['contract_differences'])
