@@ -17,3 +17,21 @@ The legacy editor validates mirrored history and charges before enabling writes.
 ## Release status
 
 The target is an unsigned candidate. Release signing remains gated on validating a backed-up in-place upgrade on Android. Keep the installed app and its data during that check.
+
+## Local verification, 20 November 2026
+
+The unsigned release was built from `505ea68673bd13397916d78c9bad2ce3ef77b90f` with JDK 17, Gradle 8.10.2, Android platform 35 and Build Tools 35.0.0. No hosted workflow ran.
+
+| Check | Result |
+| --- | --- |
+| Python service and database suites | 49 service tests and 15 audit/rehearsal tests passed |
+| JavaScript and TypeScript | 486 Android desk tests, 22 root tests, 39 web-engine tests and 25 calculation checks passed |
+| Browser UI | 59 Android desk checks with a simulated native bridge passed. The React desktop/mobile suite also passed |
+| Web build | TypeScript type checking and the Vite production build passed |
+| Debug and release Android tests | All 115 passed in each variant. Includes Room migration, native-only transactions, damaged-file retention, stale writers, foreground alerts and a Robolectric Compose launch |
+| Debug and release lint | Zero errors and three warnings in each variant. Lint flagged synchronous credential preference persistence, JavaScript in the bundled WebView and the back-navigation attribute on older APIs |
+| APK inspection | Package ID, version, SDK levels, expected permissions, signature absence, asset equality, zip alignment and 64-bit native library segment alignment verified |
+
+The aligned APK is 43,079,879 bytes. Its SHA-256 is `73f4320a24ee15c4922203439fe1d07108f7a1dc1da1beb52adf9acafa362046`.
+
+**Still unverified on a device.** The environment had no attached Android device. Physical upgrade from the signed 5.1.24 installation, preservation of the user's actual ledger and Keystore entries, live authenticated Upstox/NSE responses, and background notification delivery on the user's phone require device checks. The original APK certificate was verified independently. The unsigned candidate cannot be installed over that signed app.
