@@ -63,3 +63,11 @@ test('free Windows local verifier defaults to unsigned, requires full checks bef
  A.match(script,/Remove-Item -LiteralPath \$signed/);
  A.doesNotMatch(script,/adb\s+uninstall|pm\s+clear|gh\s+workflow\s+run/);
 });
+
+test('local release scripts run read-only legacy/Room compatibility audits',()=>{
+ const bash=read('build.sh'),win=read('scripts/local-windows-release.ps1');
+ A.match(bash,/test_audit_book_compat\.py/);
+ A.match(win,/test_audit_book_compat\.py/);
+ A.match(bash,/Python 3 required/);
+ A.match(win,/Python 3 required/);
+});
