@@ -8,6 +8,7 @@ import java.security.MessageDigest;
 /** Atomic snapshots. Never wipes legacy WebView data or silently resets corrupt records. */
 final class BookStore extends SQLiteOpenHelper {
  private final int schemaAtOpen;
+ private long seen=-1;
  /**
   * Detect the installed database version WITHOUT opening it for mutation.
   * Existing Room v2 data must not be silently downgraded or reinterpreted
@@ -31,10 +32,9 @@ final class BookStore extends SQLiteOpenHelper {
   // opened when the observed version is 0 (unreadable/unsupported).
   super(context,"haldesk_book.db",null,observedSchema==1?1:2);
   schemaAtOpen=observedSchema;
-  if(schemaAtOpen==1)setWriteAheadLoggingEnabled(true);
+  if(schemaAtOpen==1||schemaAtOpen==2)setWriteAheadLoggingEnabled(true);
  }
  private void requireCompatible(){
-  if(schemaAtOpen==2)throw new IllegalStateException("room_v2_requires_reconciliation");
   if(schemaAtOpen==0)throw new IllegalStateException("database_unreadable_or_unsupported");
  }
  @Override public synchronized SQLiteDatabase getWritableDatabase(){
@@ -44,12 +44,27 @@ final class BookStore extends SQLiteOpenHelper {
   requireCompatible();return super.getReadableDatabase();
  }
  @Override public void onConfigure(SQLiteDatabase db){db.setForeignKeyConstraintsEnabled(true);}
+ @Override public void onOpen(SQLiteDatabase db){super.onOpen(db);if(schemaAtOpen==2)AtlasCompat.track(db);}
  @Override public void onCreate(SQLiteDatabase db){
   for(String table:new String[]{"book","recovery"})db.execSQL("CREATE TABLE "+table+" (id INTEGER PRIMARY KEY CHECK(id=1),revision INTEGER NOT NULL,payload TEXT NOT NULL,digest TEXT NOT NULL,updated_at INTEGER NOT NULL)");
   db.execSQL("CREATE TABLE cache (key TEXT PRIMARY KEY,payload TEXT NOT NULL,digest TEXT NOT NULL,updated_at INTEGER NOT NULL)");
  }
  @Override public void onUpgrade(SQLiteDatabase db,int before,int after){throw new IllegalStateException("Explicit database migration required");}
- synchronized JSONObject load(boolean previous)throws Exception{return read(getReadableDatabase(),previous?"recovery":"book");}
+ synchronized JSONObject load(boolean previous)throws Exception{
+  SQLiteDatabase db=getReadableDatabase();
+  if(schemaAtOpen!=2)return read(db,previous?"recovery":"book");
+  db.beginTransaction();
+  try{
+   JSONObject out=read(db,previous?"recovery":"book");
+   if(!previous){
+    seen=AtlasCompat.serial(db);
+    JSONObject visible=AtlasCompat.visible(db,out.optJSONObject("book"));
+    if(visible!=null)out.put("book",BookValidator.parse(visible.toString()));
+   }
+   db.setTransactionSuccessful();
+   return out;
+  }finally{db.endTransaction();}
+ }
  private JSONObject read(SQLiteDatabase db,String table)throws Exception{
   JSONObject out=new JSONObject().put("ok",true).put("revision",0).put("book",JSONObject.NULL);
   try(Cursor c=db.query(table,new String[]{"revision","payload","digest","updated_at"},"id=1",null,null,null,null)){if(c.moveToFirst()){String payload=c.getString(1);if(!digest(payload).equals(c.getString(2)))throw new Exception("book_corrupted_recovery_available");out.put("revision",c.getLong(0)).put("book",BookValidator.parse(payload)).put("updatedAt",c.getLong(3));}}
@@ -57,8 +72,8 @@ final class BookStore extends SQLiteOpenHelper {
  }
  synchronized JSONObject save(String payload,long expected)throws Exception{
   JSONObject valid=BookValidator.parse(payload);if(expected<0)throw new Exception("invalid_revision");SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
-  try{JSONObject old=read(db,"book");long rev=old.getLong("revision");if(rev!=expected)throw new Exception("revision_conflict_reload_required");if(!old.isNull("book"))db.execSQL("INSERT OR REPLACE INTO recovery SELECT * FROM book WHERE id=1");
-   long next=rev+1,now=System.currentTimeMillis();valid.put("revision",next);String encoded=valid.toString();ContentValues v=new ContentValues();v.put("id",1);v.put("revision",next);v.put("payload",encoded);v.put("digest",digest(encoded));v.put("updated_at",now);if(db.insertWithOnConflict("book",null,v,SQLiteDatabase.CONFLICT_REPLACE)==-1)throw new Exception("book_save_failed");db.setTransactionSuccessful();return new JSONObject().put("ok",true).put("revision",next).put("updatedAt",now);
+  try{if(schemaAtOpen==2 && seen>=0 && seen!=AtlasCompat.serial(db))throw new Exception("revision_conflict_reload_required");JSONObject old=read(db,"book");long rev=old.getLong("revision");if(rev!=expected)throw new Exception("revision_conflict_reload_required");if(!old.isNull("book"))db.execSQL("INSERT OR REPLACE INTO recovery SELECT * FROM book WHERE id=1");
+   long next=rev+1,now=System.currentTimeMillis();valid.put("revision",next);String encoded=valid.toString();ContentValues v=new ContentValues();v.put("id",1);v.put("revision",next);v.put("payload",encoded);v.put("digest",digest(encoded));v.put("updated_at",now);if(db.insertWithOnConflict("book",null,v,SQLiteDatabase.CONFLICT_REPLACE)==-1)throw new Exception("book_save_failed");if(schemaAtOpen==2){AtlasCompat.write(db,valid);seen=AtlasCompat.serial(db);}db.setTransactionSuccessful();return new JSONObject().put("ok",true).put("revision",next).put("updatedAt",now);
   }finally{db.endTransaction();}
  }
  synchronized long currentRevision(){try(Cursor c=getReadableDatabase().rawQuery("SELECT revision FROM book WHERE id=1",null)){return c.moveToFirst()?c.getLong(0):0;}catch(Exception e){return -1;}}
@@ -68,7 +83,7 @@ final class BookStore extends SQLiteOpenHelper {
    db.execSQL("CREATE TABLE IF NOT EXISTS quarantine (id INTEGER PRIMARY KEY AUTOINCREMENT,revision INTEGER NOT NULL,payload TEXT NOT NULL,digest TEXT NOT NULL,updated_at INTEGER NOT NULL)");
    db.execSQL("INSERT INTO quarantine(revision,payload,digest,updated_at) SELECT revision,payload,digest,updated_at FROM book WHERE id=1");
    JSONObject risk=valid.optJSONObject("riskProfile");if(risk!=null){risk.put("confirmedAt",JSONObject.NULL);risk.put("confirmedBook",JSONObject.NULL);}
-   long next=current+1,now=System.currentTimeMillis();valid.put("revision",next);String encoded=valid.toString();ContentValues v=new ContentValues();v.put("id",1);v.put("revision",next);v.put("payload",encoded);v.put("digest",digest(encoded));v.put("updated_at",now);if(db.insertWithOnConflict("book",null,v,SQLiteDatabase.CONFLICT_REPLACE)==-1)throw new Exception("book_save_failed");db.setTransactionSuccessful();return new JSONObject().put("ok",true).put("revision",next).put("book",valid).put("updatedAt",now);
+   long next=current+1,now=System.currentTimeMillis();valid.put("revision",next);String encoded=valid.toString();ContentValues v=new ContentValues();v.put("id",1);v.put("revision",next);v.put("payload",encoded);v.put("digest",digest(encoded));v.put("updated_at",now);if(db.insertWithOnConflict("book",null,v,SQLiteDatabase.CONFLICT_REPLACE)==-1)throw new Exception("book_save_failed");if(schemaAtOpen==2){if(seen<0 || seen!=AtlasCompat.serial(db))throw new Exception("revision_conflict_reload_required");AtlasCompat.write(db,valid);seen=AtlasCompat.serial(db);}db.setTransactionSuccessful();return new JSONObject().put("ok",true).put("revision",next).put("book",valid).put("updatedAt",now);
   }finally{db.endTransaction();}
  }
  synchronized JSONObject cacheGet(String key)throws Exception{key(key);try(Cursor c=getReadableDatabase().query("cache",new String[]{"payload","digest","updated_at"},"key=?",new String[]{key},null,null,null)){if(!c.moveToFirst())return new JSONObject().put("ok",true).put("data",JSONObject.NULL);String p=c.getString(0);if(!digest(p).equals(c.getString(1)))throw new Exception("cache_corrupted");return new JSONObject().put("ok",true).put("data",new JSONObject(p)).put("storedAt",c.getLong(2)).put("cached",true);}}
