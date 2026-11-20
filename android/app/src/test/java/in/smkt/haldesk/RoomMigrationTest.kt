@@ -17,6 +17,21 @@ class RoomMigrationTest {
     private val first="""{"version":4,"legs":[],"journal":[]}"""
     private val second="""{"version":4,"legs":[{"id":"f","type":"FUT","entry":4900,"lots":2,"lotSize":150,"expiry":"2026-12-29"}],"journal":[{"id":"fee","kind":"fee","date":"2026-10-01","amount":25.25}],"legacy":{"realized":-10000,"costs":50}}"""
 
+    @Test fun openingCorruptRoomFilePreservesItsOriginalBytes() {
+        val c=RuntimeEnvironment.getApplication() as Context
+        val name="room-corruption-test"
+        val file=c.getDatabasePath(name)
+        file.parentFile!!.mkdirs()
+        val original="fixture with invalid database header".toByteArray()
+        file.writeBytes(original)
+        val db=Room.databaseBuilder(c,TradebookDb::class.java,name)
+            .openHelperFactory(PreservingRoomHelper).addMigrations(atlasMigration).allowMainThreadQueries().build()
+        try {
+            assertThrows(Exception::class.java) { db.openHelper.writableDatabase }
+            assertArrayEquals(original,file.readBytes())
+        } finally { db.close() }
+    }
+
     @Test fun migratesOnceAndKeepsOriginalRecoveryCacheAndStaleWriterIsBlocked(){
         val c:Context=RuntimeEnvironment.getApplication()
         c.deleteDatabase("haldesk_book.db")
@@ -28,7 +43,7 @@ class RoomMigrationTest {
             val recovery=old.load(true).getJSONObject("book").toString()
             repeat(2) {
                 val db=Room.databaseBuilder(c,TradebookDb::class.java,"haldesk_book.db")
-                    .addMigrations(atlasMigration).allowMainThreadQueries().build()
+                    .openHelperFactory(PreservingRoomHelper).addMigrations(atlasMigration).allowMainThreadQueries().build()
                 try { runBlocking {
                     assertEquals("f",db.book().positions().first().single().id)
                     val ledger=db.book().ledger().first()

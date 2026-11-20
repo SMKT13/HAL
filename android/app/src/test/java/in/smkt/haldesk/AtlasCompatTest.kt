@@ -57,6 +57,22 @@ class AtlasCompatTest {
             }
         }
     }
+    @Test fun missingPositionPrimaryKeyRejectsWritesBeforeInstallingTriggers(){
+        val c=setup()
+        c.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null).use { db ->
+            db.execSQL("ALTER TABLE FoPositionEntity RENAME TO original_positions")
+            db.execSQL("CREATE TABLE FoPositionEntity(id TEXT NOT NULL,payload TEXT NOT NULL)")
+            db.execSQL("INSERT INTO FoPositionEntity SELECT * FROM original_positions")
+        }
+        BookStore(c).use { store ->
+            val failure=assertThrows(Exception::class.java){store.load(false)}
+            assertEquals("room_v2_schema_layout_mismatch",failure.message)
+        }
+        c.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null).use { db ->
+            db.rawQuery("SELECT COUNT(*) FROM FoPositionEntity",null).use { it.moveToFirst();assertEquals(2,it.getInt(0)) }
+            db.rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='trigger'",null).use { it.moveToFirst();assertEquals(0,it.getInt(0)) }
+        }
+    }
     @Test fun nativeOnlyExposuresBlockIncompleteLegacyLifetimeAccounting(){
         val c=setup()
         BookStore(c).use { store ->

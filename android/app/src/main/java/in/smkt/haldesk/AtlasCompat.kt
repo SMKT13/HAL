@@ -15,7 +15,12 @@ object AtlasCompat {
         val actual=mutableMapOf<String,String>()
         db.rawQuery("PRAGMA table_info(${table})",null).use { cursor ->
             while(cursor.moveToNext()) {
-                actual[cursor.getString(1)]=cursor.getString(2).uppercase(java.util.Locale.ROOT)
+                val name=cursor.getString(1)
+                val expectedPrimaryKey=if(name=="id") 1 else 0
+                require(cursor.getInt(3)==1 && cursor.isNull(4) && cursor.getInt(5)==expectedPrimaryKey) {
+                    "room_v2_schema_layout_mismatch"
+                }
+                actual[name]=cursor.getString(2).uppercase(java.util.Locale.ROOT)
             }
         }
         require(actual==columns) { "room_v2_schema_layout_mismatch" }
@@ -232,7 +237,7 @@ object AtlasCompat {
         removed.forEach { db.delete("FoPositionEntity","id=?",arrayOf(it)) }
         incoming.forEach { (id,p) ->
             require(supported(p)) { "unsupported_contract_in_legacy_book" }
-            db.execSQL("INSERT OR REPLACE INTO FoPositionEntity VALUES(?,?)",arrayOf(id,p.toString()))
+            db.execSQL("INSERT OR REPLACE INTO FoPositionEntity(id,payload) VALUES(?,?)",arrayOf(id,p.toString()))
         }
         val mirrored=project(book).associateBy { it.id }.toMutableMap()
         val obsolete=mutableListOf<String>()

@@ -19,7 +19,7 @@ public final class RoomReadOnlyPreview {
     public static JSONObject read(Context context) throws Exception {
         File file = context.getDatabasePath("haldesk_book.db");
         if (!file.exists()) return null;
-        try (SQLiteDatabase db = SQLiteDatabase.openDatabase(file.getPath(),null,SQLiteDatabase.OPEN_READONLY)) {
+        try (SQLiteDatabase db = SQLiteDatabase.openDatabase(file.getPath(),null,SQLiteDatabase.OPEN_READONLY,BookStore.PRESERVE_CORRUPT)) {
             int schema = db.getVersion();
             if (schema == 1) return null;
             if (schema != 2) throw new Exception("unsupported_database_schema");

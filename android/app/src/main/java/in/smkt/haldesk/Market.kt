@@ -63,7 +63,10 @@ class HalRepository(c:Context,private val dao:BookDao){
         val broker=if(token.isBlank())null else runCatching{
             val q=get("https://api.upstox.com/v2/market-quote/quotes?instrument_key=NSE_EQ%7CINE066F01020",token).getJSONObject("data").getJSONObject("NSE_EQ:HAL")
             require(q.getString("instrument_token")==halKey)
-            val t=java.time.OffsetDateTime.parse(q.getString("timestamp")).toInstant().toEpochMilli()
+            val provider=MarketClient.epoch(q.opt("timestamp"))
+            val trade=MarketClient.epoch(q.opt("last_trade_time"))
+            require(provider>0 && trade>0 && trade<=provider+60000)
+            val t=minOf(provider,trade)
             val o=q.getJSONObject("ohlc")
             Quote(q.getDouble("last_price"),o.getDouble("close"),"Upstox",t,emptyList(),open=o.getDouble("open"),high=o.getDouble("high"),low=o.getDouble("low"),
                 vwap=q.optDouble("average_price").takeIf{it.isFinite() && it>0},volume=q.optLong("volume",-1).takeIf{it>=0})
@@ -71,7 +74,7 @@ class HalRepository(c:Context,private val dao:BookDao){
         val public=if(prefs.getBoolean("yahoo",true))runCatching{yahoo()}.getOrNull() else null
         val mcp=if(broker==null && !prefs.getString("mcp","").isNullOrBlank())runCatching{sources.mcpQuote()}.getOrNull() else null
         val nse=if(broker==null && mcp==null && public==null && prefs.getBoolean("nse",true))runCatching{sources.nseQuote()}.getOrNull() else null
-        val live=listOfNotNull(broker,mcp,public,nse).filter{it.price>0 && it.previous>0 && it.time in 1..System.currentTimeMillis()+5000}
+        val live=listOfNotNull(broker,mcp,public,nse).filter{it.price>0 && it.previous>0 && it.time in 1..System.currentTimeMillis()}
         val quote=live.firstOrNull{System.currentTimeMillis()-it.time<300000}?:live.maxByOrNull{it.time}
         if(quote!=null){
             val bars=if(token.isNotBlank())runCatching{

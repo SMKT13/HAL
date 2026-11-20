@@ -21,7 +21,7 @@ test('Compose build preserves original DB identity and uses versionCode above Li
  A.match(gradle,/buildFeatures \{ compose true \}/);
  A.match(gradle,/versionCode 59/);
  A.match(gradle,/versionName '5\.3\.0'/);
- A.match(read('app/src/main/java/in/smkt/haldesk/BookStore.java'),/haldesk_book\.db",null,observedSchema==1\?1:2/);
+ A.match(read('app/src/main/java/in/smkt/haldesk/BookStore.java'),/haldesk_book\.db",null,observedSchema==1\?1:2,PRESERVE_CORRUPT/);
 });
 
 test('native expiry and nominal-coverage safeguards are explicit',()=>{

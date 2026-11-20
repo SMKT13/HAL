@@ -62,6 +62,9 @@ class Broker(context:Context,private val db:TradebookDb){
                         && p.optDouble("strike",0.0)==j.optDouble("strike",0.0) && p.optString("side","BUY")==j.getString("side"))}
                 if(match.size>1)error("Multiple local legs match this contract; reconcile before sync")
                 val prev=match.singleOrNull()
+                require(existing.none { it.id==row.id && it.id!=prev?.id }) {
+                    "Broker contract ID belongs to a different saved position"
+                }
                 if(prev!=null){val p=JSONObject(prev.payload)
                     require(quantity(p)==quantity(j)){"Contract quantity changed; reconcile locally before syncing"}
                     // Keep user fields, manual marks and imported metadata on matching rows.

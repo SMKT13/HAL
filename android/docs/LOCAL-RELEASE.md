@@ -1,12 +1,12 @@
 # Build and verify HAL Atlas 5.3.0 locally on Windows (no GitHub Actions minutes)
 
-This is an **optional personal verification path**, not evidence that Android CI, phone testing or signature verification has already passed. Build from the current `main` source (or a verified release commit); earlier draft-branch instructions are historical. The installed Android 4.6 package must not be uninstalled.
+This is an **optional personal verification path**, not evidence that Android CI, phone testing or signature verification has already passed. Build this candidate from `rebuild/hal-atlas-5.3.0`. The installed Android 4.6 package must not be uninstalled.
 
 ## Prerequisites
 
 - Windows with free disk space and internet for one-time dependency downloads.
 - Java **17** / JDK 17, Node.js **22**, Android Studio command-line SDK with **Android platform 35** and **Build Tools 35.0.0**.
-- Clone `SMKT13/HAL` and check out the intended commit on the main branch. Do not commit `.jks`/password files.
+- Clone `SMKT13/HAL` and check out the intended commit on the rebuild branch. Do not commit `.jks`/password files.
 - Keep a verified exported backup of the installed app's actual Position/History ledger **off the phone**. Store PAPER exports separately.
 
 PowerShell, from inside the repository's `android` directory:
@@ -24,15 +24,7 @@ To run an incremental **not release-verified** check without installing Playwrig
 .\scripts\local-windows-release.ps1 -SkipBrowser
 ```
 
-To sign a fully tested candidate on a trusted personal computer **only if you still have the original keystore and signing password**:
-
-```powershell
-$env:HAL_SIGNING_KEY_FILE = "C:\secure-outside-repo\HAL-Desk-original-personal.jks"
-$env:HAL_SIGNING_PASSWORD_FILE = "C:\secure-outside-repo\password.txt"
-.\scripts\local-windows-release.ps1 -Sign
-```
-
-The script requires alias `hal-personal` and checks the original certificate SHA-256 `a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382`, plus v2/v3 signatures. On mismatch it removes the signed output and fails. **Do not create a new key, change the package ID, share the password or uninstall 4.6.** No real account API credentials are used by the tests.
+Signing is disabled in both release scripts while the physical in-place upgrade is pending. The original 5.1.24 certificate SHA-256 is `a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382`.
 
 ## After any local build
 

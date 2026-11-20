@@ -3,6 +3,8 @@ package `in`.smkt.haldesk
 import android.content.Context
 import androidx.room.*
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteOpenHelper
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONObject
@@ -50,6 +52,26 @@ val atlasMigration=object:Migration(1,2){
         }
     }
 }
+internal object PreservingRoomHelper : SupportSQLiteOpenHelper.Factory {
+    override fun create(configuration:SupportSQLiteOpenHelper.Configuration):SupportSQLiteOpenHelper {
+        val room=configuration.callback
+        val preserving=object:SupportSQLiteOpenHelper.Callback(room.version) {
+            override fun onConfigure(db:SupportSQLiteDatabase)=room.onConfigure(db)
+            override fun onOpen(db:SupportSQLiteDatabase)=room.onOpen(db)
+            override fun onCreate(db:SupportSQLiteDatabase)=room.onCreate(db)
+            override fun onUpgrade(db:SupportSQLiteDatabase,oldVersion:Int,newVersion:Int)=room.onUpgrade(db,oldVersion,newVersion)
+            override fun onDowngrade(db:SupportSQLiteDatabase,oldVersion:Int,newVersion:Int)=room.onDowngrade(db,oldVersion,newVersion)
+            override fun onCorruption(db:SupportSQLiteDatabase) {
+                throw android.database.sqlite.SQLiteDatabaseCorruptException("database_unreadable_or_unsupported")
+            }
+        }
+        val config=SupportSQLiteOpenHelper.Configuration.builder(configuration.context)
+            .name(configuration.name).noBackupDirectory(configuration.useNoBackupDirectory)
+            .allowDataLossOnRecovery(false).callback(preserving).build()
+        return FrameworkSQLiteOpenHelperFactory().create(config)
+    }
+}
+
 @Database(entities=[FoPositionEntity::class,TradeLedgerEntity::class,PriceAlertEntity::class,CachedSnapshotEntity::class],version=2,exportSchema=false)
 abstract class TradebookDb:RoomDatabase(){
     abstract fun book():BookDao
@@ -57,7 +79,7 @@ abstract class TradebookDb:RoomDatabase(){
         @Volatile private var instance:TradebookDb?=null
         fun get(c:Context): TradebookDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(c.applicationContext,TradebookDb::class.java,"haldesk_book.db")
-                .addMigrations(atlasMigration).build().also { instance=it }
+                .openHelperFactory(PreservingRoomHelper).addMigrations(atlasMigration).build().also { instance=it }
         }
     }
 }

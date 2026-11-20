@@ -7,7 +7,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
-import java.time.OffsetDateTime
+
 
 data class ContractMark(val price:Double,val previous:Double?,val time:Long)
 class Marks(c:Context){
@@ -23,11 +23,17 @@ class Marks(c:Context){
         http.newCall(req).execute().use{r->
             require(r.isSuccessful);val data=JSONObject(r.body!!.string()).getJSONObject("data")
             buildMap{
-                for(k in data.keys()){val q=data.getJSONObject(k);val legs=byKey[q.optString("instrument_token")]?:continue
-                    val t=runCatching{OffsetDateTime.parse(q.getString("timestamp")).toInstant().toEpochMilli()}.getOrNull()?:continue
-                    if(System.currentTimeMillis()-t !in 0..180000)continue
-                    val p=q.getDouble("last_price");if(!p.isFinite()||p<=0)continue
-                    for(leg in legs)put(leg.id,ContractMark(p,q.optJSONObject("ohlc")?.optDouble("close")?.takeIf{it.isFinite()&&it>0},t))
+                val now=System.currentTimeMillis()
+                for((key,legs) in byKey){
+                    val quote=MarketClient.quote(data,key,now) ?: continue
+                    if(quote.optString("quality")!="recent") continue
+                    val provider=MarketClient.epoch(quote.opt("quote_as_of"))
+                    val trade=MarketClient.epoch(quote.opt("last_trade_at"))
+                    if(provider>now || trade>now) continue
+                    val raw=data.keys().asSequence().mapNotNull { data.optJSONObject(it) }
+                        .first { it.optString("instrument_token")==key }
+                    val previous=raw.optJSONObject("ohlc")?.optDouble("close")?.takeIf{it.isFinite()&&it>0}
+                    for(leg in legs) put(leg.id,ContractMark(quote.getDouble("last_price"),previous,provider))
                 }
             }
         }

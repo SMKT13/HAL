@@ -6,7 +6,11 @@ import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 /** Atomic snapshots. Never wipes legacy WebView data or silently resets corrupt records. */
-final class BookStore extends SQLiteOpenHelper {
+final class BookStore extends SQLiteOpenHelper implements java.io.Closeable {
+ // Android's default corruption handler deletes the database and its sidecars.
+ static final android.database.DatabaseErrorHandler PRESERVE_CORRUPT = db -> {
+  throw new android.database.sqlite.SQLiteDatabaseCorruptException("database_unreadable_or_unsupported");
+ };
  private final int schemaAtOpen;
  private long seen=-1;
  /**
@@ -17,7 +21,7 @@ final class BookStore extends SQLiteOpenHelper {
  static int schemaOf(Context context) {
   java.io.File file=context.getDatabasePath("haldesk_book.db");
   if(!file.exists())return 1;
-  try(SQLiteDatabase db=SQLiteDatabase.openDatabase(file.getPath(),null,SQLiteDatabase.OPEN_READONLY)){
+  try(SQLiteDatabase db=SQLiteDatabase.openDatabase(file.getPath(),null,SQLiteDatabase.OPEN_READONLY,PRESERVE_CORRUPT)){
    int version=db.getVersion();
    return (version==1||version==2)?version:0;
   }catch(android.database.sqlite.SQLiteException failure){
@@ -30,7 +34,7 @@ final class BookStore extends SQLiteOpenHelper {
  private BookStore(Context context,int observedSchema){
   // SQLiteOpenHelper requires a positive target version. No DB is actually
   // opened when the observed version is 0 (unreadable/unsupported).
-  super(context,"haldesk_book.db",null,observedSchema==1?1:2);
+  super(context,"haldesk_book.db",null,observedSchema==1?1:2,PRESERVE_CORRUPT);
   schemaAtOpen=observedSchema;
   if(schemaAtOpen==1||schemaAtOpen==2)setWriteAheadLoggingEnabled(true);
  }
