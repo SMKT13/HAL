@@ -41,6 +41,7 @@ import java.util.function.BooleanSupplier;
 public final class MainActivity extends Activity {
     private WebView web;
     private SecretStore secrets;
+    private AiHistoryStore aiHistory;
     private BookStore books;
     private volatile boolean foreground;
     private long backgroundAt=-1;
@@ -74,7 +75,7 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-        books=new BookStore(this);secrets=new SecretStore(this);prefs=getSharedPreferences("connection",MODE_PRIVATE);
+        books=new BookStore(this);secrets=new SecretStore(this);aiHistory=new AiHistoryStore(this);prefs=getSharedPreferences("connection",MODE_PRIVATE);
         offlineFinbert=new FinbertClassifier(getNoBackupFilesDir());
         stream=new MarketStream(data->{final int ticket=streamGeneration.get();sendIf("stream",data,()->ticket==streamGeneration.get()&&(foreground||"stopped".equals(data.optString("state"))));});
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(11,16,32));
@@ -160,7 +161,11 @@ public final class MainActivity extends Activity {
                             try{progress.put("label",label);}catch(Exception ignored){}
                             sendAi("ai_progress",withId(id,"data",progress),current);
                         });
-                    }else result=client.generate(key,model,mode,question,evidence);if(current==aiGeneration.get()&&foreground)sendAi("ai_result",withId(id,"data",result),current);}catch(Exception e){if(current==aiGeneration.get())sendAi("ai_error",withId(id,"message",e instanceof AiClient.Failure?e.getMessage():"The Gemini request could not finish. Check quota or connectivity and retry."),current);}finally{if(aiWorking.compareAndSet(ticket,null)){activeAiId="";activeAi=null;}}});
+                    }else result=client.generate(key,model,mode,question,evidence);if(current==aiGeneration.get()&&foreground){
+                            try{aiHistory.save(id,question,mode,result,evidence);result.put("historySaved",true);}
+                            catch(Exception historyError){result.put("historySaved",false);}
+                            sendAi("ai_result",withId(id,"data",result),current);
+                        }}catch(Exception e){if(current==aiGeneration.get())sendAi("ai_error",withId(id,"message",e instanceof AiClient.Failure?e.getMessage():"The Gemini request could not finish. Check quota or connectivity and retry."),current);}finally{if(aiWorking.compareAndSet(ticket,null)){activeAiId="";activeAi=null;}}});
         }catch(Exception e){send("ai_error",withId(id,"message",e.getMessage()));}
     }
     private void cancelAi(){AiClient client=activeAi;if(client!=null)client.cancel();}
@@ -404,6 +409,23 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void aiConfig(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,true));}
         @JavascriptInterface public void ai(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,false));}
         @JavascriptInterface public void aiSettings(){runOnUiThread(()->showAiSettings());}
+        @JavascriptInterface public String aiHistoryList(){
+            try{return aiHistory.list().toString();}
+            catch(Exception error){return object("error","Encrypted AI history is unavailable; existing records have not been deleted.").toString();}
+        }
+        @JavascriptInterface public String aiHistoryPin(String id,boolean pinned){
+            try{return aiHistory.pin(id,pinned).toString();}
+            catch(Exception error){return object("error","Could not update the selected AI history record.").toString();}
+        }
+        @JavascriptInterface public String aiHistoryDelete(String id){
+            try{return aiHistory.delete(id).toString();}
+            catch(Exception error){return object("error","Could not delete the selected AI history record.").toString();}
+        }
+        @JavascriptInterface public String aiHistoryClear(){
+            try{return aiHistory.clear().toString();}
+            catch(Exception error){return object("error","Could not clear AI history.").toString();}
+        }
+
         @JavascriptInterface public void finbertStatus(){offlineStatus();}
         @JavascriptInterface public void finbertInstall(){runOnUiThread(()->{if(!foreground)return;if(offlineFinbert.ready()){offlineStatus();return;}new AlertDialog.Builder(MainActivity.this).setTitle("Download offline FinBERT?").setMessage("Download approximately 111 MB of model/tokenizer data. Mobile-data charges may apply. Pinned files are checksum verified. English headline classification runs locally and does not predict prices. Models are excluded from backups. Model license: CC BY-NC-SA 4.0 for personal noncommercial use.").setPositiveButton("Download",(d,w)->installOfflineFinbert()).setNegativeButton("Cancel",null).show();});}
         @JavascriptInterface public void finbertScore(String json){classifyOffline(json);}
