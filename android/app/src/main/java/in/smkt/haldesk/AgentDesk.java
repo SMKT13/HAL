@@ -35,19 +35,21 @@ final class AgentDesk {
         return out;
     }
     static JSONObject stageEvidence(String mode,JSONObject source,JSONArray previous)throws Exception{
+        // Every field originates from the already sanitized, user-approved evidence packet.
+        // Role isolation is enforced before each Gemini request.
         JSONObject out;
         switch(mode){
             case "agent_technical":
-                out=select(source,"quoteAsOf","quoteFreshness","spot","dataHealth","technical","previousSnapshot");break;
+                out=select(source,"generatedAt","quoteAsOf","market","technical","sources");break;
             case "agent_business":
-                out=select(source,"quoteAsOf","dataHealth","fundamentals","news","sources","positionContext");break;
+                out=select(source,"generatedAt","quoteAsOf","fundamentals","news","sources");break;
             case "agent_derivatives":
-                out=select(source,"quoteAsOf","quoteFreshness","positions","risk","positionDesk","positionContext","ledger","funding","hedgeComparisons");break;
+                out=select(source,"generatedAt","quoteAsOf","portfolioIncluded","bookRevision","portfolio","valuation","risk","scenarios","funding","coach","sources");break;
             case "agent_bull":case "agent_bear":
-                out=select(source,"quoteAsOf","quoteFreshness","spot","technical","risk","positionDesk");
+                out=select(source,"generatedAt","quoteAsOf","market","technical","portfolioIncluded","bookRevision","portfolio","valuation","risk","sources");
                 out.put("analystSummaries",summaries(previous,3));break;
             case "agent_risk":
-                out=select(source,"quoteAsOf","quoteFreshness","positions","risk","positionDesk","funding","hedgeComparisons");
+                out=select(source,"generatedAt","quoteAsOf","market","portfolioIncluded","bookRevision","portfolio","valuation","risk","scenarios","funding","coach","sources");
                 out.put("analystSummaries",summaries(previous,5));break;
             default:throw new Exception("Unknown agent role.");
         }
@@ -59,7 +61,7 @@ final class AgentDesk {
         String focus=question.trim().isEmpty()
             ?"Review the saved HAL position, uncertain evidence, hedge and next rollover risks.":question;
         for(int i=0;i<MODES.length;i++){
-            progress.announce(i+1,LABELS[i]);
+            if(progress!=null)progress.announce(i+1,LABELS[i]);
             JSONObject packet=stageEvidence(MODES[i],evidence,findings);
             if(packet.toString().length()>24000)throw new Exception("An agent's evidence exceeds the request limit.");
             JSONObject result;
@@ -77,7 +79,11 @@ final class AgentDesk {
             .put("reply",findings.getJSONObject(5).optString("reply"))
             .put("agents",findings).put("grounded",false)
             .put("generatedAt",Instant.now().toString()).put("dataAsOf",evidence.opt("quoteAsOf"))
-            .put("sources",sources==null?new JSONArray():sources);
+            .put("sources",sources==null?new JSONArray():sources)
+            .put("portfolioIncluded",evidence.optBoolean("portfolioIncluded",false))
+            .put("bookRevision",evidence.opt("bookRevision"))
+            .put("evidenceDigest",AiPolicy.evidenceDigest(evidence))
+            .put("evidenceGeneratedAt",evidence.opt("generatedAt"));
     }
 }
 
