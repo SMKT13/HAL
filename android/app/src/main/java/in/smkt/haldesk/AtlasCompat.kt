@@ -32,6 +32,13 @@ object AtlasCompat {
 
     private fun supported(p:JSONObject): Boolean =
         p.optString("type") in listOf("FUT","PE") && p.optString("side","BUY") == "BUY"
+    private fun mirroredRows(db:SQLiteDatabase):Set<String> {
+        val ids=mutableSetOf<String>()
+        db.rawQuery("SELECT id FROM TradeLedgerEntity",null).use { c ->
+            while(c.moveToNext())ids.add(c.getString(0))
+        }
+        return ids
+    }
     private fun nativeClose(id:String,p:JSONObject):Boolean =
         id!="opening" && !id.startsWith("journal/") && !id.startsWith("history/") &&
         p.optString("kind")=="close" && p.optJSONObject("leg")?.let(::supported)==true
@@ -106,10 +113,19 @@ object AtlasCompat {
             }
         }
         if(original==null&&legs.length()==0&&journal.length()==0&&historic.length()==0)return null
+        // Missing source rows must never silently erase history or lifetime charges.
+        if(original!=null) {
+            val available=mirroredRows(db)
+            for(row in project(original)) {
+                if(row.id.startsWith("history/") && row.id !in available)
+                    throw IllegalStateException("room_v2_history_mismatch")
+                if(row.id=="opening" && row.id !in available)
+                    throw IllegalStateException("room_v2_opening_mismatch")
+            }
+        }
         val book=original?:JSONObject().put("version",4)
         if(!openingPresent && original!=null && project(original).any { it.id=="opening" }) {
-            book.optJSONObject("legacy")?.let { it.put("realized",0).put("costs",0) }
-            book.optJSONObject("history")?.optJSONObject("charges")?.put("amount",0)
+            throw IllegalStateException("room_v2_opening_mismatch")
         }
         book.put("legs",legs).put("journal",journal)
         book.optJSONObject("history")?.let { history ->

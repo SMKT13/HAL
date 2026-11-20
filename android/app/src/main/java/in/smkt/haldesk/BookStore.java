@@ -72,7 +72,7 @@ final class BookStore extends SQLiteOpenHelper {
  }
  synchronized JSONObject save(String payload,long expected)throws Exception{
   JSONObject valid=BookValidator.parse(payload);if(expected<0)throw new Exception("invalid_revision");SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
-  try{if(schemaAtOpen==2 && seen>=0 && seen!=AtlasCompat.serial(db))throw new Exception("revision_conflict_reload_required");JSONObject old=read(db,"book");long rev=old.getLong("revision");if(rev!=expected)throw new Exception("revision_conflict_reload_required");if(!old.isNull("book"))db.execSQL("INSERT OR REPLACE INTO recovery SELECT * FROM book WHERE id=1");
+  try{if(schemaAtOpen==2 && (seen<0 || seen!=AtlasCompat.serial(db)))throw new Exception("revision_conflict_reload_required");JSONObject old=read(db,"book");long rev=old.getLong("revision");if(rev!=expected)throw new Exception("revision_conflict_reload_required");if(!old.isNull("book"))db.execSQL("INSERT OR REPLACE INTO recovery SELECT * FROM book WHERE id=1");
    long next=rev+1,now=System.currentTimeMillis();valid.put("revision",next);String encoded=valid.toString();ContentValues v=new ContentValues();v.put("id",1);v.put("revision",next);v.put("payload",encoded);v.put("digest",digest(encoded));v.put("updated_at",now);if(db.insertWithOnConflict("book",null,v,SQLiteDatabase.CONFLICT_REPLACE)==-1)throw new Exception("book_save_failed");if(schemaAtOpen==2){AtlasCompat.write(db,valid);seen=AtlasCompat.serial(db);}db.setTransactionSuccessful();return new JSONObject().put("ok",true).put("revision",next).put("updatedAt",now);
   }finally{db.endTransaction();}
  }

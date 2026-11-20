@@ -5,7 +5,8 @@ test('legacy store fails closed on installed Room 2 instead of downgrading',()=>
  const code=read('app/src/main/java/in/smkt/haldesk/BookStore.java');
  A.match(code,/SQLiteDatabase\.OPEN_READONLY/);
  A.match(code,/schemaAtOpen==2/);
- A.match(code,/room_v2_requires_reconciliation/);
+ A.match(code,/AtlasCompat\.track\(db\)/);
+ A.match(code,/seen<0 \|\| seen!=AtlasCompat\.serial\(db\)/);
  A.match(code,/getWritableDatabase\(\)/);
  A.match(code,/getReadableDatabase\(\)/);
  A.doesNotMatch(code,/fallbackToDestructiveMigration|deleteDatabase\(/);
@@ -19,6 +20,13 @@ test('detect installed schema exactly once and surface a clear fail-closed messa
  A.match(main,/This installation has a newer Room trading database/);
 });
 
+test('Room v2 bridge preserves native rows and historical reconciliations',()=>{
+ const bridge=read('app/src/main/java/in/smkt/haldesk/AtlasCompat.kt');
+ A.match(bridge,/room_v2_missing_tables/);
+ A.match(bridge,/room_v2_contract_id_conflict/);
+ A.match(bridge,/room_v2_history_mismatch/);
+ A.match(bridge,/room_v2_opening_mismatch/);
+});
 test('unknown or corrupt sqlite schema cannot crash BookStore construction',()=>{
  const store=read('app/src/main/java/in/smkt/haldesk/BookStore.java');
  const robo=read('app/src/test/java/in/smkt/haldesk/BookStoreGuardTest.java');

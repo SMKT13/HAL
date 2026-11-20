@@ -18,20 +18,17 @@ public class BookStoreGuardTest {
         context = RuntimeEnvironment.getApplication();
         context.deleteDatabase("haldesk_book.db");
     }
-    @Test public void roomVersion2NeverDowngradedOrModified() throws Exception {
-        SQLiteDatabase db = context.openOrCreateDatabase("haldesk_book.db", Context.MODE_PRIVATE, null);
-        db.execSQL("CREATE TABLE book (id INTEGER PRIMARY KEY,revision INTEGER,payload TEXT,digest TEXT,updated_at INTEGER)");
-        db.execSQL("CREATE TABLE FoPositionEntity (id TEXT NOT NULL PRIMARY KEY,payload TEXT NOT NULL)");
+    @Test public void incompleteRoomV2SchemaNeverAltered() throws Exception {
+        SQLiteDatabase db=context.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null);
+        db.execSQL("CREATE TABLE book(id INTEGER PRIMARY KEY,revision INTEGER,payload TEXT,digest TEXT,updated_at INTEGER)");
+        db.execSQL("CREATE TABLE FoPositionEntity(id TEXT NOT NULL PRIMARY KEY,payload TEXT NOT NULL)");
         db.execSQL("INSERT INTO FoPositionEntity VALUES ('native-test','{\"type\":\"CE\"}')");
-        db.setVersion(2);
-        db.close();
-        try (BookStore store = new BookStore(context)) {
-            try { store.load(false); fail("v2 book must remain sealed"); }
-            catch (Exception expected) { assertEquals("room_v2_requires_reconciliation",expected.getMessage()); }
-            try { store.save("{\"version\":4,\"legs\":[],\"journal\":[]}",0); fail("v2 writes must be blocked"); }
-            catch (Exception expected) { assertEquals("room_v2_requires_reconciliation",expected.getMessage()); }
-            try { store.cachePut("snapshot","{}"); fail("v2 cache writes must be blocked"); }
-            catch (Exception expected) { assertEquals("room_v2_requires_reconciliation",expected.getMessage()); }
+        db.setVersion(2);db.close();
+        try(BookStore store=new BookStore(context)){
+            try {store.load(false);fail("Incomplete Room v2 must not be opened");}
+            catch(Exception expected){assertTrue(expected.getMessage().contains("room_v2_missing_tables"));}
+            try {store.save("{\"version\":4,\"legs\":[],\"journal\":[]}",0);fail("Incomplete Room v2 must not be written");}
+            catch(Exception expected){assertTrue(expected.getMessage().contains("room_v2_missing_tables"));}
         }
         try(SQLiteDatabase inspect=SQLiteDatabase.openDatabase(context.getDatabasePath("haldesk_book.db").getPath(),null,SQLiteDatabase.OPEN_READONLY)){
             assertEquals(2,inspect.getVersion());
