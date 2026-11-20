@@ -137,6 +137,12 @@ object AtlasCompat {
                     throw IllegalStateException("room_v2_history_mismatch")
                 if(row.id=="opening" && row.id !in available)
                     throw IllegalStateException("room_v2_opening_mismatch")
+                // A missing journal mirror cannot be assumed to mean that a
+                // trade was legitimately deleted. Room-native closes can
+                // mirror journal/id as a bare id, so accept either identity.
+                if(row.id.startsWith("journal/") &&
+                   row.id !in available && row.id.removePrefix("journal/") !in available)
+                    throw IllegalStateException("room_v2_journal_mismatch")
             }
         }
         val book=original?:JSONObject().put("version",4)

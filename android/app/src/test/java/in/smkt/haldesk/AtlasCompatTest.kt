@@ -57,6 +57,28 @@ class AtlasCompatTest {
             }
         }
     }
+    @Test fun missingOriginalJournalMirrorBlocksProjectionWithoutRewritingBook(){
+        val c=setup()
+        c.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null).use { db ->
+            removeUnsupportedRows(db)
+            val raw="""{"version":4,"legs":[{"id":"f","type":"FUT","expiry":"2026-12-29","lots":1,"lotSize":150,"entry":4927.35}],"journal":[{"id":"prior-fee","kind":"fee","date":"2026-11-19","amount":25.0}]}"""
+            val hash=MessageDigest.getInstance("SHA-256").digest(raw.toByteArray()).joinToString(""){"%02x".format(it)}
+            db.execSQL("UPDATE book SET payload=?,digest=? WHERE id=1",arrayOf(raw,hash))
+        }
+        BookStore(c).use { store ->
+            try { store.load(false);fail("Missing journal must be rejected") }
+            catch(expected:Exception) {
+                assertTrue(expected.message?.contains("room_v2_journal_mismatch")==true)
+            }
+        }
+        c.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null).use { db ->
+            db.rawQuery("SELECT payload FROM book WHERE id=1",null).use {
+                assertTrue(it.moveToFirst())
+                val book=JSONObject(it.getString(0))
+                assertEquals("prior-fee",book.getJSONArray("journal").getJSONObject(0).getString("id"))
+            }
+        }
+    }
     private fun removeUnsupportedRows(db:SQLiteDatabase){
         db.delete("FoPositionEntity","id=?",arrayOf("c"))
         db.delete("TradeLedgerEntity","id=?",arrayOf("native-ledger"))
