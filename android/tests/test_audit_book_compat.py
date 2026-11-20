@@ -65,6 +65,23 @@ class AuditTests(unittest.TestCase):
             self.assertNotIn('native_records_need_reconciliation',r['flags'])
             self.assertIn('room_v2_requires_migration_validation',r['flags'])
 
+    def test_display_only_metadata_does_not_count_as_contract_change(self):
+        with tempfile.TemporaryDirectory() as folder:
+            p=Path(folder)/'book.db';fixture(p,2)
+            db=sqlite3.connect(p)
+            payload=sample_document()['legs'][0].copy()
+            payload['note']='display-only'
+            db.execute("INSERT INTO FoPositionEntity VALUES(?,?)",(payload['id'],json.dumps(payload)))
+            db.commit();db.close()
+            r=audit_database(p)
+            self.assertEqual(0,r['counts']['contract_differences'])
+
+    def test_changed_economic_quantity_counts_as_difference(self):
+        with tempfile.TemporaryDirectory() as folder:
+            p=Path(folder)/'book.db';fixture(p,2,different=True)
+            r=audit_database(p)
+            self.assertEqual(1,r['counts']['contract_differences'])
+
     def test_checksum_mismatch_blocks(self):
         with tempfile.TemporaryDirectory() as folder:
             p=Path(folder)/'book.db';fixture(p,1,corrupt=True)
