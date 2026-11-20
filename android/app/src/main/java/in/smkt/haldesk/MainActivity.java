@@ -224,6 +224,11 @@ public final class MainActivity extends Activity {
                 if(secret.isEmpty())throw new MarketClient.Failure("credential_missing");
                 JSONObject data=activeClient.load(selectedMode,secret,expiry);
                 sendMarket("snapshot",data,current);
+                // Reuse a validated HAL cash quote; never poll separately.
+                if(foreground && current==generation.get()){
+                    JSONObject event=LocalPriceAlerts.onSpot(this,data.optJSONObject("spot"),System.currentTimeMillis());
+                    if(event!=null)sendMarket("local_alert",event,current);
+                }
             }catch(Exception error){
                 String code=error instanceof MarketClient.Failure?((MarketClient.Failure)error).code:"network_unavailable";
                 sendMarket("error",object("code",code),current);

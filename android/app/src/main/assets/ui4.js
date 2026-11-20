@@ -582,6 +582,7 @@ document.addEventListener('change',ev=>{const id=ev.target.id;rememberInput(id);
 $('modal-close').onclick=$('modal-cancel').onclick=closeModal;$('modal-save').onclick=()=>{try{saveModal?.();closeModal();}catch(e){$('modal-error').textContent=e.message;}};$('refresh').onclick=()=>refresh();$('settings').onclick=settings;if($('native-terminal'))$('native-terminal').onclick=()=>native('terminal');
 document.addEventListener('keydown',ev=>{if($('modal').hidden)return;if(ev.key==='Escape')closeModal();if(ev.key==='Tab'){const nodes=[...$('modal').querySelectorAll('button,input,select,textarea,a')].filter(x=>!x.disabled&&!x.hidden),first=nodes[0],last=nodes.at(-1);if(ev.shiftKey&&document.activeElement===first){ev.preventDefault();last.focus();}if(!ev.shiftKey&&document.activeElement===last){ev.preventDefault();first.focus();}}});
 function receive(event,data){
+ if(event==='local_alert'){toast(data.message||'HAL price alert');return;}
  if(event==='history_preview'){try{historyView.preview(data);}catch(e){toast(e.message);}return;}
  if(event==='lifecycle'&&data.state==='resumed'){resumeReview(data.awayMs);s.loading=false;for(const h of Object.values(s.health))if(h.pending){h.pending=null;h.lastAttempt=null;}invalidateCalculations();if(ui.pendingAI){ui.pendingAI=null;ui.aiError='Cancelled when the app left the foreground.';}}
  if(event==='connection'){configured=!!data.configured;if(!started){started=true;if(configured){refresh();request('candles');request('news');request('filings');request('fundamentals');}}}

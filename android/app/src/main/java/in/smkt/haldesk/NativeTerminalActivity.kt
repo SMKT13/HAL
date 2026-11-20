@@ -155,9 +155,40 @@ private fun readSnapshot(context: Context): Snapshot = try {
                     Text("This preview does not substitute the HAL spot price for futures or option marks.",color=cyan,fontSize=12.sp)
                     Button(onClick=onClose){Text("Return to full HAL analysis")}
                 }
-                Text("Read-only preview · no broker orders · no database writes.",color=muted,fontSize=11.sp)
+                PriceAlertsPanel(context)
+                Text("Read-only broker integration · no orders · no portfolio database writes.",color=muted,fontSize=11.sp)
             }
         }
+    }
+}
+
+@Composable private fun PriceAlertsPanel(context: Context) {
+    val currentAbove=remember { LocalPriceAlerts.threshold(context,"above") }
+    val currentBelow=remember { LocalPriceAlerts.threshold(context,"below") }
+    var above by remember { mutableStateOf(if(currentAbove.isFinite())currentAbove.toString() else "") }
+    var below by remember { mutableStateOf(if(currentBelow.isFinite())currentBelow.toString() else "") }
+    var message by remember { mutableStateOf("") }
+    Panel("HAL cash price alerts · app open") {
+        Text("Evaluated only after a fresh Upstox cash quote. No background monitoring or orders.",
+            color=muted,fontSize=12.sp)
+        OutlinedTextField(value=above,onValueChange={above=it.take(18)},
+            label={Text("Alert when at or above ₹")},singleLine=true,modifier=Modifier.fillMaxWidth())
+        OutlinedTextField(value=below,onValueChange={below=it.take(18)},
+            label={Text("Alert when at or below ₹")},singleLine=true,modifier=Modifier.fillMaxWidth())
+        Button(onClick={
+            try{
+                val hi=above.trim().takeIf{it.isNotEmpty()}?.toDoubleOrNull()
+                val lo=below.trim().takeIf{it.isNotEmpty()}?.toDoubleOrNull()
+                require(above.isBlank()||hi!=null){"Invalid upper price"}
+                require(below.isBlank()||lo!=null){"Invalid lower price"}
+                if(hi!=null)require(hi.isFinite()&&hi>0){"Invalid upper price"}
+                if(lo!=null)require(lo.isFinite()&&lo>0){"Invalid lower price"}
+                LocalPriceAlerts.configure(context,"above",hi)
+                LocalPriceAlerts.configure(context,"below",lo)
+                message="Saved locally. Alerts run only while the app is open."
+            }catch(e:Exception){message=e.message?:"Invalid price"}
+        }){Text("Save thresholds")}
+        if(message.isNotBlank())Text(message,color=cyan,fontSize=12.sp)
     }
 }
 @Composable private fun CountCard(label:String,count:Int,modifier:Modifier=Modifier) {
