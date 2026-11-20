@@ -53,3 +53,13 @@ test('short puts and calls never inflate protective hedge coverage',()=>{
  A.match(risk,/Basic protective-put coverage is withheld/);
  A.match(ui,/ExposureLeg\(it.type, it.expiry, it.lots, it.lotSize, it.side\)/);
 });
+
+test('native sidecar preview detects economically changed and original-only contracts',()=>{
+ const source=read('app/src/main/java/in/smkt/haldesk/RoomReadOnlyPreview.java');
+ const ui=read('app/src/main/java/in/smkt/haldesk/NativeTerminalActivity.kt');
+ A.match(source,/contractDifferences/);
+ A.match(source,/legacyOnly/);
+ A.match(source,/sameFinite\(a,"entry",b\)/);
+ A.match(ui,/Changed:/);
+ A.match(ui,/Legacy-only:/);
+});
