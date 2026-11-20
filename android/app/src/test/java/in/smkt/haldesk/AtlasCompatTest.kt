@@ -29,6 +29,8 @@ class AtlasCompatTest {
             db.execSQL("CREATE TABLE TradeLedgerEntity(id TEXT NOT NULL PRIMARY KEY,payload TEXT NOT NULL,gross INTEGER NOT NULL,fees INTEGER NOT NULL)")
             db.execSQL("CREATE TABLE PriceAlertEntity(id TEXT NOT NULL PRIMARY KEY,kind TEXT NOT NULL,threshold REAL NOT NULL,enabled INTEGER NOT NULL)")
             db.execSQL("CREATE TABLE CachedSnapshotEntity(id TEXT NOT NULL PRIMARY KEY,payload TEXT NOT NULL,at INTEGER NOT NULL)")
+            db.execSQL("CREATE TABLE room_master_table(id INTEGER PRIMARY KEY,identity_hash TEXT)")
+            db.execSQL("INSERT INTO room_master_table VALUES(42,'fixture-valid-hash')")
             db.execSQL("INSERT INTO book VALUES(1,8,?,?,1)",arrayOf(raw,hash))
             db.execSQL("INSERT INTO FoPositionEntity VALUES(?,?)",arrayOf("f",JSONObject(raw).getJSONArray("legs").getJSONObject(0).toString()))
             val call=JSONObject().put("id","c").put("type","CE").put("side","SELL").put("expiry","2026-12-29")

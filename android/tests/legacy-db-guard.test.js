@@ -23,6 +23,7 @@ test('detect installed schema exactly once and surface a clear fail-closed messa
 test('Room v2 bridge preserves native rows and historical reconciliations',()=>{
  const bridge=read('app/src/main/java/in/smkt/haldesk/AtlasCompat.kt');
  A.match(bridge,/room_v2_missing_tables/);
+ A.match(bridge,/room_v2_identity_missing/);
  A.match(bridge,/room_v2_contract_id_conflict/);
  A.match(bridge,/room_v2_history_mismatch/);
  A.match(bridge,/room_v2_opening_mismatch/);

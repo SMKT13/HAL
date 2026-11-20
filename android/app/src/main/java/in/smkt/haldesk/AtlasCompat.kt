@@ -16,6 +16,14 @@ object AtlasCompat {
             require(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", arrayOf(name))
                 .use { it.moveToFirst() }) { "room_v2_missing_tables" }
         }
+        require(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name='room_master_table'",null).use { it.moveToFirst() }) {
+            "room_v2_identity_missing"
+        }
+        // Room v2 is only safe to bridge if its schema identity is present.
+        val identity=db.rawQuery("SELECT identity_hash FROM room_master_table WHERE id=42",null).use {
+            if(it.moveToFirst())it.getString(0) else null
+        }
+        require(!identity.isNullOrBlank()){"room_v2_identity_missing"}
         db.execSQL("CREATE TABLE IF NOT EXISTS atlas_serial(id INTEGER PRIMARY KEY, generation INTEGER NOT NULL)")
         db.execSQL("INSERT OR IGNORE INTO atlas_serial VALUES(1,0)")
         for (table in listOf("FoPositionEntity","TradeLedgerEntity")) {
