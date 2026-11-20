@@ -33,3 +33,15 @@ test('native expiry and nominal-coverage safeguards are explicit',()=>{
  A.match(src,/expiry is past/);
  A.match(ui,/nominalCoverage/);
 });
+
+test('Room v2 sidecar is previewed read-only with native BUY/SELL labeling',()=>{
+ const reader=read('app/src/main/java/in/smkt/haldesk/RoomReadOnlyPreview.java');
+ const ui=read('app/src/main/java/in/smkt/haldesk/NativeTerminalActivity.kt');
+ A.match(reader,/SQLiteDatabase\.OPEN_READONLY/);
+ A.match(reader,/BookValidator\.parse\(raw\)/);
+ A.match(reader,/FoPositionEntity/);
+ A.match(reader,/TradeLedgerEntity/);
+ A.doesNotMatch(reader,/\.insert\(|\.delete\(|\.update\(|execSQL\(/);
+ A.match(ui,/RoomReadOnlyPreview\.read\(context\)/);
+ A.match(ui,/Short put/);A.match(ui,/Short call/);
+});

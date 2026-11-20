@@ -43,12 +43,27 @@ private val panel = Color(0xFF15243B)
 private val edge = Color(0xFF2C4563)
 private val cyan = Color(0xFF68E7E8)
 private val muted = Color(0xFFB1C4DA)
-private data class Leg(val type: String, val expiry: String, val lots: Int?, val lotSize: Int?, val entry: Double?, val strike: Double?)
+private data class Leg(val type: String, val expiry: String, val lots: Int?, val lotSize: Int?, val entry: Double?, val strike: Double?, val side: String = "BUY")
 private data class Snapshot(val loading: Boolean = false, val issue: String? = null, val savedAt: Long? = null, val legs: List<Leg> = emptyList())
 private fun finite(v: Double): Double? = v.takeIf { it.isFinite() && it >= 0.0 }
 private fun money(v: Double?): String = v?.let { NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(it) } ?: "Not recorded"
 private fun readSnapshot(context: Context): Snapshot = try {
-    BookStore(context).use { store ->
+    // When Library 5.1.24 migrated the database to Room v2, read its native
+    // position table WITHOUT triggering the legacy helper's schema downgrade.
+    val room = RoomReadOnlyPreview.read(context)
+    if (room != null) {
+        val entries = room.getJSONArray("legs")
+        val visible = (0 until entries.length()).map { i ->
+            val row = entries.getJSONObject(i)
+            Leg(row.getString("type"),row.getString("expiry"),
+                row.getInt("lots"),row.getInt("lotSize"),
+                finite(row.getDouble("entry")),finite(row.optDouble("strike",Double.NaN)),
+                row.getString("side"))
+        }
+        Snapshot(issue = room.getString("message") + " · Native-only contracts: " +
+            room.getInt("nativeOnly") + " · Ledger entries retained: " + room.getLong("ledgerRows"),
+            legs = visible)
+    } else BookStore(context).use { store ->
         val original = store.load(false)
         val book = original.optJSONObject("book")
         if (book == null) Snapshot(issue = "No saved book found. Nothing has been changed.")
@@ -97,7 +112,7 @@ private fun readSnapshot(context: Context): Snapshot = try {
                 Panel("Saved open contracts") {
                     if(!state.loading&&state.legs.isEmpty())Text("No saved contracts to display.",color=muted)
                     state.legs.forEach { leg ->
-                        Text(when(leg.type){"FUT"->"Long future";"PE"->"Protective put";else->"Unverified contract"},fontWeight=FontWeight.SemiBold)
+                        Text(when(leg.type){"FUT"->if(leg.side=="SELL")"Short future" else "Long future";"PE"->if(leg.side=="SELL")"Short put" else "Long put";"CE"->if(leg.side=="SELL")"Short call" else "Long call";else->"Unverified contract"},fontWeight=FontWeight.SemiBold)
                         val qty=if(leg.lots!=null&&leg.lotSize!=null)
                             leg.lots.toString()+" lot(s) · "+(leg.lots.toLong()*leg.lotSize)+" shares"
                             else "Quantity requires verification"
