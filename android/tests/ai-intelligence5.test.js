@@ -45,3 +45,8 @@ test('market event only with verified input',()=>{
  assert.equal(AI.priority({market:{spot:{changePct:4}}}).code,'ROUTINE');
  assert.equal(AI.priority({market:{spot:{changePct:4}},marketVerified:true}).code,'MARKET_MOVE');
 });
+test('daily intelligence brief includes all approved relevant evidence',()=>{
+ const x=AI.selectContext(source,'Prepare my daily HAL intelligence brief with recovery',{mode:'copilot',includePortfolio:true});
+ assert.equal(x.scope,'comprehensive');assert.equal(x.evidence.portfolioIncluded,true);
+ assert.ok(x.evidence.news);assert.ok(x.evidence.technical);assert.ok(x.evidence.risk);
+});
