@@ -47,6 +47,33 @@ public class RoomReadOnlyPreviewTest {
    }
   }
  }
+ @Test public void nativeChangedAndMissingLegacyContractsFlagged() throws Exception {
+  SQLiteDatabase db=fixture(false);
+  // A valid original record not in Room indicates a discrepancy requiring reconciliation.
+  String legacy="{\"version\":4,\"legs\":[{\"id\":\"legacy-future\",\"type\":\"FUT\",\"expiry\":\"2026-12-29\",\"lots\":1,\"lotSize\":150,\"entry\":4900}],\"journal\":[]}";
+  byte[] bytes=MessageDigest.getInstance("SHA-256").digest(legacy.getBytes(StandardCharsets.UTF_8));
+  StringBuilder digest=new StringBuilder();
+  for(byte b:bytes)digest.append(String.format("%02x",b&255));
+  db.execSQL("UPDATE book SET payload=?,digest=? WHERE id=1",new Object[]{legacy,digest.toString()});
+  db.close();
+  JSONObject result=RoomReadOnlyPreview.read(context);
+  assertEquals(1,result.getInt("nativeOnly"));
+  assertEquals(0,result.getInt("contractDifferences"));
+  assertEquals(1,result.getInt("legacyOnly"));
+ }
+ @Test public void modifiedMatchingRoomContractIsExplicitlyCounted() throws Exception {
+  SQLiteDatabase db=fixture(false);
+  String legacy="{\"version\":4,\"legs\":[{\"id\":\"native-put\",\"type\":\"PE\",\"expiry\":\"2026-12-29\",\"lots\":1,\"lotSize\":150,\"entry\":55,\"strike\":4500}],\"journal\":[]}";
+  byte[] bytes=MessageDigest.getInstance("SHA-256").digest(legacy.getBytes(StandardCharsets.UTF_8));
+  StringBuilder digest=new StringBuilder();
+  for(byte b:bytes)digest.append(String.format("%02x",b&255));
+  db.execSQL("UPDATE book SET payload=?,digest=? WHERE id=1",new Object[]{legacy,digest.toString()});
+  db.close();
+  JSONObject result=RoomReadOnlyPreview.read(context);
+  assertEquals(0,result.getInt("nativeOnly"));
+  assertEquals(1,result.getInt("contractDifferences"));
+  assertEquals(0,result.getInt("legacyOnly"));
+ }
  @Test public void corruptBookCannotBeSilentlyPreviewed() throws Exception {
   fixture(true).close();
   try{RoomReadOnlyPreview.read(context);fail("Corrupt saved book must be blocked");}
