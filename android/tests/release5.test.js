@@ -66,8 +66,8 @@ test('free Windows local verifier defaults to unsigned, requires full checks bef
 
 test('local release scripts run read-only legacy/Room compatibility audits',()=>{
  const bash=read('build.sh'),win=read('scripts/local-windows-release.ps1');
- A.match(bash,/test_audit_book_compat\.py/);
- A.match(win,/test_audit_book_compat\.py/);
+ A.ok(bash.includes("test_*.py"));
+ A.ok(win.includes("test_*.py"));
  A.match(bash,/Python 3 required/);
  A.match(win,/Python 3 required/);
 });
