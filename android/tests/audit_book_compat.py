@@ -24,8 +24,20 @@ def _row_json(raw):
         raise ValueError("Expected JSON object")
     return value
 
-def _canonical(obj):
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+def _economic_contract(item):
+    """Match the on-device preview: economic fields, not JSON key order or UI metadata."""
+    if not isinstance(item, dict):
+        raise ValueError("Invalid position payload")
+    fields = ("type", "expiry", "lots", "lotSize", "entry")
+    if not all(k in item for k in fields):
+        raise ValueError("Missing economic contract fields")
+    result = {field: item[field] for field in fields}
+    result["side"] = item.get("side", "BUY")
+    if item["type"] != "FUT":
+        if "strike" not in item:
+            raise ValueError("Missing option strike")
+        result["strike"] = item["strike"]
+    return result
 
 def audit_database(path):
     db_path = Path(path).resolve(strict=True)
@@ -76,13 +88,13 @@ def audit_database(path):
                                          ("PriceAlertEntity", "room_alerts"),
                                          ("CachedSnapshotEntity", "room_cache")]:
                         report["counts"][field] = conn.execute('SELECT COUNT(*) FROM "' + table + '"').fetchone()[0]
-                    before = {str(p.get("id")): _canonical(p) for p in legacy_legs if isinstance(p, dict) and p.get("id")}
+                    before = {str(p.get("id")): _economic_contract(p) for p in legacy_legs if isinstance(p, dict) and p.get("id")}
                     native_only, changed = 0, 0
                     for ident, raw in positions:
                         item = _row_json(raw)
                         if ident not in before:
                             native_only += 1
-                        elif _canonical(item) != before[ident]:
+                        elif _economic_contract(item) != before[ident]:
                             changed += 1
                     report["counts"]["native_only_positions"] = native_only
                     report["counts"]["contract_differences"] = changed
