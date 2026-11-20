@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 bt="$ANDROID_SDK_ROOT/build-tools/35.0.0"
 # Always run the sidecar/legacy database safety suite before packaging.
 command -v python3 >/dev/null || { echo "Python 3 required for DB safety tests" >&2; exit 1; }
-python3 -m unittest discover -s tests -p 'test_audit_book_compat.py' -v
+python3 -m unittest discover -s tests -p 'test_*.py' -v
 if [ ! -f node_modules/esbuild/package.json ]; then
   echo "Installing pinned Android JS build tools (npm ci)" >&2
   npm ci --no-audit --no-fund

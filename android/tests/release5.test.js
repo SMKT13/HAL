@@ -71,3 +71,14 @@ test('local release scripts run read-only legacy/Room compatibility audits',()=>
  A.match(bash,/Python 3 required/);
  A.match(win,/Python 3 required/);
 });
+
+test('local scripts run the audit and memory-only migration rehearsal',()=>{
+ const bash=read('build.sh'),win=read('scripts/local-windows-release.ps1');
+ const rehearsal=read('tests/rehearse_room_v2.py');
+ A.ok(bash.includes("test_*.py"));
+ A.ok(win.includes("test_*.py"));
+ A.match(rehearsal,/sqlite3\.connect\(":memory:"\)/);
+ A.match(rehearsal,/mode=ro/);
+ A.match(bash,/signing is blocked/);
+ A.match(win,/signing is blocked/);
+});

@@ -47,7 +47,7 @@ try{
  Run-Checked 'npm.cmd' @('test')
  $py=Get-Command python.exe -ErrorAction SilentlyContinue
  if(!$py){throw 'Python 3 required to run the SQLite v1/v2 compatibility tests.'}
- Run-Checked 'python.exe' @('-m','unittest','discover','-s','tests','-p','test_audit_book_compat.py','-v')
+ Run-Checked 'python.exe' @('-m','unittest','discover','-s','tests','-p','test_*.py','-v')
  Run-Checked 'npm.cmd' @('run','assets')
  if(!$SkipBrowser){
   Run-Checked 'npx.cmd' @('playwright','install','chromium')

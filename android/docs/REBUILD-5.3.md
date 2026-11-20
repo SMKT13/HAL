@@ -30,3 +30,6 @@ The Library 5.1.24 Android archive contains a SQLiteOpenHelper at version 2 with
 
 ### Added read-only database test gate
 Both Linux and Windows local release scripts now run `python -m unittest discover -s tests -p test_audit_book_compat.py -v` before Gradle packaging. Python 3 is required. The synthetic tests protect v1/v2 audit behavior but **do not lift** the signing block or replace a real Android migration test.
+
+## Migration rehearsal
+The independent tests/rehearse_room_v2.py tool audits an offline schema-1 database COPY in read-only mode and creates schema-2-like ledger mirror tables exclusively in SQLite memory. Its seven synthetic tests check original-book SHA-256, source version preservation, and position and journal row counts. Both platform build scripts now run both Python suites before Android packaging. This is not production Room migration and does not lift the signing block.
