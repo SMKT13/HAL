@@ -82,3 +82,11 @@ test('local scripts run the audit and memory-only migration rehearsal',()=>{
  A.match(bash,/signing is blocked/);
  A.match(win,/signing is blocked/);
 });
+
+test('bash release source requires finance and browser tests before Gradle packaging',()=>{
+ const src=read('build.sh');
+ A.match(src,/npm test/);
+ A.match(src,/npm run test:ui/);
+ A.ok(src.indexOf('npm test') < src.indexOf(':app:testReleaseUnitTest'));
+ A.ok(src.indexOf('npm run test:ui') < src.indexOf(':app:testReleaseUnitTest'));
+});

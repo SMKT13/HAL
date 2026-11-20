@@ -39,3 +39,5 @@ The script requires alias `hal-personal` and checks the original certificate SHA
 An unsigned APK is only a testing artifact; it cannot update an app signed by the original certificate. Even a signed APK is **not production-verified** until a careful in-place update on Android 8+ preserves the real SQLite book, October completed history, all charges, journal, PAPER history, Keystore token, and offline behavior. Validate live Upstox data separately on the phone and preserve the ability to roll back via an exported backup.
 
 The GitHub Actions spending allowance is independent of these local steps. These commands do not invoke Actions or require paid CI runners.
+
+**5.3 development branch:** Bash build now runs both npm unit tests and browser UI tests before Android compilation, after the Python v1/v2 database audit and in-memory rehearsal suites. Install Chromium locally using `npx playwright install chromium`. This changes source validation only. Signing remains intentionally blocked until Room migration and physical-device upgrade checks pass.

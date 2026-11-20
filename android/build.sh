@@ -10,6 +10,10 @@ if [ ! -f node_modules/esbuild/package.json ]; then
   echo "Installing pinned Android JS build tools (npm ci)" >&2
   npm ci --no-audit --no-fund
 fi
+# Release candidates require both deterministic JS and browser UI tests.
+# Chromium must be installed locally (npx playwright install chromium).
+npm test
+npm run test:ui
 if [ -x ./gradlew ]; then gradle_command=./gradlew; else gradle_command=gradle; fi
 "$gradle_command" --no-daemon :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease
 mkdir -p build
