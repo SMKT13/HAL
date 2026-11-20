@@ -18,3 +18,12 @@ test('detect installed schema exactly once and surface a clear fail-closed messa
  A.match(code,/schemaAtOpen=observedSchema/);
  A.match(main,/This installation has a newer Room trading database/);
 });
+
+test('unknown or corrupt sqlite schema cannot crash BookStore construction',()=>{
+ const store=read('app/src/main/java/in/smkt/haldesk/BookStore.java');
+ const robo=read('app/src/test/java/in/smkt/haldesk/BookStoreGuardTest.java');
+ A.match(store,/return \(version==1\|\|version==2\)\?version:0/);
+ A.match(store,/database_unreadable_or_unsupported/);
+ A.match(robo,/malformedSqliteCannotCrashConstructorOrDestroyBytes/);
+ A.match(robo,/unknownSchemaFailsClosedWithoutCrashingConstructor/);
+});

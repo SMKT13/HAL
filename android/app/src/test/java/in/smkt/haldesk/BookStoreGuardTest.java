@@ -41,6 +41,30 @@ public class BookStoreGuardTest {
             }
         }
     }
+    @Test public void unknownSchemaFailsClosedWithoutCrashingConstructor() throws Exception {
+        SQLiteDatabase db=context.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null);
+        db.execSQL("CREATE TABLE arbitrary (note TEXT)");
+        db.setVersion(3);
+        db.close();
+        try(BookStore store=new BookStore(context)){
+            try {store.load(false);fail("Unknown version must be blocked");}
+            catch(Exception ex){assertEquals("database_unreadable_or_unsupported",ex.getMessage());}
+        }
+        try(SQLiteDatabase inspect=SQLiteDatabase.openDatabase(context.getDatabasePath("haldesk_book.db").getPath(),null,SQLiteDatabase.OPEN_READONLY)){
+            assertEquals(3,inspect.getVersion());
+        }
+    }
+    @Test public void malformedSqliteCannotCrashConstructorOrDestroyBytes() throws Exception {
+        java.io.File file=context.getDatabasePath("haldesk_book.db");
+        file.getParentFile().mkdirs();
+        byte[] original="this is not a sqlite file".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        java.nio.file.Files.write(file.toPath(),original);
+        try(BookStore store=new BookStore(context)){
+            try{store.load(false);fail("Corrupt database must be blocked");}
+            catch(Exception ex){assertEquals("database_unreadable_or_unsupported",ex.getMessage());}
+        }
+        assertArrayEquals(original,java.nio.file.Files.readAllBytes(file.toPath()));
+    }
     @Test public void legacyVersion1StillSupportsNormalBook() throws Exception {
         try(BookStore store=new BookStore(context)){
             assertEquals(1,store.save("{\"version\":4,\"legs\":[],\"journal\":[]}",0).getLong("revision"));

@@ -18,20 +18,24 @@ final class BookStore extends SQLiteOpenHelper {
   if(!file.exists())return 1;
   try(SQLiteDatabase db=SQLiteDatabase.openDatabase(file.getPath(),null,SQLiteDatabase.OPEN_READONLY)){
    int version=db.getVersion();
-   if(version!=1 && version!=2)throw new IllegalStateException("unsupported_database_schema");
-   return version;
+   return (version==1||version==2)?version:0;
   }catch(android.database.sqlite.SQLiteException failure){
-   throw new IllegalStateException("database_unreadable");
+   // An unrecognised or damaged file must not crash MainActivity construction.
+   // Never open it with SQLiteOpenHelper; both reads and writes fail closed.
+   return 0;
   }
  }
  BookStore(Context context){this(context,schemaOf(context));}
  private BookStore(Context context,int observedSchema){
-  super(context,"haldesk_book.db",null,observedSchema);
+  // SQLiteOpenHelper requires a positive target version. No DB is actually
+  // opened when the observed version is 0 (unreadable/unsupported).
+  super(context,"haldesk_book.db",null,observedSchema==1?1:2);
   schemaAtOpen=observedSchema;
   if(schemaAtOpen==1)setWriteAheadLoggingEnabled(true);
  }
  private void requireCompatible(){
   if(schemaAtOpen==2)throw new IllegalStateException("room_v2_requires_reconciliation");
+  if(schemaAtOpen==0)throw new IllegalStateException("database_unreadable_or_unsupported");
  }
  @Override public synchronized SQLiteDatabase getWritableDatabase(){
   requireCompatible();return super.getWritableDatabase();
