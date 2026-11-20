@@ -3,13 +3,17 @@ package in.smkt.haldesk
 import java.time.LocalDate
 
 /** Deterministic share-count and expiry checks; not valuation or broker margin. */
-data class ExposureLeg(val type: String, val expiry: String, val lots: Int?, val lotSize: Int?)
+data class ExposureLeg(val type: String, val expiry: String, val lots: Int?, val lotSize: Int?, val side: String = "BUY")
 data class NominalCoverage(val futures: Long?, val puts: Long?, val uncovered: Long?, val notes: List<String>)
 
 fun nominalCoverage(legs: List<ExposureLeg>, today: LocalDate): NominalCoverage {
-    val futures = legs.filter { it.type == "FUT" }
-    val puts = legs.filter { it.type == "PE" }
+    val futures = legs.filter { it.type == "FUT" && it.side == "BUY" }
+    val puts = legs.filter { it.type == "PE" && it.side == "BUY" }
     val notes = mutableListOf<String>()
+    if (legs.any { it.side != "BUY" || (it.type != "FUT" && it.type != "PE") }) {
+        notes += "This book includes short contracts, calls or unsupported exposures. Basic protective-put coverage is withheld."
+        return NominalCoverage(null, null, null, notes)
+    }
     val all = futures + puts
     if (all.any { it.lots == null || it.lotSize == null || it.lots <= 0 || it.lotSize <= 0 }) {
         notes += "At least one contract has an unverified lot size or quantity; exposure is withheld."

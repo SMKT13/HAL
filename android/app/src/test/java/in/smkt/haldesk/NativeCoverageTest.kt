@@ -27,6 +27,19 @@ class NativeCoverageTest {
             ExposureLeg("PE","2026-12-29",1,150)),today)
         assertEquals(150L,result.uncovered)
     }
+    @Test fun shortPutNeverCountsAsProtectiveHedge() {
+        val result=nominalCoverage(listOf(ExposureLeg("FUT","2026-12-29",1,150),
+            ExposureLeg("PE","2026-12-29",1,150,"SELL")),today)
+        assertNull(result.puts)
+        assertNull(result.uncovered)
+        assertTrue(result.notes.any { it.contains("withheld") })
+    }
+    @Test fun longCallWithholdsIncompleteBasketCoverage() {
+        val result=nominalCoverage(listOf(ExposureLeg("FUT","2026-12-29",1,150),
+            ExposureLeg("CE","2026-12-29",1,150)),today)
+        assertNull(result.futures)
+        assertTrue(result.notes.any { it.contains("calls") })
+    }
     @Test fun expiredPutWarnsRatherThanCountingAsCurrentProtection() {
         val result=nominalCoverage(listOf(ExposureLeg("FUT","2026-12-29",1,150),
             ExposureLeg("PE","2026-10-27",1,150)),today)

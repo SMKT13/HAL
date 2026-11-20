@@ -45,3 +45,11 @@ test('Room v2 sidecar is previewed read-only with native BUY/SELL labeling',()=>
  A.match(ui,/RoomReadOnlyPreview\.read\(context\)/);
  A.match(ui,/Short put/);A.match(ui,/Short call/);
 });
+
+test('short puts and calls never inflate protective hedge coverage',()=>{
+ const risk=read('app/src/main/java/in/smkt/haldesk/NativeCoverage.kt');
+ const ui=read('app/src/main/java/in/smkt/haldesk/NativeTerminalActivity.kt');
+ A.match(risk,/it\.type == "PE" && it\.side == "BUY"/);
+ A.match(risk,/Basic protective-put coverage is withheld/);
+ A.match(ui,/ExposureLeg\(it.type, it.expiry, it.lots, it.lotSize, it.side\)/);
+});

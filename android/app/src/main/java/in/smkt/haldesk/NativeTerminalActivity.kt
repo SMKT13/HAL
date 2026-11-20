@@ -127,7 +127,7 @@ private fun readSnapshot(context: Context): Snapshot = try {
                     }
                 }
                 if (!state.loading && state.issue == null) {
-                    val c = nominalCoverage(state.legs.map { ExposureLeg(it.type, it.expiry, it.lots, it.lotSize) },
+                    val c = nominalCoverage(state.legs.map { ExposureLeg(it.type, it.expiry, it.lots, it.lotSize, it.side) },
                         LocalDate.now(ZoneId.of("Asia/Kolkata")))
                     Panel("Hedge coverage & expiry") {
                         Text("Futures shares: " + (c.futures?.toString() ?: "Unavailable"), color=muted)
