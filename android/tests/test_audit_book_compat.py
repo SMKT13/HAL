@@ -7,7 +7,7 @@ from pathlib import Path
 from audit_book_compat import audit_database
 
 def sample_document():
-    return {"version": 4, "legs": [{"id": "future-dec", "type": "FUT", "lots": 2, "lotSize": 150}], "journal": [{"id": "close-oct", "kind": "close"}]}
+    return {"version": 4, "legs": [{"id": "future-dec", "type": "FUT", "expiry": "2026-12-29", "entry": 4927.35, "lots": 2, "lotSize": 150}], "journal": [{"id": "close-oct", "kind": "close"}]}
 
 def fixture(path, version, corrupt=False, different=False, native=False, missing_room=False):
     db = sqlite3.connect(path)
