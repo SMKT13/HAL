@@ -33,3 +33,9 @@ Both Linux and Windows local release scripts now run `python -m unittest discove
 
 ## Migration rehearsal
 The independent tests/rehearse_room_v2.py tool audits an offline schema-1 database COPY in read-only mode and creates schema-2-like ledger mirror tables exclusively in SQLite memory. Its seven synthetic tests check original-book SHA-256, source version preservation, and position and journal row counts. Both platform build scripts now run both Python suites before Android packaging. This is not production Room migration and does not lift the signing block.
+
+## Continuation: non-destructive migration rehearsal and ledger preview
+- Added in-memory Room-v2 mirror rehearsal with seven synthetic Python tests (the original file is always opened read-only). Both Windows and Unix local build scripts run the compatibility audit and rehearsal test suites prior to packaging.
+- Added read-only Room v2 transaction ledger breakdown: recorded gross, fees and net in integer paise, with checked arithmetic and explicit unreconciled labels. Counts distinguish native ledger entries from mirrored journal/history entries. The app must not treat these totals as verified lifetime P&L or live valuations.
+- Added safe startup handling when the on-device SQLite database is unreadable or has an unsupported version. BookStore construction no longer throws for those cases; attempts to read or write fail closed, with instructions to preserve the original data.
+- The schema-v2 editor remains write-blocked. A full Android migration, build, native/Robolectric validation, device upgrade and original-key signing remain unverified. Release signing is intentionally blocked.
