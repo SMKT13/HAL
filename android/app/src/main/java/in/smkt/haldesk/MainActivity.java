@@ -144,7 +144,7 @@ public final class MainActivity extends Activity {
             final String mode=args.optString("mode"),question=args.optString("message");final JSONObject evidence=AiPolicy.sanitizeEvidence(args.optJSONObject("evidence"),mode);AiPolicy.prompt(mode,question,evidence.toString());final int current=aiGeneration.get();
             if(aiWorking.get()!=null)throw new Exception("The previous API request is still finishing.");
             if(consentDialog!=null&&consentDialog.isShowing())throw new Exception("Review or cancel the open sharing request first.");
-            ScrollView scroll=new ScrollView(this);TextView contents=text("Model: "+model+"\nQuestion: "+question+"\n\nExact evidence sent to Google:\n"+evidence.toString(2));contents.setTextIsSelectable(true);contents.setPadding(dp(20),dp(8),dp(20),dp(16));scroll.addView(contents);
+            ScrollView scroll=new ScrollView(this);TextView contents=text("Model: "+model+("deliberate".equals(mode)?" · 6 sequential AI requests":" · 1 AI request")+"\nQuestion: "+question+"\n\nExact evidence sent to Google:\n"+evidence.toString(2));contents.setTextIsSelectable(true);contents.setPadding(dp(20),dp(8),dp(20),dp(16));scroll.addView(contents);
             activeAiId=id;consentDialog=new AlertDialog.Builder(this).setTitle("Send this evidence to Gemini?").setView(scroll).setPositiveButton("Send to Gemini",(d,w)->runAi(id,model,mode,question,evidence,current)).setNegativeButton("Cancel",(d,w)->send("ai_error",withId(id,"message","Review cancelled before any API call."))).setOnCancelListener(d->send("ai_error",withId(id,"message","Review cancelled before any API call."))).create();consentDialog.show();consentDialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         }catch(Exception e){send(config?"ai_config_error":"ai_error",withId(id,"message",e.getMessage()));}
     }
@@ -153,7 +153,14 @@ public final class MainActivity extends Activity {
         try{if(current!=aiGeneration.get()||!foreground)throw new Exception("Evidence changed or the app paused. Review the current book and retry.");
             final String key;try{key=secrets.get("gemini");}catch(Exception e){throw new Exception("Secure key storage unavailable. Unlock the phone and retry.");}if(!AiPolicy.validKey(key))throw new Exception("Enter a valid Gemini API key in AI settings.");
             final Object ticket=new Object();if(!aiWorking.compareAndSet(null,ticket))throw new Exception("The previous API request is still finishing.");final AiClient client=new AiClient();activeAi=client;activeAiId=id;
-            aiExecutor.execute(()->{try{if(current!=aiGeneration.get()||!foreground)return;JSONObject result=client.generate(key,model,mode,question,evidence);if(current==aiGeneration.get()&&foreground)sendAi("ai_result",withId(id,"data",result),current);}catch(Exception e){if(current==aiGeneration.get())sendAi("ai_error",withId(id,"message",e instanceof AiClient.Failure?e.getMessage():"The Gemini request could not finish. Check quota or connectivity and retry."),current);}finally{if(aiWorking.compareAndSet(ticket,null)){activeAiId="";activeAi=null;}}});
+            aiExecutor.execute(()->{try{if(current!=aiGeneration.get()||!foreground)return;JSONObject result;
+                    if("deliberate".equals(mode)){
+                        result=AgentDesk.run(client,key,model,question,evidence,(stage,label)->{
+                            JSONObject progress=object("stage",stage);
+                            try{progress.put("label",label);}catch(Exception ignored){}
+                            sendAi("ai_progress",withId(id,"data",progress),current);
+                        });
+                    }else result=client.generate(key,model,mode,question,evidence);if(current==aiGeneration.get()&&foreground)sendAi("ai_result",withId(id,"data",result),current);}catch(Exception e){if(current==aiGeneration.get())sendAi("ai_error",withId(id,"message",e instanceof AiClient.Failure?e.getMessage():"The Gemini request could not finish. Check quota or connectivity and retry."),current);}finally{if(aiWorking.compareAndSet(ticket,null)){activeAiId="";activeAi=null;}}});
         }catch(Exception e){send("ai_error",withId(id,"message",e.getMessage()));}
     }
     private void cancelAi(){AiClient client=activeAi;if(client!=null)client.cancel();}
