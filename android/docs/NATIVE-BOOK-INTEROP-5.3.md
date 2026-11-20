@@ -10,3 +10,5 @@ This is a development branch source integration based on the Library 5.1.24 Atla
 - This does not add Room/KSP dependencies or new schema-2 tables to legacy v1 databases.
 
 **Verification caveat:** A source integration and regression tests are not equivalent to a built, tested, signed upgrade. Java/Kotlin Android compilation and real-device Room-v2 interoperability have not been verified here. Do not sign or install this development build. The release-signing block remains.
+
+Native-only close records are immutable: an old-book replacement that omits a Room-native close does not delete it. When the mirror refers to the native close with inconsistent gross/fee amounts, the transaction rejects the change instead of rewriting the native ledger. This is covered by a new Robolectric source test, pending Android SDK execution.

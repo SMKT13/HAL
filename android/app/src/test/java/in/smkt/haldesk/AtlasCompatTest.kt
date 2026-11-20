@@ -66,6 +66,25 @@ class AtlasCompatTest {
             assertEquals(2,store.load(false).getJSONObject("book").getJSONArray("legs").getJSONObject(0).getInt("lots"))
         }
     }
+    @Test fun nativeCloseSurvivesLegacyReplacementThatOmitsIt() {
+        val c=setup()
+        BookStore(c).use { store->
+            val old=store.load(false).getJSONObject("book")
+            val db=store.writableDatabase
+            val original=old.getJSONArray("legs").getJSONObject(0)
+            val record=JSONObject().put("kind","close").put("date","2026-11-19")
+                .put("exit",5000).put("leg",JSONObject(original.toString()))
+            db.execSQL("INSERT INTO TradeLedgerEntity VALUES(?,?,?,?)",
+                arrayOf<Any>("native-close",record.toString(),1089750L,0L))
+            // Refresh serial after a native-only ledger insert.
+            store.load(false)
+            store.save(old.toString(),8)
+            db.rawQuery("SELECT gross,fees FROM TradeLedgerEntity WHERE id='native-close'",null).use {
+                assertTrue(it.moveToFirst())
+                assertEquals(1089750L,it.getLong(0));assertEquals(0L,it.getLong(1))
+            }
+        }
+    }
     @Test fun legacyVersionOneStillUsable(){
         val c=setup()
         c.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null).use {

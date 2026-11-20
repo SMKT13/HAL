@@ -162,15 +162,19 @@ object AtlasCompat {
         }
         val mirrored=project(book).associateBy { it.id }.toMutableMap()
         val obsolete=mutableListOf<String>()
-        db.rawQuery("SELECT id,payload FROM TradeLedgerEntity",null).use { cursor ->
+        db.rawQuery("SELECT id,payload,gross,fees FROM TradeLedgerEntity",null).use { cursor ->
             while(cursor.moveToNext()) {
                 val id=cursor.getString(0)
                 val p=JSONObject(cursor.getString(1))
                 when {
                     nativeClose(id,p)-> {
+                        // Native-only close entries are immutable evidence, not
+                        // stale mirror rows. Never delete or rewrite them when
+                        // importing a legacy snapshot that omits the close.
                         val match=mirrored.remove("journal/"+id)
-                        if(match==null)obsolete.add(id)
-                        else mirrored[id]=match.copy(id=id)
+                        if(match!=null &&
+                           (match.gross!=cursor.getLong(2)||match.fees!=cursor.getLong(3)))
+                            throw IllegalStateException("room_v2_native_ledger_conflict")
                     }
                     (id=="opening" || id.startsWith("history/") || id.startsWith("journal/")) && id !in mirrored->
                         obsolete.add(id)
