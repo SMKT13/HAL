@@ -1,9 +1,9 @@
-package in.smkt.haldesk
+package `in`.smkt.haldesk
 
 import android.database.sqlite.SQLiteDatabase
 import org.json.JSONArray
 import org.json.JSONObject
-import java.security.MessageDigest
+import android.database.Cursor
 
 /**
  * Library-5.1.24-style compatibility between legacy long FUT/PE book and
@@ -21,7 +21,7 @@ object AtlasCompat {
         require(actual==columns) { "room_v2_schema_layout_mismatch" }
     }
 
-    @JvmStatic fun track(db: SQLiteDatabase) {
+    @JvmStatic fun validateSchema(db: SQLiteDatabase) {
         for (name in arrayOf("FoPositionEntity","TradeLedgerEntity","PriceAlertEntity","CachedSnapshotEntity")) {
             require(db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", arrayOf(name))
                 .use { it.moveToFirst() }) { "room_v2_missing_tables" }
@@ -40,6 +40,11 @@ object AtlasCompat {
             if(it.moveToFirst())it.getString(0) else null
         }
         require(!identity.isNullOrBlank()){"room_v2_identity_missing"}
+        require(identity=="f53029bc4c6016b14152a2c56810b12d") { "room_v2_identity_mismatch" }
+    }
+
+    @JvmStatic fun track(db: SQLiteDatabase) {
+        validateSchema(db)
         db.execSQL("CREATE TABLE IF NOT EXISTS atlas_serial(id INTEGER PRIMARY KEY, generation INTEGER NOT NULL)")
         db.execSQL("INSERT OR IGNORE INTO atlas_serial VALUES(1,0)")
         for (table in listOf("FoPositionEntity","TradeLedgerEntity")) {
@@ -56,13 +61,6 @@ object AtlasCompat {
 
     private fun supported(p:JSONObject): Boolean =
         p.optString("type") in listOf("FUT","PE") && p.optString("side","BUY") == "BUY"
-    private fun mirroredRows(db:SQLiteDatabase):Set<String> {
-        val ids=mutableSetOf<String>()
-        db.rawQuery("SELECT id FROM TradeLedgerEntity",null).use { c ->
-            while(c.moveToNext())ids.add(c.getString(0))
-        }
-        return ids
-    }
     private fun nativeClose(id:String,p:JSONObject):Boolean =
         id!="opening" && !id.startsWith("journal/") && !id.startsWith("history/") &&
         p.optString("kind")=="close" && p.optJSONObject("leg")?.let(::supported)==true
@@ -71,12 +69,12 @@ object AtlasCompat {
         val a=optJSONArray(key) ?: return emptyList()
         return List(a.length()){a.getJSONObject(it)}
     }
-    private data class Ledger(val id:String,val payload:String,val gross:Long,val fees:Long)
+    internal data class Ledger(val id:String,val payload:String,val gross:Long,val fees:Long)
     private fun paise(value:Double):Long {
         require(value.isFinite() && kotlin.math.abs(value)<=1e13) { "invalid_ledger_amount" }
         return Math.round(value*100.0)
     }
-    private fun project(book:JSONObject):List<Ledger> {
+    internal fun project(book:JSONObject):List<Ledger> {
         val h=book.optJSONObject("history") ?: JSONObject()
         val legacy=book.optJSONObject("legacy") ?: JSONObject()
         val charges=h.optJSONObject("charges")
@@ -104,16 +102,59 @@ object AtlasCompat {
         return rows
     }
 
+    private fun sameValue(a:Any?, b:Any?):Boolean = when {
+        a is JSONObject && b is JSONObject -> a.length()==b.length() &&
+            a.keys().asSequence().all { b.has(it) && sameValue(a.get(it),b.get(it)) }
+        a is JSONArray && b is JSONArray -> a.length()==b.length() &&
+            (0 until a.length()).all { sameValue(a.get(it),b.get(it)) }
+        a is Number && b is Number -> a.toString().toBigDecimal().compareTo(b.toString().toBigDecimal())==0
+        else -> a==b
+    }
+
+    @JvmStatic fun checkOriginalLedger(db:SQLiteDatabase, original:JSONObject?) {
+        if(original!=null) {
+            val mirrors=mutableMapOf<String,Ledger>()
+            db.rawQuery("SELECT id,payload,gross,fees FROM TradeLedgerEntity",null).use { cursor ->
+                while(cursor.moveToNext()){
+                    check(cursor.getType(2)==Cursor.FIELD_TYPE_INTEGER && cursor.getType(3)==Cursor.FIELD_TYPE_INTEGER) {
+                        "room_v2_invalid_ledger"
+                    }
+                    val row=Ledger(cursor.getString(0),cursor.getString(1),cursor.getLong(2),cursor.getLong(3))
+                    mirrors[row.id]=row
+                }
+            }
+            for(row in project(original)) {
+                val matching=mirrors[row.id]
+                    ?: if(row.id.startsWith("journal/"))mirrors[row.id.removePrefix("journal/")] else null
+                if(matching==null) {
+                    when {
+                        row.id.startsWith("history/")->throw IllegalStateException("room_v2_history_mismatch")
+                        row.id=="opening"->throw IllegalStateException("room_v2_opening_mismatch")
+                        row.id.startsWith("journal/")->throw IllegalStateException("room_v2_journal_mismatch")
+                    }
+                } else if(matching.gross!=row.gross || matching.fees!=row.fees) {
+                    // Conflicting realised amounts or charges must never be
+                    // silently overwritten by either ledger implementation.
+                    throw IllegalStateException("room_v2_mirror_amount_mismatch")
+                } else if(matching.id==row.id && !sameValue(JSONObject(row.payload),JSONObject(matching.payload))) {
+                    throw IllegalStateException("room_v2_mirror_payload_mismatch")
+                }
+            }
+        }
+    }
+
     /**
      * Reconcile the supported subset. A snapshot does not misclassify native-only
      * short positions or calls as long protective exposure.
      */
     @JvmStatic fun visible(db:SQLiteDatabase,original:JSONObject?):JSONObject? {
         val legs=JSONArray()
+        val accountedPositions=mutableSetOf<String>()
         var hasNativeOnlyExposure=false
         db.rawQuery("SELECT id,payload FROM FoPositionEntity ORDER BY rowid",null).use { cursor ->
             while(cursor.moveToNext()) {
                 val p=JSONObject(cursor.getString(1))
+                accountedPositions.add(cursor.getString(0))
                 if(supported(p))legs.put(p.put("id",cursor.getString(0)))
                 else hasNativeOnlyExposure=true
             }
@@ -127,12 +168,15 @@ object AtlasCompat {
                 val id=cursor.getString(0)
                 val p=JSONObject(cursor.getString(1))
                 val fee=cursor.getLong(2)
+                if(id.startsWith("journal/") || id.startsWith("history/"))
+                    check(id.substringAfter('/')==p.getString("id")) { "room_v2_record_id_mismatch" }
                 when {
                     id=="opening"->openingPresent=true
                     id.startsWith("journal/")->journal.put(p)
                     id.startsWith("history/")->historic.put(p)
                     nativeClose(id,p)-> {
                         val leg=p.getJSONObject("leg")
+                        accountedPositions.add(leg.optString("id"))
                         if(leg.optString("id").isBlank())leg.put("id",id)
                         journal.put(p.put("id",id).put("fees",fee/100.0))
                     }
@@ -142,31 +186,16 @@ object AtlasCompat {
         }
         if(hasNativeOnlyExposure||hasNativeOnlyLedger)
             throw IllegalStateException("room_v2_native_exposure_requires_review")
+        require(original?.rows("legs").orEmpty().all { it.getString("id") in accountedPositions }) {
+            "room_v2_position_mismatch"
+        }
+        if(openingPresent && (original==null || project(original).none { it.id=="opening" }))
+            throw IllegalStateException("room_v2_opening_mismatch")
         if(original==null&&legs.length()==0&&journal.length()==0&&historic.length()==0)return null
         if(historic.length()>0 && original?.optJSONObject("history")==null)
             throw IllegalStateException("room_v2_history_mismatch")
         // Missing source rows must never silently erase history or lifetime charges.
-        if(original!=null) {
-            val mirrors=mutableMapOf<String,Pair<Long,Long>>()
-            db.rawQuery("SELECT id,gross,fees FROM TradeLedgerEntity",null).use { cursor ->
-                while(cursor.moveToNext())mirrors[cursor.getString(0)]=cursor.getLong(1) to cursor.getLong(2)
-            }
-            for(row in project(original)) {
-                val matching=mirrors[row.id]
-                    ?: if(row.id.startsWith("journal/"))mirrors[row.id.removePrefix("journal/")] else null
-                if(matching==null) {
-                    when {
-                        row.id.startsWith("history/")->throw IllegalStateException("room_v2_history_mismatch")
-                        row.id=="opening"->throw IllegalStateException("room_v2_opening_mismatch")
-                        row.id.startsWith("journal/")->throw IllegalStateException("room_v2_journal_mismatch")
-                    }
-                } else if(matching.first!=row.gross || matching.second!=row.fees) {
-                    // Conflicting realised amounts or charges must never be
-                    // silently overwritten by either ledger implementation.
-                    throw IllegalStateException("room_v2_mirror_amount_mismatch")
-                }
-            }
-        }
+        checkOriginalLedger(db,original)
         val book=original?:JSONObject().put("version",4)
         if(!openingPresent && original!=null && project(original).any { it.id=="opening" }) {
             throw IllegalStateException("room_v2_opening_mismatch")
@@ -179,6 +208,7 @@ object AtlasCompat {
                 history.put("excludedJournalIds",JSONArray((0 until old.length()).map { old.getString(it) }.filter{it in ids}))
             }
         }
+        checkOriginalLedger(db,book)
         return book
     }
 
@@ -228,7 +258,7 @@ object AtlasCompat {
         obsolete.forEach { db.delete("TradeLedgerEntity","id=?",arrayOf(it)) }
         mirrored.values.forEach { row ->
             db.execSQL("INSERT OR REPLACE INTO TradeLedgerEntity(id,payload,gross,fees) VALUES(?,?,?,?)",
-                arrayOf(row.id,row.payload,row.gross,row.fees))
+                arrayOf<Any>(row.id,row.payload,row.gross,row.fees))
         }
     }
 }

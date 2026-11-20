@@ -286,8 +286,11 @@ public final class MainActivity extends Activity {
             startActivity(new Intent(Intent.ACTION_VIEW,uri));
         }catch(Exception e){send("file_error",object("message","Could not open this HTTPS source link."));}
     }
+    private static final int NATIVE_TERMINAL_REQUEST = 530;
     @Override protected void onActivityResult(int request,int result,Intent data){
-        super.onActivityResult(request,result,data);if(result!=RESULT_OK||data==null||data.getData()==null){if(request==41)pendingExport=null;return;}
+        super.onActivityResult(request,result,data);
+        if(request==NATIVE_TERMINAL_REQUEST){if(!books.requiresReopen(this) && web!=null)web.reload();return;}
+        if(result!=RESULT_OK||data==null||data.getData()==null){if(request==41)pendingExport=null;return;}
         if(request==41){try{if(pendingExport==null)throw new Exception();try(OutputStream out=getContentResolver().openOutputStream(data.getData())){if(out==null)throw new Exception();out.write(pendingExport);}send("file_saved",new JSONObject());}catch(Exception e){send("file_error",object("message","The file could not be saved."));}finally{pendingExport=null;}}
         if (request == 43) {
             final Uri uri = data.getData();
@@ -373,7 +376,7 @@ public final class MainActivity extends Activity {
             }
         });
     }
-    private String storeFailure(Exception e){JSONObject out=object("ok",false);try{String code=e.getMessage();if(code==null||!code.matches("[a-z_]+"))code="storage_unavailable";out.put("code",code);out.put("revision",books.currentRevision());out.put("message",code!=null && code.startsWith("room_v2_")?"The installed Room tradebook needs a compatibility review. Your recorded positions, history and native ledger were not replaced. Review the read-only native terminal before editing.":"database_unreadable_or_unsupported".equals(code)?"The saved database version is unsupported or the file is unreadable. It was not changed. Keep your original backup and do not uninstall the app.":"Records were not replaced. Reload the book or review recovery.");}catch(Exception ignored){}return out.toString();}
+    private String storeFailure(Exception e){JSONObject out=object("ok",false);try{String code=e.getMessage();if(code==null||!code.matches("[a-z][a-z0-9_]{0,79}"))code="storage_unavailable";out.put("code",code);out.put("revision",books.currentRevision());out.put("message",code!=null && code.startsWith("room_v2_")?"The installed Room tradebook needs a compatibility review. Your recorded positions, history and native ledger were not replaced. Review the read-only native terminal before editing.":"database_unreadable_or_unsupported".equals(code)?"The saved database version is unsupported or the file is unreadable. It was not changed. Keep your original backup and do not uninstall the app.":"Records were not replaced. Reload the book or review recovery.");}catch(Exception ignored){}return out.toString();}
     private final class Bridge {
         @JavascriptInterface public String loadBook(){try{return books.load(false).toString();}catch(Exception e){return storeFailure(e);}}
         @JavascriptInterface public String restorePreviousBook(long revision){try{JSONObject out=books.restorePrevious(revision);invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");return out.toString();}catch(Exception e){return storeFailure(e);}}
@@ -387,7 +390,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void minimize(){runOnUiThread(()->moveTaskToBack(true));}
         @JavascriptInterface public void ready(){runOnUiThread(()->{pageReady=true;status();});}
         @JavascriptInterface public void settings(){runOnUiThread(()->showSettings());}
-        @JavascriptInterface public void terminal(){runOnUiThread(()->startActivity(new Intent(MainActivity.this,NativeTerminalActivity.class)));}
+        @JavascriptInterface public void terminal(){runOnUiThread(()->startActivityForResult(new Intent(MainActivity.this,NativeTerminalActivity.class), NATIVE_TERMINAL_REQUEST));}
         @JavascriptInterface public void refresh(String expiry){MainActivity.this.refresh(expiry);}
         @JavascriptInterface public void nseRefresh(){MainActivity.this.refreshNse();}
         @JavascriptInterface public void research(String request){MainActivity.this.research(request);}
@@ -436,7 +439,7 @@ public final class MainActivity extends Activity {
         });}
     }
     @Override protected void onPause(){backgroundAt=android.os.SystemClock.elapsedRealtime();foreground=false;generation.incrementAndGet();invalidateAi("AI review cancelled when the app left the foreground.");client.cancel();cancelOffline();stopStream();super.onPause();if(web!=null){web.onPause();web.pauseTimers();}}
-    @Override protected void onResume(){super.onResume();long awayMs=backgroundAt<0?0:Math.max(0,android.os.SystemClock.elapsedRealtime()-backgroundAt);backgroundAt=-1;foreground=true;lastRequest=0;lastNseRequest=0;researchRequests.clear();if(web!=null){web.onResume();web.resumeTimers();if(pageReady){JSONObject resumed=object("state","resumed");try{resumed.put("awayMs",awayMs);}catch(Exception ignored){}send("lifecycle",resumed);offlineStatus();}}}
+    @Override protected void onResume(){super.onResume();if(books!=null && books.requiresReopen(this)){recreate();return;}long awayMs=backgroundAt<0?0:Math.max(0,android.os.SystemClock.elapsedRealtime()-backgroundAt);backgroundAt=-1;foreground=true;lastRequest=0;lastNseRequest=0;researchRequests.clear();if(web!=null){web.onResume();web.resumeTimers();if(pageReady){JSONObject resumed=object("state","resumed");try{resumed.put("awayMs",awayMs);}catch(Exception ignored){}send("lifecycle",resumed);offlineStatus();}}}
     @Override protected void onDestroy(){foreground=false;client.cancel();cancelOffline();streamGeneration.incrementAndGet();stream.shutdown();generation.incrementAndGet();invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");executor.shutdownNow();researchExecutor.shutdownNow();nseExecutor.shutdownNow();aiExecutor.shutdownNow();offlineExecutor.shutdownNow();if (offlineFinbert!=null)offlineFinbert.close();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}if(books!=null)books.close();super.onDestroy();}
     @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp && window.HALApp.back()",null);else super.onBackPressed();}
 }

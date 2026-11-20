@@ -23,6 +23,10 @@ public class RoomReadOnlyPreviewTest {
   db.execSQL("CREATE TABLE book (id INTEGER PRIMARY KEY,revision INTEGER,payload TEXT,digest TEXT,updated_at INTEGER)");
   db.execSQL("CREATE TABLE FoPositionEntity (id TEXT NOT NULL PRIMARY KEY,payload TEXT NOT NULL)");
   db.execSQL("CREATE TABLE TradeLedgerEntity (id TEXT NOT NULL PRIMARY KEY,payload TEXT NOT NULL,gross INTEGER NOT NULL,fees INTEGER NOT NULL)");
+  db.execSQL("CREATE TABLE PriceAlertEntity(id TEXT NOT NULL PRIMARY KEY,kind TEXT NOT NULL,threshold REAL NOT NULL,enabled INTEGER NOT NULL)");
+  db.execSQL("CREATE TABLE CachedSnapshotEntity(id TEXT NOT NULL PRIMARY KEY,payload TEXT NOT NULL,at INTEGER NOT NULL)");
+  db.execSQL("CREATE TABLE room_master_table(id INTEGER PRIMARY KEY,identity_hash TEXT)");
+  db.execSQL("INSERT INTO room_master_table VALUES(42,'f53029bc4c6016b14152a2c56810b12d')");
   String book="{\"version\":4,\"legs\":[],\"journal\":[]}";
   byte[] digest=MessageDigest.getInstance("SHA-256").digest(book.getBytes(StandardCharsets.UTF_8));
   StringBuilder hash=new StringBuilder();for(byte b:digest)hash.append(String.format("%02x",b&255));

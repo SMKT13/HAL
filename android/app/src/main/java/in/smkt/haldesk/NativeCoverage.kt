@@ -1,4 +1,4 @@
-package in.smkt.haldesk
+package `in`.smkt.haldesk
 
 import java.time.LocalDate
 
@@ -33,7 +33,7 @@ fun nominalCoverage(legs: List<ExposureLeg>, today: LocalDate): NominalCoverage 
     if (f > 0 && p == 0L) notes += "No recorded put coverage for the futures position."
     if (p > f) notes += "Put contracts exceed futures share quantity; review intended hedge."
     val dates = all.associateWith { runCatching { LocalDate.parse(it.expiry) }.getOrNull() }
-    if (dates.values.any { it == null }) notes += "An expiry is missing or invalid; duration protection cannot be confirmed."
+    if (dates.values.any { it == null }) return NominalCoverage(null, null, null, listOf("An expiry is missing or invalid; reconcile the contracts."))
     val maxFuture = futures.mapNotNull { dates[it] }.maxOrNull()
     val minPut = puts.mapNotNull { dates[it] }.minOrNull()
     if (maxFuture != null && minPut != null && minPut.isBefore(maxFuture)) {

@@ -1,4 +1,4 @@
-package in.smkt.haldesk
+package `in`.smkt.haldesk
 
 import android.content.Context
 import android.os.Bundle
@@ -29,13 +29,14 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** Read-only Compose terminal based on the Library design.
- * Retains schema-1 BookStore as the sole authoritative book. */
+/** Read-only book review and entry point for the native Room tradebook. */
 class NativeTerminalActivity : ComponentActivity() {
+    private var visits by mutableIntStateOf(0)
+    override fun onResume() { super.onResume(); visits++ }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        setContent { TerminalScreen(this, onClose = { finish() }) }
+        setContent { key(visits) { TerminalScreen(this, onClose = { finish() }) } }
     }
 }
 private val dark = Color(0xFF0A1124)
@@ -44,7 +45,7 @@ private val edge = Color(0xFF2C4563)
 private val cyan = Color(0xFF68E7E8)
 private val muted = Color(0xFFB1C4DA)
 private data class Leg(val type: String, val expiry: String, val lots: Int?, val lotSize: Int?, val entry: Double?, val strike: Double?, val side: String = "BUY")
-private data class Snapshot(val loading: Boolean = false, val issue: String? = null, val savedAt: Long? = null, val legs: List<Leg> = emptyList(), val ledgerGross: Long? = null, val ledgerFees: Long? = null, val ledgerNet: Long? = null, val ledgerRows: Long? = null, val nativeRows: Long? = null)
+private data class Snapshot(val readable: Boolean = false, val ledgerReconciled:Boolean = false, val loading: Boolean = false, val issue: String? = null, val savedAt: Long? = null, val legs: List<Leg> = emptyList(), val ledgerGross: Long? = null, val ledgerFees: Long? = null, val ledgerNet: Long? = null, val ledgerRows: Long? = null, val nativeRows: Long? = null)
 private fun finite(v: Double): Double? = v.takeIf { it.isFinite() && it >= 0.0 }
 private fun money(v: Double?): String = v?.let { NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(it) } ?: "Not recorded"
 private fun paiseMoney(value: Long?): String = value?.let { NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(java.math.BigDecimal.valueOf(it, 2)) } ?: "Not reconciled"
@@ -61,7 +62,7 @@ private fun readSnapshot(context: Context): Snapshot = try {
                 finite(row.getDouble("entry")),finite(row.optDouble("strike",Double.NaN)),
                 row.getString("side"))
         }
-        Snapshot(issue = room.getString("message") + " · Native-only: " +
+        Snapshot(readable=true,ledgerReconciled=room.getBoolean("ledgerReconciled"),issue = room.getString("message") + " · Native-only: " +
             room.getInt("nativeOnly") + " · Changed: " + room.getInt("contractDifferences") +
             " · Legacy-only: " + room.getInt("legacyOnly") +
             " · Ledger entries retained: " + room.getLong("ledgerRows"),
@@ -69,7 +70,7 @@ private fun readSnapshot(context: Context): Snapshot = try {
     } else BookStore(context).use { store ->
         val original = store.load(false)
         val book = original.optJSONObject("book")
-        if (book == null) Snapshot(issue = "No saved book found. Nothing has been changed.")
+        if (book == null) Snapshot(readable=true,issue = "No saved book found. Nothing has been changed.")
         else {
             val arr = book.optJSONArray("legs")
             val legs = if (arr == null) emptyList() else (0 until arr.length()).mapNotNull { i ->
@@ -78,15 +79,16 @@ private fun readSnapshot(context: Context): Snapshot = try {
                     row.optInt("lots",0).takeIf { it > 0 }, row.optInt("lotSize",0).takeIf { it > 0 },
                     finite(row.optDouble("entry",Double.NaN)),finite(row.optDouble("strike",Double.NaN)))
             }
-            Snapshot(savedAt = original.optLong("updatedAt",0).takeIf { it > 0 },legs = legs)
+            Snapshot(readable=true,savedAt = original.optLong("updatedAt",0).takeIf { it > 0 },legs = legs)
         }
     }
 } catch (_: Exception) {
     Snapshot(issue = "Saved book unavailable or failed validation. Nothing was changed. Use the existing recovery screen.")
 }
 @Composable private fun TerminalScreen(context: Context, onClose: () -> Unit) {
-    val state by produceState(initialValue = Snapshot(loading = true),key1 = context) {
-        value = withContext(Dispatchers.IO) { readSnapshot(context) }
+    var state by remember(context) { mutableStateOf(Snapshot(loading = true)) }
+    LaunchedEffect(context) {
+        state = withContext(Dispatchers.IO) { readSnapshot(context) }
     }
     MaterialTheme(colorScheme = darkColorScheme(primary = cyan,background = dark,surface = panel,onSurface = Color.White)) {
         Scaffold(containerColor = dark,topBar = {
@@ -129,7 +131,7 @@ private fun readSnapshot(context: Context): Snapshot = try {
                         Text("Last saved: "+time,color=muted,fontSize=11.sp)
                     }
                 }
-                if (!state.loading && state.issue == null) {
+                if (!state.loading && (state.issue == null || state.ledgerRows != null)) {
                     val c = nominalCoverage(state.legs.map { ExposureLeg(it.type, it.expiry, it.lots, it.lotSize, it.side) },
                         LocalDate.now(ZoneId.of("Asia/Kolkata")))
                     Panel("Hedge coverage & expiry") {
@@ -155,8 +157,11 @@ private fun readSnapshot(context: Context): Snapshot = try {
                     Text("This preview does not substitute the HAL spot price for futures or option marks.",color=cyan,fontSize=12.sp)
                     Button(onClick=onClose){Text("Return to full HAL analysis")}
                 }
+                if (state.readable && (state.ledgerRows == null || state.ledgerReconciled)) {
+                    TradebookLauncher(context, legacy=state.ledgerRows==null)
+                }
                 PriceAlertsPanel(context)
-                Text("Read-only broker integration · no orders · no portfolio database writes.",color=muted,fontSize=11.sp)
+                Text("Broker access is read-only. Portfolio edits are saved on this device.",color=muted,fontSize=11.sp)
             }
         }
     }
@@ -202,5 +207,28 @@ private fun readSnapshot(context: Context): Snapshot = try {
             Text(title,fontSize=17.sp,fontWeight=FontWeight.Bold)
             content()
         }
+    }
+}
+
+@Composable private fun TradebookLauncher(context:Context, legacy:Boolean) {
+    var opening by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    if(opening) LaunchedEffect(Unit) {
+        try {
+            withContext(Dispatchers.IO) {
+                val db=TradebookDb.get(context)
+                db.openHelper.writableDatabase
+                val checked=requireNotNull(RoomReadOnlyPreview.read(context))
+                require(checked.getBoolean("ledgerReconciled"))
+            }
+            context.startActivity(android.content.Intent(context,TradebookActivity::class.java))
+        } catch (e:Exception) {
+            message="Could not open the verified native book. Return to the full desk to review your saved data."
+        } finally { opening=false }
+    }
+    Panel("Native tradebook") {
+        if(legacy) Text("Opening the native tradebook upgrades this database to Room v2 and keeps the original book and recovery records.")
+        Button(enabled=!opening,onClick={opening=true}) { Text(if(opening) "Opening…" else "Open native tradebook") }
+        if(message.isNotEmpty()) Text(message)
     }
 }

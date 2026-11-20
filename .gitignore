@@ -26,3 +26,6 @@ qa/
 **/signing/
 *.p12
 *.pfx
+
+# Kotlin Gradle session metadata
+.kotlin/

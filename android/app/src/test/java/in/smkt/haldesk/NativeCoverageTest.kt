@@ -1,4 +1,4 @@
-package in.smkt.haldesk
+package `in`.smkt.haldesk
 
 import org.junit.Assert.*
 import org.junit.Test

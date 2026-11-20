@@ -14,7 +14,7 @@ final class BookStore extends SQLiteOpenHelper {
   * Existing Room v2 data must not be silently downgraded or reinterpreted
   * by this legacy-only implementation.
   */
- private static int schemaOf(Context context) {
+ static int schemaOf(Context context) {
   java.io.File file=context.getDatabasePath("haldesk_book.db");
   if(!file.exists())return 1;
   try(SQLiteDatabase db=SQLiteDatabase.openDatabase(file.getPath(),null,SQLiteDatabase.OPEN_READONLY)){
@@ -52,14 +52,15 @@ final class BookStore extends SQLiteOpenHelper {
  @Override public void onUpgrade(SQLiteDatabase db,int before,int after){throw new IllegalStateException("Explicit database migration required");}
  synchronized JSONObject load(boolean previous)throws Exception{
   SQLiteDatabase db=getReadableDatabase();
-  if(schemaAtOpen!=2)return read(db,previous?"recovery":"book");
   db.beginTransaction();
   try{
+   if(!previous)seen=-1;
    JSONObject out=read(db,previous?"recovery":"book");
-   if(!previous){
-    seen=AtlasCompat.serial(db);
+   if(db.getVersion()!=schemaAtOpen)throw new IllegalStateException("revision_conflict_reload_required");
+   if(schemaAtOpen==2 && !previous){
     JSONObject visible=AtlasCompat.visible(db,out.optJSONObject("book"));
     if(visible!=null)out.put("book",BookValidator.parse(visible.toString()));
+    seen=AtlasCompat.serial(db);
    }
    db.setTransactionSuccessful();
    return out;
@@ -72,14 +73,15 @@ final class BookStore extends SQLiteOpenHelper {
  }
  synchronized JSONObject save(String payload,long expected)throws Exception{
   JSONObject valid=BookValidator.parse(payload);if(expected<0)throw new Exception("invalid_revision");SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
-  try{if(schemaAtOpen==2 && (seen<0 || seen!=AtlasCompat.serial(db)))throw new Exception("revision_conflict_reload_required");JSONObject old=read(db,"book");long rev=old.getLong("revision");if(rev!=expected)throw new Exception("revision_conflict_reload_required");if(!old.isNull("book"))db.execSQL("INSERT OR REPLACE INTO recovery SELECT * FROM book WHERE id=1");
+  try{if(db.getVersion()!=schemaAtOpen)throw new Exception("revision_conflict_reload_required");if(schemaAtOpen==2 && (seen<0 || seen!=AtlasCompat.serial(db)))throw new Exception("revision_conflict_reload_required");JSONObject old=read(db,"book");long rev=old.getLong("revision");if(rev!=expected)throw new Exception("revision_conflict_reload_required");if(!old.isNull("book"))db.execSQL("INSERT OR REPLACE INTO recovery SELECT * FROM book WHERE id=1");
    long next=rev+1,now=System.currentTimeMillis();valid.put("revision",next);String encoded=valid.toString();ContentValues v=new ContentValues();v.put("id",1);v.put("revision",next);v.put("payload",encoded);v.put("digest",digest(encoded));v.put("updated_at",now);if(db.insertWithOnConflict("book",null,v,SQLiteDatabase.CONFLICT_REPLACE)==-1)throw new Exception("book_save_failed");if(schemaAtOpen==2){AtlasCompat.write(db,valid);seen=AtlasCompat.serial(db);}db.setTransactionSuccessful();return new JSONObject().put("ok",true).put("revision",next).put("updatedAt",now);
   }finally{db.endTransaction();}
  }
+ boolean requiresReopen(Context context){return schemaAtOpen!=schemaOf(context);}
  synchronized long currentRevision(){try(Cursor c=getReadableDatabase().rawQuery("SELECT revision FROM book WHERE id=1",null)){return c.moveToFirst()?c.getLong(0):0;}catch(Exception e){return -1;}}
  synchronized JSONObject restorePrevious(long expected)throws Exception{
   SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
-  try{long current=currentRevision();if(current<0||current!=expected)throw new Exception("revision_conflict_reload_required");JSONObject old=read(db,"recovery");if(old.isNull("book"))throw new Exception("no_recovery_copy");JSONObject valid=BookValidator.parse(old.getJSONObject("book").toString());
+  try{if(db.getVersion()!=schemaAtOpen)throw new Exception("revision_conflict_reload_required");long current=currentRevision();if(current<0||current!=expected)throw new Exception("revision_conflict_reload_required");JSONObject old=read(db,"recovery");if(old.isNull("book"))throw new Exception("no_recovery_copy");JSONObject valid=BookValidator.parse(old.getJSONObject("book").toString());
    db.execSQL("CREATE TABLE IF NOT EXISTS quarantine (id INTEGER PRIMARY KEY AUTOINCREMENT,revision INTEGER NOT NULL,payload TEXT NOT NULL,digest TEXT NOT NULL,updated_at INTEGER NOT NULL)");
    db.execSQL("INSERT INTO quarantine(revision,payload,digest,updated_at) SELECT revision,payload,digest,updated_at FROM book WHERE id=1");
    JSONObject risk=valid.optJSONObject("riskProfile");if(risk!=null){risk.put("confirmedAt",JSONObject.NULL);risk.put("confirmedBook",JSONObject.NULL);}

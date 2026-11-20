@@ -4,6 +4,7 @@ from pathlib import Path
 
 p = argparse.ArgumentParser()
 p.add_argument('apk', type=Path)
+p.add_argument('--unsigned', action='store_true', help='Verify an unsigned development APK')
 p.add_argument('--previous', required=True, type=Path)
 p.add_argument('--build-tools', required=True, type=Path)
 a = p.parse_args()
@@ -19,14 +20,30 @@ assert package == oldpackage == 'in.smkt.haldesk'
 assert int(code) == 59 and int(code)>int(oldcode) and version=='5.3.0'
 assert "application-label:'HAL Atlas'" in new
 assert "sdkVersion:'26'" in new and "targetSdkVersion:'35'" in new
-assert re.findall(r"uses-permission: name='([^']+)'",new)==['android.permission.INTERNET']
-sig = run('apksigner','verify','--verbose','--print-certs',a.apk)
+expected_permissions = {
+    'android.permission.INTERNET', 'android.permission.POST_NOTIFICATIONS',
+    'android.permission.WAKE_LOCK', 'android.permission.ACCESS_NETWORK_STATE',
+    'android.permission.RECEIVE_BOOT_COMPLETED', 'android.permission.FOREGROUND_SERVICE',
+    'in.smkt.haldesk.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION',
+}
+assert set(re.findall(r"uses-permission: name='([^']+)'",new)) == expected_permissions
 oldsig = run('apksigner','verify','--verbose','--print-certs',a.previous)
 fingerprint = lambda s: re.search(r'Signer #1 certificate SHA-256 digest: (\w+)',s).group(1)
-cert = fingerprint(sig)
-assert cert == fingerprint(oldsig) == 'a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382'
-assert 'Verified using v2 scheme (APK Signature Scheme v2): true' in sig
-assert 'Verified using v3 scheme (APK Signature Scheme v3): true' in sig
+previous_cert = fingerprint(oldsig)
+assert previous_cert == 'a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382'
+cert = None
+schemes = []
+if a.unsigned:
+    check = subprocess.run([str(a.build_tools/'apksigner'),'verify',str(a.apk)],
+                           text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    assert check.returncode != 0 and 'Missing META-INF/MANIFEST.MF' in check.stdout, check.stdout
+else:
+    sig = run('apksigner','verify','--verbose','--print-certs',a.apk)
+    cert = fingerprint(sig)
+    assert cert == previous_cert
+    for scheme in ('v2','v3'):
+        assert f'Verified using {scheme} scheme (APK Signature Scheme {scheme}): true' in sig
+        schemes.append(scheme)
 run('zipalign','-c','-P','16','4',a.apk)
 alignment = {}
 with zipfile.ZipFile(a.apk) as z:
@@ -43,4 +60,4 @@ with zipfile.ZipFile(a.apk) as z:
             assert values and all(n>=16384 for n in values), (name,values)
             alignment[name]=values
 assert alignment
-print(json.dumps({'applicationId':package,'versionName':version,'versionCode':int(code),'previousVersion':oldversion,'previousCode':int(oldcode),'certificateSHA256':cert,'schemes':['v2','v3'],'zipAlignment':'passed 16 KB','nativeLoadSegmentAlignments':alignment,'testedAssetsMatch':True,'sizeBytes':a.apk.stat().st_size,'apkSHA256':hashlib.sha256(a.apk.read_bytes()).hexdigest()},indent=2))
+print(json.dumps({'applicationId':package,'versionName':version,'versionCode':int(code),'previousVersion':oldversion,'previousCode':int(oldcode),'certificateSHA256':cert,'previousCertificateSHA256':previous_cert,'schemes':schemes,'zipAlignment':'passed 16 KB','nativeLoadSegmentAlignments':alignment,'testedAssetsMatch':True,'sizeBytes':a.apk.stat().st_size,'apkSHA256':hashlib.sha256(a.apk.read_bytes()).hexdigest()},indent=2))

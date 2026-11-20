@@ -1,4 +1,4 @@
-package in.smkt.haldesk
+package `in`.smkt.haldesk
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
@@ -30,7 +30,7 @@ class AtlasCompatTest {
             db.execSQL("CREATE TABLE PriceAlertEntity(id TEXT NOT NULL PRIMARY KEY,kind TEXT NOT NULL,threshold REAL NOT NULL,enabled INTEGER NOT NULL)")
             db.execSQL("CREATE TABLE CachedSnapshotEntity(id TEXT NOT NULL PRIMARY KEY,payload TEXT NOT NULL,at INTEGER NOT NULL)")
             db.execSQL("CREATE TABLE room_master_table(id INTEGER PRIMARY KEY,identity_hash TEXT)")
-            db.execSQL("INSERT INTO room_master_table VALUES(42,'fixture-valid-hash')")
+            db.execSQL("INSERT INTO room_master_table VALUES(42,'f53029bc4c6016b14152a2c56810b12d')")
             db.execSQL("INSERT INTO book VALUES(1,8,?,?,1)",arrayOf(raw,hash))
             db.execSQL("INSERT INTO FoPositionEntity VALUES(?,?)",arrayOf("f",JSONObject(raw).getJSONArray("legs").getJSONObject(0).toString()))
             val call=JSONObject().put("id","c").put("type","CE").put("side","SELL").put("expiry","2026-12-29")
@@ -153,6 +153,14 @@ class AtlasCompatTest {
                 assertTrue(it.moveToFirst())
                 assertEquals(1089750L,it.getLong(0));assertEquals(0L,it.getLong(1))
             }
+        }
+    }
+    @Test fun failedLoadCannotAuthorizeSavingAnEmptyBook(){
+        val c=setup()
+        BookStore(c).use { store ->
+            assertThrows(Exception::class.java){store.load(false)}
+            assertThrows(Exception::class.java){store.save("""{"version":4,"legs":[],"journal":[]}""",8)}
+            assertEquals(8L,store.currentRevision())
         }
     }
     @Test fun legacyVersionOneStillUsable(){

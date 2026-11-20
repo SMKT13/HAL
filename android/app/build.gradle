@@ -1,4 +1,4 @@
-plugins { id 'com.android.application'; id 'com.google.protobuf'; id 'org.jetbrains.kotlin.android'; id 'org.jetbrains.kotlin.plugin.compose' }
+plugins { id 'com.google.devtools.ksp'; id 'com.android.application'; id 'com.google.protobuf'; id 'org.jetbrains.kotlin.android'; id 'org.jetbrains.kotlin.plugin.compose' }
 android {
     namespace 'in.smkt.haldesk'
     compileSdk 35
@@ -21,7 +21,7 @@ android {
         unitTests.includeAndroidResources = true
         unitTests.all {
             systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
-            ['https.proxyHost','https.proxyPort','http.proxyHost','http.proxyPort'].each { name ->
+            ['https.proxyHost','https.proxyPort','http.proxyHost','http.proxyPort','javax.net.ssl.trustStore'].each { name ->
                 if (System.getProperty(name)) systemProperty name, System.getProperty(name)
             }
         }
@@ -39,10 +39,18 @@ protobuf {
     }
 }
 dependencies {
+    implementation 'androidx.compose.material:material-icons-extended'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7'
+    implementation 'androidx.room:room-ktx:2.6.1'
+    ksp 'androidx.room:room-compiler:2.6.1'
+    implementation 'androidx.work:work-runtime-ktx:2.10.0'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'com.google.code.gson:gson:2.11.0'
     implementation platform('androidx.compose:compose-bom:2025.02.00')
     implementation 'androidx.activity:activity-compose:1.10.1'
     implementation 'androidx.compose.material3:material3'
     implementation 'com.google.protobuf:protobuf-javalite:3.25.5'
+    testImplementation 'androidx.compose.ui:ui-test-junit4'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.14.1'
     testImplementation 'org.json:json:20250517'

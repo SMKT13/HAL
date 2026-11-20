@@ -26,6 +26,7 @@ public final class RoomReadOnlyPreview {
             if (!table(db,"FoPositionEntity") || !table(db,"TradeLedgerEntity")) {
                 throw new Exception("room_v2_missing_tables");
             }
+            AtlasCompat.validateSchema(db);
             JSONObject book = null;
             if (table(db,"book")) {
                 try(Cursor c=db.rawQuery("SELECT payload,digest FROM book WHERE id=1",null)) {
@@ -60,7 +61,10 @@ public final class RoomReadOnlyPreview {
                     if(!("FUT".equals(type)||"CE".equals(type)||"PE".equals(type)) ||
                        !("BUY".equals(side)||"SELL".equals(side)))throw new Exception("room_v2_invalid_contract");
                     LocalDate.parse(item.getString("expiry"));
-                    int lots=item.getInt("lots"),size=item.getInt("lotSize");
+                    double rawLots=item.getDouble("lots"),rawSize=item.getDouble("lotSize");
+                    if(rawLots!=Math.rint(rawLots)||rawLots<1||rawLots>10000 ||
+                       rawSize!=Math.rint(rawSize)||rawSize<1||rawSize>100000)throw new Exception("room_v2_invalid_contract");
+                    int lots=(int)rawLots,size=(int)rawSize;
                     double entry=item.getDouble("entry");
                     if(lots<=0||size<=0||!Double.isFinite(entry)||entry<0 ||
                        ("FUT".equals(type)&&entry==0))throw new Exception("room_v2_invalid_contract");
@@ -104,15 +108,18 @@ public final class RoomReadOnlyPreview {
             long ledgerNet;
             try{ledgerNet=Math.subtractExact(ledgerGross,ledgerFees);}
             catch(ArithmeticException overflow){throw new Exception("room_v2_ledger_overflow");}
+            boolean reconciled=true;
+            try { AtlasCompat.checkOriginalLedger(db,book); }
+            catch (IllegalStateException conflict) { reconciled=false; }
             int legacyOnly=0;
             for(String id:original)if(!seen.contains(id))legacyOnly++;
             return new JSONObject().put("schema",2).put("legs",visible)
-                .put("nativeOnly",nativeOnly).put("contractDifferences",changed).put("legacyOnly",legacyOnly)
+                .put("ledgerReconciled",reconciled).put("nativeOnly",nativeOnly).put("contractDifferences",changed).put("legacyOnly",legacyOnly)
                 .put("ledgerRows",ledgerCount).put("ledgerGrossPaise",ledgerGross)
                 .put("ledgerFeesPaise",ledgerFees).put("ledgerNetPaise",ledgerNet)
                 .put("journalRows",legacyJournalCount).put("historyRows",historyCount)
                 .put("openingRows",openingCount).put("nativeLedgerRows",nativeLedgerCount)
-                .put("message","Room v2 saved contracts (read-only). Full ledger, recovery P&L and edits require reconciliation. No database changes were made.");
+                .put("message",reconciled ? "Saved Room v2 contracts and ledger. Open the native tradebook for portfolio and recovery." : "Original and Room ledger records disagree. Review the saved records before editing.");
         }
     }
 

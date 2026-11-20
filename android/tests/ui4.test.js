@@ -13,7 +13,7 @@ await check('HAL Atlas branding and daily analysis route appear without modifyin
  A.match(await p.locator('.brand').innerText(),/HAL ATLAS/);
  A.match(await p.locator('.bottom-nav').innerText(),/Analysis/);
  await nav(p,'technicals','analysis');
- A.match(await p.locator('main').innerText(),/Evidence-led daily report/);
+ A.match(await p.locator('main').innerText(),/Evidence-led daily report/i);
  await nav(p,'position','overview');
  A.equal(await p.evaluate(()=>JSON.stringify(window.saved)),previous);
  A.deepEqual(x.errors,[]);
@@ -314,14 +314,14 @@ await check('evidence-led HAL daily analysis renders and never changes the broke
  const before=await p.evaluate(()=>JSON.stringify(saved));
  await nav(p,'technicals','analysis');
  const content=await p.locator('main').innerText();
- A.match(content,/Evidence-led daily report/);
+ A.match(content,/Evidence-led daily report/i);
  A.match(content,/Why this verdict/);
  A.match(content,/What would change the view/);
  A.match(content,/Fundamentals/);
  A.match(content,/Your hedge/);
  await nav(p,'position','overview');
  await click(p,'go-analysis');
- A.match(await p.locator('main').innerText(),/Evidence-led daily report/);
+ A.match(await p.locator('main').innerText(),/Evidence-led daily report/i);
  A.equal(await p.evaluate(()=>JSON.stringify(saved)),before);
  A.deepEqual(x.errors,[]);
 });

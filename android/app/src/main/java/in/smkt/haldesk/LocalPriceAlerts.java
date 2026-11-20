@@ -12,7 +12,7 @@ public final class LocalPriceAlerts {
  static SharedPreferences prefs(Context c){return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);}
  private static boolean valid(double n){return Double.isFinite(n)&&n>0&&n<100000000;}
  /** Updates both thresholds atomically; rejects contradictory limits. */
- public static void configureBoth(Context c,Double above,Double below){
+ public static synchronized void configureBoth(Context c,Double above,Double below){
   if(above!=null&&!valid(above))throw new IllegalArgumentException("invalid_upper_price");
   if(below!=null&&!valid(below))throw new IllegalArgumentException("invalid_lower_price");
   if(above!=null&&below!=null&&below>=above)
@@ -28,7 +28,7 @@ public final class LocalPriceAlerts {
   try{double n=Double.parseDouble(stored);return valid(n)?n:Double.NaN;}
   catch(Exception ignored){return Double.NaN;}
  }
- public static void configure(Context c,String side,Double price){
+ public static synchronized void configure(Context c,String side,Double price){
   if(!side.equals("above")&&!side.equals("below"))throw new IllegalArgumentException("invalid_alert_side");
   if(price!=null&&!valid(price))throw new IllegalArgumentException("invalid_alert_price");
   SharedPreferences.Editor e=prefs(c).edit();
@@ -45,7 +45,7 @@ public final class LocalPriceAlerts {
   double price=spot.optDouble("last_price",Double.NaN);
   if(!valid(price))return null;
   long provider=timestamp(spot.optString("quote_as_of")),trade=timestamp(spot.optString("last_trade_at"));
-  if(provider<=0||trade<=0||provider>now+60000||trade>now+60000
+  if(provider<=0||trade<=0||provider>now||trade>now
    ||now-provider>180000||now-trade>300000||trade>provider+60000)return null;
   SharedPreferences state=prefs(c);
   // Inconsistent legacy settings must not emit contradictory alerts.
