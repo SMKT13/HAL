@@ -1,4 +1,4 @@
-# HAL Atlas 5.2.0 — local Windows verification without paid GitHub runners.
+# HAL Atlas 5.3.0 — local Windows verification without paid GitHub runners.
 # Run on your own trusted machine, after manually backing up 4.6 data.
 # This NEVER installs/uninstalls an app, opens a broker session or uploads keys.
 [CmdletBinding()]
@@ -19,8 +19,8 @@ $apksigner=Join-Path $buildTools 'apksigner.bat'
 $gradle=Join-Path $repoRoot 'gradlew.bat'
 $release=Join-Path $repoRoot 'app\build\outputs\apk\release\app-release-unsigned.apk'
 $dist=Join-Path $repoRoot 'build'
-$unsigned=Join-Path $dist 'HAL-Atlas-v5.2.0-unsigned.apk'
-$signed=Join-Path $dist 'HAL-Atlas-v5.2.0-signed.apk'
+$unsigned=Join-Path $dist 'HAL-Atlas-v5.3.0-unsigned.apk'
+$signed=Join-Path $dist 'HAL-Atlas-v5.3.0-signed.apk'
 $expected='a9e9cd47ef90edc5771ef9ec75046e1ff9033ad043f00325f286173b96837382'
 foreach($path in @($zipalign,$apksigner,$gradle)){
  if(!(Test-Path -LiteralPath $path)){throw "Missing required build tool: $path"}
@@ -37,9 +37,9 @@ Push-Location $repoRoot
 try{
  $buildText=Get-Content -LiteralPath (Join-Path $repoRoot 'app\build.gradle') -Raw
  if(!$buildText.Contains("applicationId 'in.smkt.haldesk'") -or
-    !$buildText.Contains('versionCode 35') -or
-    !$buildText.Contains("versionName '5.2.0'")){
-  throw 'Release identity mismatch: expected in.smkt.haldesk / versionCode 35 / 5.2.0'
+    !$buildText.Contains('versionCode 59') -or
+    !$buildText.Contains("versionName '5.3.0'")){
+  throw 'Release identity mismatch: expected in.smkt.haldesk / versionCode 59 / 5.3.0'
  }
  Write-Host '[VERIFY] Immutable package and upgrade version matched.'
  Run-Checked 'npm.cmd' @('ci','--no-audit','--no-fund')

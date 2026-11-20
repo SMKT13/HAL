@@ -6,14 +6,14 @@ Personal research, derivatives risk and portfolio accounting for **Hindustan Aer
 
 | Application | Source | Version | Storage |
 | --- | --- | --- | --- |
-| Android HAL Atlas | `android/` | **5.2.0 source**, versionCode **35** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
+| Android HAL Atlas | `android/` | **5.3.0 development source**, versionCode **59** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
 | Desktop/web HAL viewer | `src/`, `backend/`, `server.ts`, `server.py` | Separate web product | Browser-origin-local portfolio, optional local Python market feed |
 
 **The two apps do not automatically share positions, history, model outputs or subscriptions.** Export/import only through documented, validated formats. The web viewer is not the canonical Android portfolio.
 
 ## Getting started on Android
 
-1. If upgrading, export your saved book first and install the signed APK over the existing app. HAL Atlas 5.2.0 supports Android 8.0 and later; a new signed build has not been verified.
+1. If upgrading, export your saved book first and install the signed APK over the existing app. HAL Atlas 5.3.0 targets Android 8.0 and later; a new signed build has not been verified.
 2. Open Settings to connect your read-only Upstox Analytics Token. Refresh market data and check the displayed timestamps before using marks.
 3. In **Position → Book**, review your existing legs or enter your HAL futures and protective puts. Check expiry, lots, units per lot and entry prices against your records.
 4. Use **Position** for performance, protection gaps, stress scenarios and hedge or rollover comparisons. Open **History** for completed trades, charges, funding and backups.
@@ -85,4 +85,4 @@ The 4.6 source refactor removes stale generated files, adds an immutable PAPER l
 
 See [refactor audit and remaining tasks](docs/REFACTOR-4.6.md).
 
-**Atlas 5.2.0 is a source update, not a verified signed APK.** Run the local release checks, retain the original package ID and signing certificate, and compare backup/book values after an in-place install.
+**Atlas 5.3.0 is development-branch source, not a verified signed APK.** Run the local release checks, retain the original package ID and signing certificate, and compare backup/book values after an in-place install.

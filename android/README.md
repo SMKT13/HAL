@@ -1,4 +1,7 @@
-# HAL Atlas Android — 5.2.0 source (versionCode 35)
+# HAL Atlas Android — 5.3.0 development source (versionCode 59)
+
+**Rebuild in progress.** Preserves the GitHub JavaScript finance/portfolio engine, secure book storage, read-only Upstox/NSE adapters and Options Lab. Adds a read-only native Compose terminal inspired by Library Atlas 5.1.24. The incompatible local Room database schema has deliberately not been copied into the existing book.
+
 
 This update preserves the Android package and SQLite schema-4 book used by 4.6.0 (versionCode 31).
 

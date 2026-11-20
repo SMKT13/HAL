@@ -16,7 +16,7 @@ def identity(apk):
 new, (package,code,version) = identity(a.apk)
 old, (oldpackage,oldcode,oldversion) = identity(a.previous)
 assert package == oldpackage == 'in.smkt.haldesk'
-assert int(code) == 35 and int(code)>int(oldcode) and version=='5.2.0'
+assert int(code) == 59 and int(code)>int(oldcode) and version=='5.3.0'
 assert "application-label:'HAL Atlas'" in new
 assert "sdkVersion:'26'" in new and "targetSdkVersion:'35'" in new
 assert re.findall(r"uses-permission: name='([^']+)'",new)==['android.permission.INTERNET']
