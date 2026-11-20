@@ -2,7 +2,7 @@
 
 > **5.3 development warning:** Do not install this branch over a Library HAL Atlas 5.1.24 device. That release may use Room database schema 2, while this integration still runs the original BookStore schema 1. A compatible migration and preserved-history test are required first. A higher versionCode does not establish storage compatibility.
 
-**Rebuild in progress.** Preserves the GitHub JavaScript finance/portfolio engine, secure book storage, read-only Upstox/NSE adapters and Options Lab. Adds a read-only native Compose terminal inspired by Library Atlas 5.1.24. The incompatible local Room database schema has deliberately not been copied into the existing book.
+**Rebuild in progress.** Preserves the GitHub JavaScript finance/portfolio engine, secure book storage, read-only Upstox/NSE adapters and Options Lab. Adds a read-only native Compose terminal inspired by Library Atlas 5.1.24. The existing Room v2 sidecar is bridged for supported long futures/puts with revision conflict safeguards; legacy v1 remains unchanged. Native-only contracts and ledger data remain separate. This interoperability requires full Android/device testing before release.
 
 
 This update preserves the Android package and SQLite schema-4 book used by 4.6.0 (versionCode 31).

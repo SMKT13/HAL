@@ -38,6 +38,15 @@ public class LocalPriceAlertsTest {
   assertTrue(Double.isNaN(LocalPriceAlerts.threshold(context,"below")));
   assertNull(LocalPriceAlerts.onSpot(context,quote(4700,now),now));
  }
+ @Test public void validatesBothThresholdsWithoutPartialWrites(){
+  LocalPriceAlerts.configureBoth(context,5300.0,4800.0);
+  assertEquals(5300.0,LocalPriceAlerts.threshold(context,"above"),0.001);
+  assertEquals(4800.0,LocalPriceAlerts.threshold(context,"below"),0.001);
+  try{LocalPriceAlerts.configureBoth(context,4900.0,5200.0);fail();}
+  catch(IllegalArgumentException expected){assertEquals("below_must_be_less_than_above",expected.getMessage());}
+  assertEquals(5300.0,LocalPriceAlerts.threshold(context,"above"),0.001);
+  assertEquals(4800.0,LocalPriceAlerts.threshold(context,"below"),0.001);
+ }
  @Test public void rejectsInvalidThresholds(){
   try{LocalPriceAlerts.configure(context,"above",Double.NaN);fail();}catch(IllegalArgumentException expected){}
   try{LocalPriceAlerts.configure(context,"below",-1.0);fail();}catch(IllegalArgumentException expected){}

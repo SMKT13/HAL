@@ -39,3 +39,10 @@ The independent tests/rehearse_room_v2.py tool audits an offline schema-1 databa
 - Added read-only Room v2 transaction ledger breakdown: recorded gross, fees and net in integer paise, with checked arithmetic and explicit unreconciled labels. Counts distinguish native ledger entries from mirrored journal/history entries. The app must not treat these totals as verified lifetime P&L or live valuations.
 - Added safe startup handling when the on-device SQLite database is unreadable or has an unsupported version. BookStore construction no longer throws for those cases; attempts to read or write fail closed, with instructions to preserve the original data.
 - The schema-v2 editor remains write-blocked. A full Android migration, build, native/Robolectric validation, device upgrade and original-key signing remain unverified. Release signing is intentionally blocked.
+
+## Latest source integration checkpoint
+- Legacy schema-1 book stays supported; existing schema-2 Room sidecar can be projected into the legacy long-futures/protective-put book through `AtlasCompat.kt`. Native-only calls/shorts and ledger entries remain isolated; stale serials and mismatched opening/history rows reject writes. **Robolectric and device compatibility are not yet verified.**
+- Foreground-only HAL cash threshold alerts were added without extra broker requests, notifications or background permissions. Invalid/stale provider timestamps suppress alerts; thresholds are updated atomically.
+- The first 27 source-contract tests (release, branding, native, database and alerts) passed in a read-only JavaScript harness against actual GitHub branch files. These are static checks, not a Gradle or Android test run.
+- Full native Library 5.1.24 tradebook UI, background monitoring, complete Upstox integration on a real account and signed APK are not yet verified/ported.
+- Full 5.3 npm suite, Playwright, Android unit tests, device upgrade and certificate signing remain required. Signing remains intentionally disabled, and `main` is unchanged.

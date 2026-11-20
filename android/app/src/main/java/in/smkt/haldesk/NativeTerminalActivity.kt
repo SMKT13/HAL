@@ -183,8 +183,7 @@ private fun readSnapshot(context: Context): Snapshot = try {
                 require(below.isBlank()||lo!=null){"Invalid lower price"}
                 if(hi!=null)require(hi.isFinite()&&hi>0){"Invalid upper price"}
                 if(lo!=null)require(lo.isFinite()&&lo>0){"Invalid lower price"}
-                LocalPriceAlerts.configure(context,"above",hi)
-                LocalPriceAlerts.configure(context,"below",lo)
+                LocalPriceAlerts.configureBoth(context,hi,lo)
                 message="Saved locally. Alerts run only while the app is open."
             }catch(e:Exception){message=e.message?:"Invalid price"}
         }){Text("Save thresholds")}

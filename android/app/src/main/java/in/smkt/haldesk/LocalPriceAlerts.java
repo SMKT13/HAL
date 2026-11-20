@@ -11,6 +11,17 @@ public final class LocalPriceAlerts {
  private LocalPriceAlerts(){}
  static SharedPreferences prefs(Context c){return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);}
  private static boolean valid(double n){return Double.isFinite(n)&&n>0&&n<100000000;}
+ /** Updates both thresholds atomically; rejects contradictory limits. */
+ public static void configureBoth(Context c,Double above,Double below){
+  if(above!=null&&!valid(above))throw new IllegalArgumentException("invalid_upper_price");
+  if(below!=null&&!valid(below))throw new IllegalArgumentException("invalid_lower_price");
+  if(above!=null&&below!=null&&below>=above)
+   throw new IllegalArgumentException("below_must_be_less_than_above");
+  SharedPreferences.Editor e=prefs(c).edit();
+  if(above==null)e.remove("price_above");else e.putString("price_above",Double.toString(above));
+  if(below==null)e.remove("price_below");else e.putString("price_below",Double.toString(below));
+  e.putBoolean("tripped_above",false).putBoolean("tripped_below",false).apply();
+ }
  public static double threshold(Context c,String side){
   if(!side.equals("above")&&!side.equals("below"))return Double.NaN;
   String stored=prefs(c).getString("price_"+side,"");
@@ -37,6 +48,9 @@ public final class LocalPriceAlerts {
   if(provider<=0||trade<=0||provider>now+60000||trade>now+60000
    ||now-provider>180000||now-trade>300000||trade>provider+60000)return null;
   SharedPreferences state=prefs(c);
+  // Inconsistent legacy settings must not emit contradictory alerts.
+  double above=threshold(c,"above"),below=threshold(c,"below");
+  if(valid(above)&&valid(below)&&below>=above)return null;
   if(provider<=state.getLong("last_provider_time",0))return null;
   SharedPreferences.Editor e=state.edit().putLong("last_provider_time",provider);
   JSONObject event=null;

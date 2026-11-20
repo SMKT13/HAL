@@ -16,3 +16,11 @@ test('alerts are opt-in foreground only',()=>{
  A.match(native,/PriceAlertsPanel/);
  A.match(web,/event==='local_alert'/);
 });
+
+test('alerts update both thresholds atomically and disallow contradictory settings',()=>{
+ const rules=read('app/src/main/java/in/smkt/haldesk/LocalPriceAlerts.java');
+ const native=read('app/src/main/java/in/smkt/haldesk/NativeTerminalActivity.kt');
+ A.match(rules,/configureBoth\(Context c,Double above,Double below\)/);
+ A.match(rules,/below_must_be_less_than_above/);
+ A.match(native,/LocalPriceAlerts\.configureBoth\(context,hi,lo\)/);
+});
