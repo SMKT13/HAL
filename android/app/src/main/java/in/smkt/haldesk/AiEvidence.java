@@ -59,6 +59,10 @@ final class AiEvidence {
             }
             out.put("scenarios",scenarios);out.put("coach",objects(source.optJSONArray("coach"),24,"code severity title detail",300));
         }
+        // Model-produced prior role summaries are permitted only in agent prompts.
+        // They are untrusted text, bounded by the same evidence packet limit.
+        if(AiPolicy.isAgentMode(mode)&&source.optJSONArray("analystSummaries")!=null)
+            out.put("analystSummaries",objects(source.optJSONArray("analystSummaries"),5,"role reply",1100));
         if(out.toString().length()>24000)throw new Exception("Sanitized evidence exceeds the safe request limit.");
         return out;
     }
