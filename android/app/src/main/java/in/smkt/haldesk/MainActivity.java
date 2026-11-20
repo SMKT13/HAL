@@ -124,7 +124,7 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return "direct";}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","5.2.0");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","5.3.0");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
@@ -382,6 +382,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void minimize(){runOnUiThread(()->moveTaskToBack(true));}
         @JavascriptInterface public void ready(){runOnUiThread(()->{pageReady=true;status();});}
         @JavascriptInterface public void settings(){runOnUiThread(()->showSettings());}
+        @JavascriptInterface public void terminal(){runOnUiThread(()->startActivity(new Intent(MainActivity.this,NativeTerminalActivity.class)));}
         @JavascriptInterface public void refresh(String expiry){MainActivity.this.refresh(expiry);}
         @JavascriptInterface public void nseRefresh(){MainActivity.this.refreshNse();}
         @JavascriptInterface public void research(String request){MainActivity.this.research(request);}

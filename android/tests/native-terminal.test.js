@@ -1,0 +1,25 @@
+'use strict';
+const test=require('node:test'),A=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
+test('native terminal is non-exported and linked only from bundled UI',()=>{
+ A.match(read('app/src/main/AndroidManifest.xml'),/<activity android:name="\.NativeTerminalActivity" android:exported="false"/);
+ A.match(read('app/src/main/java/in/smkt/haldesk/MainActivity.java'),/@JavascriptInterface public void terminal\(\)/);
+ A.match(read('app/src/main/assets/index.html'),/id="native-terminal"/);
+ A.match(read('app/src/main/assets/ui4.js'),/native\('terminal'\)/);
+});
+test('native terminal loads validated book without migrating or fabricating derivative marks',()=>{
+ const code=read('app/src/main/java/in/smkt/haldesk/NativeTerminalActivity.kt');
+ A.match(code,/BookStore\(context\)\.use/);
+ A.match(code,/store\.load\(false\)/);
+ A.doesNotMatch(code,/store\.save\(|placeOrder|fallbackToDestructiveMigration|Room\.databaseBuilder/);
+ A.match(code,/not a live exchange quote/);A.match(code,/does not substitute the HAL spot price/);
+ A.match(code,/FLAG_SECURE/);
+});
+test('Compose build preserves original DB identity and uses versionCode above Library 58',()=>{
+ const gradle=read('app/build.gradle');
+ A.match(read('build.gradle'),/org\.jetbrains\.kotlin\.plugin\.compose/);
+ A.match(gradle,/buildFeatures \{ compose true \}/);
+ A.match(gradle,/versionCode 59/);
+ A.match(gradle,/versionName '5\.3\.0'/);
+ A.match(read('app/src/main/java/in/smkt/haldesk/BookStore.java'),/haldesk_book\.db",null,1/);
+});

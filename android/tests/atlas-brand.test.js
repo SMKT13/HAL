@@ -14,8 +14,8 @@ test('HAL Atlas launcher display and identity coexist with preserved Android pac
  A.match(manifest,/android:allowBackup="false"/);
  A.match(gradle,/applicationId 'in\.smkt\.haldesk'/);
  A.match(gradle,/namespace 'in\.smkt\.haldesk'/);
- A.match(gradle,/versionCode 35\b/);
- A.match(gradle,/versionName '5\.2\.0'/);
+ A.match(gradle,/versionCode 59\b/);
+ A.match(gradle,/versionName '5\.3\.0'/);
  A.match(icon,/android:viewportWidth="108"/);
  A.match(icon,/android:strokeColor="#FFCE78"/);
 });
@@ -47,7 +47,7 @@ test('existing accounts, local book history, signing secrets and migrations rema
  A.match(storage,/hal_desk_v4/);
  A.match(storage,/hal_desk_v2/);
  A.match(storage,/app:'HAL Atlas'/);
- A.match(main,/obj.put\("version","5\.2\.0"\)/);
+ A.match(main,/obj.put\("version","5\.3\.0"\)/);
  A.doesNotMatch(main,/deleteDatabase\(|clearApplicationUserData\(/);
  const E=require('../app/src/main/assets/engine4.js');
  const D=require('../app/src/main/assets/data4.js');
@@ -59,7 +59,7 @@ test('local build and signing scripts align and never change the original certif
  const bash=read('build.sh');
  const windows=read('scripts/local-windows-release.ps1');
  for(const s of [bash,windows]){
-  A.match(s,/HAL-Atlas-v5\.2\.0-signed\.apk/);
+  A.match(s,/HAL-Atlas-v5\.3\.0-signed\.apk/);
   A.match(s,/HAL_SIGNING_KEY_FILE/);
   A.match(s,/HAL_SIGNING_PASSWORD_FILE/);
   A.match(s,/hal-personal/);
