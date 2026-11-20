@@ -41,14 +41,14 @@ class AtlasCompatTest {
         }
         return c
     }
-    @Test fun keepsNativeCallAndLedgerWhenSavingLongFutures(){
+    @Test fun nativeOnlyExposuresBlockIncompleteLegacyLifetimeAccounting(){
         val c=setup()
-        BookStore(c).use{store->
-            val book=store.load(false).getJSONObject("book")
-            assertEquals(1,book.getJSONArray("legs").length())
-            book.getJSONArray("legs").getJSONObject(0).put("entry",5000)
-            store.save(book.toString(),8)
-            val db=store.readableDatabase
+        BookStore(c).use { store ->
+            try {store.load(false);fail("Mixed native book should be reviewed in native terminal");}
+            catch(expected:Exception){
+                assertTrue(expected.message?.contains("room_v2_native_exposure_requires_review")==true)
+            }
+            val db=store.writableDatabase
             db.rawQuery("SELECT payload FROM FoPositionEntity WHERE id='c'",null).use {
                 assertTrue(it.moveToFirst());assertEquals("CE",JSONObject(it.getString(0)).getString("type"))
             }
@@ -57,8 +57,14 @@ class AtlasCompatTest {
             }
         }
     }
+    private fun removeUnsupportedRows(db:SQLiteDatabase){
+        db.delete("FoPositionEntity","id=?",arrayOf("c"))
+        db.delete("TradeLedgerEntity","id=?",arrayOf("native-ledger"))
+    }
     @Test fun detectsConcurrentRoomPositionModification(){
         val c=setup()
+        // Use supported mirrored positions only for legacy editor writes.
+        c.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null).use { removeUnsupportedRows(it) }
         BookStore(c).use{store->
             val book=store.load(false).getJSONObject("book")
             val db=store.writableDatabase
@@ -70,6 +76,8 @@ class AtlasCompatTest {
     }
     @Test fun nativeCloseSurvivesLegacyReplacementThatOmitsIt() {
         val c=setup()
+        // Source has no other unsupported exposures; only native close is imported.
+        c.openOrCreateDatabase("haldesk_book.db",Context.MODE_PRIVATE,null).use { removeUnsupportedRows(it) }
         BookStore(c).use { store->
             val old=store.load(false).getJSONObject("book")
             val db=store.writableDatabase

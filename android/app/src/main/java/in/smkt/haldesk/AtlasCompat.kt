@@ -94,15 +94,18 @@ object AtlasCompat {
      */
     @JvmStatic fun visible(db:SQLiteDatabase,original:JSONObject?):JSONObject? {
         val legs=JSONArray()
+        var hasNativeOnlyExposure=false
         db.rawQuery("SELECT id,payload FROM FoPositionEntity ORDER BY rowid",null).use { cursor ->
             while(cursor.moveToNext()) {
                 val p=JSONObject(cursor.getString(1))
                 if(supported(p))legs.put(p.put("id",cursor.getString(0)))
+                else hasNativeOnlyExposure=true
             }
         }
         val journal=JSONArray()
         val historic=JSONArray()
         var openingPresent=false
+        var hasNativeOnlyLedger=false
         db.rawQuery("SELECT id,payload,fees FROM TradeLedgerEntity ORDER BY rowid",null).use { cursor ->
             while(cursor.moveToNext()) {
                 val id=cursor.getString(0)
@@ -117,9 +120,12 @@ object AtlasCompat {
                         if(leg.optString("id").isBlank())leg.put("id",id)
                         journal.put(p.put("id",id).put("fees",fee/100.0))
                     }
+                    else->hasNativeOnlyLedger=true
                 }
             }
         }
+        if(hasNativeOnlyExposure||hasNativeOnlyLedger)
+            throw IllegalStateException("room_v2_native_exposure_requires_review")
         if(original==null&&legs.length()==0&&journal.length()==0&&historic.length()==0)return null
         if(historic.length()>0 && original?.optJSONObject("history")==null)
             throw IllegalStateException("room_v2_history_mismatch")
