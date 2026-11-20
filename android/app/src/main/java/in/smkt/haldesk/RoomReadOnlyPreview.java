@@ -37,12 +37,17 @@ public final class RoomReadOnlyPreview {
                 }
             }
             HashSet<String> seen=new HashSet<>(),original=new HashSet<>();
+            java.util.HashMap<String,JSONObject> originalById=new java.util.HashMap<>();
             if (book!=null) {
                 JSONArray legs=book.getJSONArray("legs");
-                for(int i=0;i<legs.length();i++)original.add(legs.getJSONObject(i).getString("id"));
+                for(int i=0;i<legs.length();i++){
+                    JSONObject leg=legs.getJSONObject(i);
+                    String id=leg.getString("id");
+                    original.add(id);originalById.put(id,leg);
+                }
             }
             JSONArray visible=new JSONArray();
-            int nativeOnly=0;
+            int nativeOnly=0, changed=0;
             try(Cursor c=db.rawQuery("SELECT id,payload FROM FoPositionEntity ORDER BY rowid",null)) {
                 if(c.getCount()>1000)throw new Exception("room_v2_too_many_contracts");
                 while(c.moveToNext()){
@@ -69,6 +74,7 @@ public final class RoomReadOnlyPreview {
                     }
                     visible.put(summary);
                     if(!original.contains(id))nativeOnly++;
+                    else if(!sameContract(originalById.get(id),item))changed++;
                 }
             }
             // Do not invent a P&L or hide any native-only transactions.
@@ -77,10 +83,34 @@ public final class RoomReadOnlyPreview {
                 if(!c.moveToFirst())throw new Exception("room_v2_ledger_unavailable");
                 ledgerCount=c.getLong(0);
             }
+            int legacyOnly=0;
+            for(String id:original)if(!seen.contains(id))legacyOnly++;
             return new JSONObject().put("schema",2).put("legs",visible)
-                .put("nativeOnly",nativeOnly).put("ledgerRows",ledgerCount)
+                .put("nativeOnly",nativeOnly).put("contractDifferences",changed).put("legacyOnly",legacyOnly)
+                .put("ledgerRows",ledgerCount)
                 .put("message","Room v2 saved contracts (read-only). Full ledger, recovery P&L and edits require reconciliation. No database changes were made.");
         }
+    }
+
+    /**
+     * Compare economic fields, not JSON key order or optional display metadata.
+     * Side defaults to BUY for legacy long-futures and long-put books.
+     */
+    private static boolean sameContract(JSONObject a,JSONObject b) {
+        if(a==null||b==null)return false;
+        String type=a.optString("type","");
+        if(!type.equals(b.optString("type","")))return false;
+        if(!a.optString("expiry","").equals(b.optString("expiry","")))return false;
+        if(!a.optString("side","BUY").equals(b.optString("side","BUY")))return false;
+        if(a.optInt("lots",-1)!=b.optInt("lots",-2))return false;
+        if(a.optInt("lotSize",-1)!=b.optInt("lotSize",-2))return false;
+        if(!sameFinite(a,"entry",b))return false;
+        return "FUT".equals(type)||sameFinite(a,"strike",b);
+    }
+    private static boolean sameFinite(JSONObject a,String field,JSONObject b) {
+        if(!a.has(field)||!b.has(field))return false;
+        double x=a.optDouble(field,Double.NaN), y=b.optDouble(field,Double.NaN);
+        return Double.isFinite(x)&&Double.isFinite(y)&&Double.compare(x,y)==0;
     }
 
     private static boolean table(SQLiteDatabase db,String name) {
