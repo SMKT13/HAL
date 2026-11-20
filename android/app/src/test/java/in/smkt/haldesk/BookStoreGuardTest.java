@@ -1,0 +1,53 @@
+package in.smkt.haldesk;
+
+import android.content.Context;
+import android.database.sqlite.SQLiteDatabase;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
+import org.robolectric.annotation.Config;
+import static org.junit.Assert.*;
+
+@RunWith(RobolectricTestRunner.class)
+@Config(sdk = 35, manifest = Config.NONE)
+public class BookStoreGuardTest {
+    private Context context;
+    @Before public void setup() {
+        context = RuntimeEnvironment.getApplication();
+        context.deleteDatabase("haldesk_book.db");
+    }
+    @Test public void roomVersion2NeverDowngradedOrModified() throws Exception {
+        SQLiteDatabase db = context.openOrCreateDatabase("haldesk_book.db", Context.MODE_PRIVATE, null);
+        db.execSQL("CREATE TABLE book (id INTEGER PRIMARY KEY,revision INTEGER,payload TEXT,digest TEXT,updated_at INTEGER)");
+        db.execSQL("CREATE TABLE FoPositionEntity (id TEXT NOT NULL PRIMARY KEY,payload TEXT NOT NULL)");
+        db.execSQL("INSERT INTO FoPositionEntity VALUES ('native-test','{\"type\":\"CE\"}')");
+        db.setVersion(2);
+        db.close();
+        try (BookStore store = new BookStore(context)) {
+            try { store.load(false); fail("v2 book must remain sealed"); }
+            catch (Exception expected) { assertEquals("room_v2_requires_reconciliation",expected.getMessage()); }
+            try { store.save("{\"version\":4,\"legs\":[],\"journal\":[]}",0); fail("v2 writes must be blocked"); }
+            catch (Exception expected) { assertEquals("room_v2_requires_reconciliation",expected.getMessage()); }
+            try { store.cachePut("snapshot","{}"); fail("v2 cache writes must be blocked"); }
+            catch (Exception expected) { assertEquals("room_v2_requires_reconciliation",expected.getMessage()); }
+        }
+        try(SQLiteDatabase inspect=SQLiteDatabase.openDatabase(context.getDatabasePath("haldesk_book.db").getPath(),null,SQLiteDatabase.OPEN_READONLY)){
+            assertEquals(2,inspect.getVersion());
+            try(android.database.Cursor c=inspect.rawQuery("SELECT payload FROM FoPositionEntity WHERE id='native-test'",null)){
+                assertTrue(c.moveToFirst());
+                assertEquals("{\"type\":\"CE\"}",c.getString(0));
+            }
+        }
+    }
+    @Test public void legacyVersion1StillSupportsNormalBook() throws Exception {
+        try(BookStore store=new BookStore(context)){
+            assertEquals(1,store.save("{\"version\":4,\"legs\":[],\"journal\":[]}",0).getLong("revision"));
+            assertNotNull(store.load(false).getJSONObject("book"));
+        }
+        try(SQLiteDatabase db=SQLiteDatabase.openDatabase(context.getDatabasePath("haldesk_book.db").getPath(),null,SQLiteDatabase.OPEN_READONLY)){
+            assertEquals(1,db.getVersion());
+        }
+    }
+}

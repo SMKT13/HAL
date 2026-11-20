@@ -7,7 +7,37 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 /** Atomic snapshots. Never wipes legacy WebView data or silently resets corrupt records. */
 final class BookStore extends SQLiteOpenHelper {
- BookStore(Context context){super(context,"haldesk_book.db",null,1);setWriteAheadLoggingEnabled(true);}
+ private final int schemaAtOpen;
+ /**
+  * Detect the installed database version WITHOUT opening it for mutation.
+  * Existing Room v2 data must not be silently downgraded or reinterpreted
+  * by this legacy-only implementation.
+  */
+ private static int schemaOf(Context context) {
+  java.io.File file=context.getDatabasePath("haldesk_book.db");
+  if(!file.exists())return 1;
+  try(SQLiteDatabase db=SQLiteDatabase.openDatabase(file.getPath(),null,SQLiteDatabase.OPEN_READONLY)){
+   int version=db.getVersion();
+   if(version!=1 && version!=2)throw new IllegalStateException("unsupported_database_schema");
+   return version;
+  }catch(android.database.sqlite.SQLiteException failure){
+   throw new IllegalStateException("database_unreadable");
+  }
+ }
+ BookStore(Context context){
+  super(context,"haldesk_book.db",null,schemaOf(context));
+  schemaAtOpen=schemaOf(context);
+  if(schemaAtOpen==1)setWriteAheadLoggingEnabled(true);
+ }
+ private void requireCompatible(){
+  if(schemaAtOpen==2)throw new IllegalStateException("room_v2_requires_reconciliation");
+ }
+ @Override public synchronized SQLiteDatabase getWritableDatabase(){
+  requireCompatible();return super.getWritableDatabase();
+ }
+ @Override public synchronized SQLiteDatabase getReadableDatabase(){
+  requireCompatible();return super.getReadableDatabase();
+ }
  @Override public void onConfigure(SQLiteDatabase db){db.setForeignKeyConstraintsEnabled(true);}
  @Override public void onCreate(SQLiteDatabase db){
   for(String table:new String[]{"book","recovery"})db.execSQL("CREATE TABLE "+table+" (id INTEGER PRIMARY KEY CHECK(id=1),revision INTEGER NOT NULL,payload TEXT NOT NULL,digest TEXT NOT NULL,updated_at INTEGER NOT NULL)");
