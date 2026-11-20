@@ -21,7 +21,7 @@ test('Compose build preserves original DB identity and uses versionCode above Li
  A.match(gradle,/buildFeatures \{ compose true \}/);
  A.match(gradle,/versionCode 59/);
  A.match(gradle,/versionName '5\.3\.0'/);
- A.match(read('app/src/main/java/in/smkt/haldesk/BookStore.java'),/haldesk_book\.db",null,1/);
+ A.match(read('app/src/main/java/in/smkt/haldesk/BookStore.java'),/haldesk_book\.db",null,observedSchema==1\?1:2/);
 });
 
 test('native expiry and nominal-coverage safeguards are explicit',()=>{
@@ -66,7 +66,7 @@ test('native sidecar preview detects economically changed and original-only cont
 
 test('Room v2 storage notice offers safe native preview rather than destructive restore',()=>{
  const ui=read('app/src/main/assets/ui4.js');
- A.match(ui,/Native Room tradebook detected/);
+ A.match(ui,/Room tradebook review needed/);
  A.match(ui,/Do not replace or restore the existing database/);
  A.match(ui,/open-native-terminal/);
  A.match(ui,/'open-native-terminal':\(\)=>native\('terminal'\)/);
