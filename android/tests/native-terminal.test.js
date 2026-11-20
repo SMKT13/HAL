@@ -63,3 +63,11 @@ test('native sidecar preview detects economically changed and original-only cont
  A.match(ui,/Changed:/);
  A.match(ui,/Legacy-only:/);
 });
+
+test('Room v2 storage notice offers safe native preview rather than destructive restore',()=>{
+ const ui=read('app/src/main/assets/ui4.js');
+ A.match(ui,/Native Room tradebook detected/);
+ A.match(ui,/Do not replace or restore the existing database/);
+ A.match(ui,/open-native-terminal/);
+ A.match(ui,/'open-native-terminal':\(\)=>native\('terminal'\)/);
+});
