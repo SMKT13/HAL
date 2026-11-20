@@ -7,6 +7,7 @@ function classify(question,mode){
  if(mode==='research')return 'research';
  if(mode==='deliberate')return 'comprehensive';
  const q=String(question||'').toLowerCase();
+ if(/\b(daily.{0,40}brief|intelligence brief|comprehensive|review everything|full review|six perspectives)\b/.test(q))return 'comprehensive';
  if(/\b(recover|recovery|lifetime|historical loss|realized|realised|charges)\b/.test(q))return 'recovery';
  if(/\b(hedge|protect|rollover|roll over|put option|uncovered|expiry gap)\b/.test(q))return 'hedge';
  if(/\b(my position|my future|my trade|my exposure|my pnl|my p&l|my option|portfolio|my risk|margin)\b/.test(q))return 'position';
