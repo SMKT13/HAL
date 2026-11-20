@@ -10,3 +10,11 @@ test('legacy store fails closed on installed Room 2 instead of downgrading',()=>
  A.match(code,/getReadableDatabase\(\)/);
  A.doesNotMatch(code,/fallbackToDestructiveMigration|deleteDatabase\(/);
 });
+
+test('detect installed schema exactly once and surface a clear fail-closed message',()=>{
+ const code=read('app/src/main/java/in/smkt/haldesk/BookStore.java');
+ const main=read('app/src/main/java/in/smkt/haldesk/MainActivity.java');
+ A.match(code,/BookStore\(Context context\)\{this\(context,schemaOf\(context\)\);\}/);
+ A.match(code,/schemaAtOpen=observedSchema/);
+ A.match(main,/This installation has a newer Room trading database/);
+});

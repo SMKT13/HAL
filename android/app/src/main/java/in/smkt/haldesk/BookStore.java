@@ -24,9 +24,10 @@ final class BookStore extends SQLiteOpenHelper {
    throw new IllegalStateException("database_unreadable");
   }
  }
- BookStore(Context context){
-  super(context,"haldesk_book.db",null,schemaOf(context));
-  schemaAtOpen=schemaOf(context);
+ BookStore(Context context){this(context,schemaOf(context));}
+ private BookStore(Context context,int observedSchema){
+  super(context,"haldesk_book.db",null,observedSchema);
+  schemaAtOpen=observedSchema;
   if(schemaAtOpen==1)setWriteAheadLoggingEnabled(true);
  }
  private void requireCompatible(){
