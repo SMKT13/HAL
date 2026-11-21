@@ -37,7 +37,7 @@ final class AiNumericClaimGuard {
         for(int i=0;i<Math.min(rows.length(),40);i++) {
             JSONObject row=rows.optJSONObject(i);
             if(row==null)continue;
-            props(values,row,"pnl modelPrice price units");
+            props(values,row,"pnl modelPrice price");
             props(values,row.optJSONObject("mark"),"price");
             props(values,row.optJSONObject("leg"),"entry strike");
         }
