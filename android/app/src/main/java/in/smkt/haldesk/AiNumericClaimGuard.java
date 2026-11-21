@@ -45,12 +45,24 @@ final class AiNumericClaimGuard {
             props(values,row.optJSONObject("leg"),"entry strike");
         }
     }
+    private static void technicalPrices(Set<String> values,JSONObject technical) {
+        if(technical==null)return;
+        props(values,technical,"sma20 sma50 sma200 ema12 ema26 support resistance atr atr14");
+        for(String field:new String[]{"support","resistance"}) {
+            JSONArray levels=technical.optJSONArray(field);
+            if(levels!=null)for(int i=0;i<Math.min(5,levels.length());i++)
+                number(values,levels.opt(i));
+        }
+        props(values,technical.optJSONObject("bollinger"),"lower middle upper");
+        props(values,technical.optJSONObject("pivots"),"pivot r1 r2 r3 s1 s2 s3");
+    }
     static Set<String> approvedMoney(JSONObject evidence) {
         Set<String> out=new HashSet<>();
         if(evidence==null)return out;
         JSONObject market=evidence.optJSONObject("market");
         if(market!=null)for(String key:new String[]{"spot","nifty"})
             props(out,market.optJSONObject(key),"price last_price prevClose");
+        technicalPrices(out,evidence.optJSONObject("technical"));
         if(!evidence.optBoolean("portfolioIncluded",false))return out;
         JSONObject portfolio=evidence.optJSONObject("portfolio");
         JSONArray legs=portfolio==null?null:portfolio.optJSONArray("legs");
@@ -86,6 +98,9 @@ final class AiNumericClaimGuard {
     private static void entries(JSONArray a,Set<String> allowed)throws Exception {
         if(a==null)return;
         for(int i=0;i<a.length();i++)if(a.opt(i) instanceof String)scan(a.optString(i),allowed);
+    }
+    static void validateFreeForm(String reply,JSONObject evidence)throws Exception {
+        scan(reply,approvedMoney(evidence));
     }
     static void validate(JSONObject output,JSONObject evidence)throws Exception {
         if(output==null)throw new Exception("AI result is unavailable.");
