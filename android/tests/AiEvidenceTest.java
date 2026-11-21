@@ -15,6 +15,9 @@ public final class AiEvidenceTest {
         check(recoverySafe.getString("contextNote").contains("Do not infer it."));
         check(!recoverySafe.toString().contains("untrusted custom instruction"));
         String hash=AiPolicy.evidenceDigest(clean);check(hash.matches("[a-f0-9]{64}"));check(hash.equals(AiPolicy.evidenceDigest(AiPolicy.sanitizeEvidence(clean,"copilot"))));
+        JSONObject roleWithoutPrivate=AiPolicy.sanitizeEvidence(packet().put("portfolioIncluded",false),"agent_derivatives");
+        check(!roleWithoutPrivate.has("portfolio")&&!roleWithoutPrivate.has("risk"));
+        check(roleWithoutPrivate.getString("analysisScope").contains("No verified private position"));
         JSONObject research=AiPolicy.sanitizeEvidence(packet(),"research");check(!research.getBoolean("portfolioIncluded"));
         for(String key:new String[]{"portfolio","bookRevision","funding","valuation","risk","scenarios","coach"})check(!research.has(key));
         check(research.has("market")&&research.has("news"));check(research.getJSONObject("fundamentals").getJSONArray("metrics").getJSONObject(0).getString("period").equals("synthetic period"));
