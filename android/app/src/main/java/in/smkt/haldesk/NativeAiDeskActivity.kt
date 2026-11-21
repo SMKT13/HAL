@@ -111,15 +111,17 @@ private fun NativeAiDesk(
     var showHistory by remember { mutableStateOf(false) }
 
     LaunchedEffect(tab) {
-        withContext(Dispatchers.IO) {
-            try {
-                configured = keySaved()
-                reports = parseHistory(history())
-                historyError = null
-            } catch (_: Exception) {
-                historyError = "Encrypted AI history cannot be read on this device. No saved reports were erased."
-                reports = emptyList()
-            }
+        val loaded = withContext(Dispatchers.IO) {
+            Pair(runCatching { keySaved() }.getOrDefault(false),
+                runCatching { parseHistory(history()) })
+        }
+        configured = loaded.first
+        loaded.second.onSuccess {
+            reports = it
+            historyError = null
+        }.onFailure {
+            historyError = "Encrypted AI history cannot be read on this device. No saved reports were erased."
+            reports = emptyList()
         }
     }
 
