@@ -108,7 +108,7 @@ private fun NativeAiDesk(
     var reports by remember { mutableStateOf<List<ReportPreview>>(emptyList()) }
     var historyError by remember { mutableStateOf<String?>(null) }
     var configured by remember { mutableStateOf(false) }
-    var expandedId by remember { mutableStateOf<String?>(null) }
+    var showHistory by remember { mutableStateOf(false) }
 
     LaunchedEffect(tab) {
         withContext(Dispatchers.IO) {
@@ -140,7 +140,7 @@ private fun NativeAiDesk(
             Column(Modifier.fillMaxSize().padding(contentPadding)) {
                 TabRow(selectedTabIndex = tab, containerColor = aiBg,
                     contentColor = aiAccent) {
-                    listOf("Brief", "Ask Atlas", "Deep Research", "History").forEachIndexed { index, name ->
+                    listOf("Brief", "Ask Atlas", "Deep Research").forEachIndexed { index, name ->
                         Tab(selected = tab == index, onClick = { tab = index },
                             text = { Text(name, fontSize = 11.sp, maxLines = 1) })
                     }
@@ -184,6 +184,10 @@ private fun NativeAiDesk(
                             }
                             Text("No automatic Gemini calls. Every remote analysis requires explicit evidence consent.",
                                 color = aiMuted, fontSize = 12.sp)
+                            TextButton(onClick = { showHistory = !showHistory }) {
+                                Text(if (showHistory) "Hide saved AI history" else "View saved AI history")
+                            }
+                            if (showHistory) NativeAiHistoryPanel(reports, historyError, open)
                         }
                         1 -> {
                             NativeAiPanel("Ask Atlas") {
@@ -203,7 +207,17 @@ private fun NativeAiDesk(
                                 Button(onClick = { open("deep") }) { Text("Open Deep Research") }
                             }
                         }
-                        else -> {
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun NativeAiHistoryPanel(
+    reports: List<ReportPreview>, historyError: String?, open: (String) -> Unit
+) {
+    var expandedId by remember { mutableStateOf<String?>(null) }
                             NativeAiPanel("Local encrypted history") {
                                 Text("Ordinary conversations expire 90 days after their last activity. Pinned research is kept until deletion.",
                                     color = aiMuted, fontSize = 12.sp)
@@ -236,12 +250,6 @@ private fun NativeAiDesk(
                                     Text("Manage history / continue conversation")
                                 }
                             }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable private fun NativeAiCard(
