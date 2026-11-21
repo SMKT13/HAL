@@ -16,6 +16,34 @@ test('allowlist removes credentials, private notes and journal memos',()=>{
  const p=I.evidencePacket(data,{mode:'copilot',includePortfolio:true,now:NOW}),s=JSON.stringify(p);
  assert.ok(p.portfolioIncluded);assert.ok(p.bookRevision);assert.ok(!/SECRET|PRIVATE|password|token|notes/.test(s));assert.equal(p.portfolio.legs[0].manual,0);assert.equal(p.valuation.open,0);
 });
+test('incomplete basket P&L is omitted before first AI consent preview',()=>{
+ const x=input();
+ x.valuation={open:-111111,net:-222222,realized:20,charges:5,complete:false,
+   rows:[{leg:x.book.legs[0],pnl:-333333,mark:{price:4700}}]};
+ const p=I.evidencePacket(x,{mode:'copilot',includePortfolio:true,now:NOW});
+ assert.equal(p.valuation.complete,false);
+ for(const key of ['open','net','realized','charges'])assert.equal(p.valuation[key],undefined);
+ assert.deepEqual(p.valuation.rows,[]);
+ const body=JSON.stringify(p);
+ for(const forbidden of ['111111','222222','333333'])assert.equal(body.includes(forbidden),false);
+});
+test('incomplete stress scenario is omitted but diagnostic reason retained',()=>{
+ const x=input();
+ x.scenarios=[{complete:false,total:-444444,horizon:'2026-11-23',spot:4800,
+    rows:[{leg:x.book.legs[0],pnl:-555555}],
+    errors:['Required option mark missing']}];
+ const p=I.evidencePacket(x,{mode:'deliberate',includePortfolio:true,now:NOW});
+ assert.equal(p.scenarios[0].complete,false);
+ assert.equal(p.scenarios[0].total,undefined);
+ assert.deepEqual(p.scenarios[0].rows,[]);
+ assert.deepEqual(p.scenarios[0].errors,['Required option mark missing']);
+ assert.equal(JSON.stringify(p).includes('555555'),false);
+});
+test('complete scenario retains validated deterministic totals',()=>{
+ const x=input(); x.scenarios=[{complete:true,total:-2500,spot:4800,rows:[]}];
+ const p=I.evidencePacket(x,{mode:'copilot',includePortfolio:true,now:NOW});
+ assert.equal(p.scenarios[0].total,-2500);
+});
 test('invalid numeric evidence stays unavailable',()=>{
  const data=input();data.market.spot.price=Infinity;data.valuation.open=NaN;const p=I.evidencePacket(data,{mode:'copilot',includePortfolio:true,now:NOW});assert.equal(p.market.spot.price,undefined);assert.equal(p.valuation.open,undefined);
 });
