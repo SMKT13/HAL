@@ -17,7 +17,8 @@ final class AgentDesk {
     static void validate(String question,JSONObject evidence)throws Exception{
         if(question==null||question.length()>2000)throw new Exception("Enter a question of up to 2,000 characters.");
         if(evidence==null||evidence.toString().length()>24000)throw new Exception("The evidence packet is too large.");
-        if(evidence.optJSONObject("risk")==null)throw new Exception("Load position risk data before an agent review.");
+        if(evidence.optBoolean("portfolioIncluded",false)&&evidence.optJSONObject("risk")==null)
+            throw new Exception("Approved position evidence is missing its validated risk calculations.");
     }
     static JSONObject select(JSONObject source,String...keys)throws Exception{
         JSONObject selected=new JSONObject();
