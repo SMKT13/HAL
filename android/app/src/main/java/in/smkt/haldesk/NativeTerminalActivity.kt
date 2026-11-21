@@ -152,6 +152,13 @@ private fun readSnapshot(context: Context): Snapshot = try {
                         Text("Ledger totals are raw saved entries, not verified lifetime P&L or a market valuation. Reconcile original history, charges and completed contracts before relying on them.", color=muted, fontSize=12.sp)
                     }
                 }
+                Panel("AI Intelligence Desk") {
+                    Text("Read saved AI reports in a native interface, or open the consent-protected Gemini brief and conversation.",
+                        color = muted, fontSize = 12.sp)
+                    Button(onClick = {
+                        context.startActivity(android.content.Intent(context, NativeAiDeskActivity::class.java))
+                    }) { Text("Open native AI Desk") }
+                }
                 Panel("Analysis and market data"){
                     Text("Open the full desk for verified Upstox/NSE quotes, hedge scenarios and lifetime P&L.",color=muted)
                     Text("This preview does not substitute the HAL spot price for futures or option marks.",color=cyan,fontSize=12.sp)
