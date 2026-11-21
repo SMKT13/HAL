@@ -42,6 +42,7 @@ public final class MainActivity extends Activity {
     private WebView web;
     private SecretStore secrets;
     private AiHistoryStore aiHistory;
+    private AiDailyBudget aiBudget;
     private BookStore books;
     private volatile boolean foreground;
     private long backgroundAt=-1;
@@ -75,7 +76,7 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-        books=new BookStore(this);secrets=new SecretStore(this);aiHistory=new AiHistoryStore(this);prefs=getSharedPreferences("connection",MODE_PRIVATE);
+        books=new BookStore(this);secrets=new SecretStore(this);aiHistory=new AiHistoryStore(this);aiBudget=new AiDailyBudget(this);prefs=getSharedPreferences("connection",MODE_PRIVATE);
         offlineFinbert=new FinbertClassifier(getNoBackupFilesDir());
         stream=new MarketStream(data->{final int ticket=streamGeneration.get();sendIf("stream",data,()->ticket==streamGeneration.get()&&(foreground||"stopped".equals(data.optString("state"))));});
         FrameLayout root=new FrameLayout(this);root.setBackgroundColor(Color.rgb(11,16,32));
@@ -177,7 +178,8 @@ public final class MainActivity extends Activity {
             AiPolicy.prompt(mode,question,evidence.toString());final int current=aiGeneration.get();
             if(aiWorking.get()!=null)throw new Exception("The previous API request is still finishing.");
             if(consentDialog!=null&&consentDialog.isShowing())throw new Exception("Review or cancel the open sharing request first.");
-            ScrollView scroll=new ScrollView(this);TextView contents=text("Model: "+model+("deliberate".equals(mode)?" · 6 sequential AI requests":" · 1 AI request")+"\nQuestion: "+question+"\n\nExact evidence sent to Google:\n"+evidence.toString(2));contents.setTextIsSelectable(true);contents.setPadding(dp(20),dp(8),dp(20),dp(16));scroll.addView(contents);
+            JSONObject quota=aiBudget.status();
+            ScrollView scroll=new ScrollView(this);TextView contents=text("Model: "+model+("deliberate".equals(mode)?" · 6 sequential AI requests":" · 1 AI request")+"\nLocal AI requests reserved today (IST): "+quota.optInt("reserved")+" / "+quota.optInt("limit")+" (not a Google billing cap)\nQuestion: "+question+"\n\nExact evidence sent to Google:\n"+evidence.toString(2));contents.setTextIsSelectable(true);contents.setPadding(dp(20),dp(8),dp(20),dp(16));scroll.addView(contents);
             activeAiId=id;consentDialog=new AlertDialog.Builder(this).setTitle("Send this evidence to Gemini?").setView(scroll).setPositiveButton("Send to Gemini",(d,w)->runAi(id,conversationId,model,mode,question,evidence,current)).setNegativeButton("Cancel",(d,w)->send("ai_error",withId(id,"message","Review cancelled before any API call."))).setOnCancelListener(d->send("ai_error",withId(id,"message","Review cancelled before any API call."))).create();consentDialog.show();consentDialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         }catch(Exception e){send(config?"ai_config_error":"ai_error",withId(id,"message",e.getMessage()));}
     }
@@ -185,7 +187,10 @@ public final class MainActivity extends Activity {
     private void runAi(String id,String conversationId,String model,String mode,String question,JSONObject evidence,int current){
         try{if(current!=aiGeneration.get()||!foreground)throw new Exception("Evidence changed or the app paused. Review the current book and retry.");
             final String key;try{key=secrets.get("gemini");}catch(Exception e){throw new Exception("Secure key storage unavailable. Unlock the phone and retry.");}if(!AiPolicy.validKey(key))throw new Exception("Enter a valid Gemini API key in AI settings.");
-            final Object ticket=new Object();if(!aiWorking.compareAndSet(null,ticket))throw new Exception("The previous API request is still finishing.");final AiClient client=new AiClient();activeAi=client;activeAiId=id;
+            final Object ticket=new Object();if(!aiWorking.compareAndSet(null,ticket))throw new Exception("The previous API request is still finishing.");
+            try{aiBudget.reserve("deliberate".equals(mode)?6:1);}
+            catch(Exception limitError){aiWorking.compareAndSet(ticket,null);throw limitError;}
+            final AiClient client=new AiClient();activeAi=client;activeAiId=id;
             aiExecutor.execute(()->{try{if(current!=aiGeneration.get()||!foreground)return;JSONObject result;
                     if("deliberate".equals(mode)){
                         result=AgentDesk.run(client,key,model,question,evidence,(stage,label)->{
@@ -220,6 +225,13 @@ public final class MainActivity extends Activity {
         form.addView(text("Paste the complete key from Google AI Studio. Pasted whitespace is removed automatically. Key formats containing dots and long authorization keys are supported; Google verifies the key when you run a review."));
         form.addView(text("Model ID"));EditText model=new EditText(this);model.setSingleLine(true);model.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         model.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(81)});model.setText(prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));form.addView(model);
+        form.addView(text("Local AI request allowance per IST day (1–60). Six-agent research reserves up to six requests. This is not a Google billing limit."));
+        EditText dailyLimit=new EditText(this);
+        dailyLimit.setSingleLine(true);
+        dailyLimit.setInputType(InputType.TYPE_CLASS_NUMBER);
+        dailyLimit.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(2)});
+        dailyLimit.setText(String.valueOf(aiBudget.limit()));
+        form.addView(dailyLimit);
         form.addView(text("The key is encrypted with Android Keystore and is never sent to the web page or included in backups. Selected questions and evidence go to Google only when you run a review. Broker tokens and private notes are excluded. API usage may incur Google charges. Research uses news and indicators already fetched by this app; no AI web search."));
         ScrollView scroll=new ScrollView(this);scroll.addView(form);
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Gemini API settings").setView(scroll).setPositiveButton("Save",null).setNegativeButton("Cancel",null).setNeutralButton("Forget API key",null).create();
@@ -230,10 +242,15 @@ public final class MainActivity extends Activity {
                 final String value;String selected=model.getText().toString().trim();
                 try{value=AiPolicy.pastedKey(credential.getText().toString());}catch(Exception error){credential.setError(error.getMessage());return;}
                 try{AiPolicy.model(selected);}catch(Exception error){model.setError(error.getMessage());return;}
+                final int nextAllowance;
+                try{nextAllowance=Integer.parseInt(dailyLimit.getText().toString().trim());
+                    if(nextAllowance<1||nextAllowance>60)throw new NumberFormatException();
+                }catch(Exception error){dailyLimit.setError("Choose a number between 1 and 60.");return;}
                 if(value.isEmpty()&&!secrets.has("gemini")){credential.setError("Enter your Gemini API key.");return;}
                 try {
                     if(!value.isEmpty())secrets.set("gemini",value);
                     if(!prefs.edit().putString("ai_model",selected).commit())throw new Exception();
+                    aiBudget.setLimit(nextAllowance);
                     invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");dialog.dismiss();aiStatus();
                 }catch(Exception error){credential.setError("Could not save securely. Unlock your phone and try again.");}
             });
