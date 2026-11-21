@@ -41,13 +41,19 @@ function priority(input){
  const issue=String(src.integrityIssue||'').trim();
  if(issue)return {level:0,code:'DATA_INTEGRITY',title:'Verify saved financial records',detail:'The saved book needs reconciliation. A complete portfolio assessment is withheld.',reason:issue};
  if(src.hasOpenPosition===true&&valuation.complete===false)return {level:0,code:'MISSING_MARKS',title:'Position valuation needs verification',detail:'One or more required contract marks are missing; basket P&L must not be inferred.'};
- if(src.bookConfirmed===true&&finite(risk.futureUnits)&&risk.futureUnits>0&&finite(risk.uncoveredUnits)){
-  const ratio=Math.max(0,risk.uncoveredUnits)/risk.futureUnits;
-  if(ratio>=0.25)return {level:1,code:'COVERAGE_CRITICAL',title:'HAL hedge coverage needs review',detail:'At least 25% of futures units are not covered by eligible put quantity. Strike and expiry also matter.'};
-  if(ratio>0)return {level:2,code:'COVERAGE_GAP',title:'Review partial put coverage',detail:'Some verified futures units lack eligible protective put quantity.'};
- }
- if(src.verifiedExpirySessions!=null&&Number.isInteger(src.verifiedExpirySessions)&&src.verifiedExpirySessions>=0&&src.verifiedExpirySessions<=2&&src.hasContinuingFutures===true)return {level:1,code:'EXPIRY_IMMINENT',title:'Protection expires soon',detail:'The verified put expiry falls within two NSE trading sessions while futures exposure continues.'};
- if(src.verifiedExpirySessions!=null&&Number.isInteger(src.verifiedExpirySessions)&&src.verifiedExpirySessions>=3&&src.verifiedExpirySessions<=5&&src.hasContinuingFutures===true)return {level:2,code:'EXPIRY_APPROACHING',title:'Review approaching put expiry',detail:'Protection expires within five verified NSE trading sessions.'};
+ const expiry=src.verifiedExpirySessions;
+ // Evaluate P1 conditions before any P2 condition. A minor coverage gap must
+ // never conceal an imminent expiry review.
+ if(Number.isInteger(expiry)&&expiry>=0&&expiry<=2&&src.hasContinuingFutures===true)
+  return {level:1,code:'EXPIRY_IMMINENT',title:'Protection expires soon',detail:'The verified put expiry falls within two NSE trading sessions while futures exposure continues.'};
+ const ratio=src.bookConfirmed===true&&finite(risk.futureUnits)&&risk.futureUnits>0&&finite(risk.uncoveredUnits)
+  ?Math.max(0,risk.uncoveredUnits)/risk.futureUnits:null;
+ if(ratio!=null&&ratio>=0.25)
+  return {level:1,code:'COVERAGE_CRITICAL',title:'HAL hedge coverage needs review',detail:'At least 25% of futures units are not covered by eligible put quantity. Strike and expiry also matter.'};
+ if(Number.isInteger(expiry)&&expiry>=3&&expiry<=5&&src.hasContinuingFutures===true)
+  return {level:2,code:'EXPIRY_APPROACHING',title:'Review approaching put expiry',detail:'Protection expires within five verified NSE trading sessions.'};
+ if(ratio!=null&&ratio>0)
+  return {level:2,code:'COVERAGE_GAP',title:'Review partial put coverage',detail:'Some verified futures units lack eligible protective put quantity.'};
  if(Number.isInteger(src.savedExpiryCalendarDays)&&src.savedExpiryCalendarDays>=0&&
     src.savedExpiryCalendarDays<=7&&src.hasContinuingFutures===true){
   return {level:2,code:'SAVED_EXPIRY_CALENDAR_REVIEW',title:'Review recorded put expiry',
