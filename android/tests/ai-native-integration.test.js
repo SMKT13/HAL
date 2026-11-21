@@ -59,6 +59,13 @@ test('native AI Brief uses verified read-only Room coverage, not guessed P&L',()
  assert.match(ui,/not a guaranteed loss floor/);
  assert.doesNotMatch(ui,/openOrCreateDatabase\(|writableDatabase|insert\(|UPDATE TradeLedgerEntity/);
 });
+test('incomplete valuation and scenario amounts are withheld before Gemini request',()=>{
+ const sanitizer=read('app/src/main/java/in/smkt/haldesk/AiEvidence.java');
+ assert.match(sanitizer,/boolean valuationComplete=val!=null&&val\.optBoolean\("complete",false\)/);
+ assert.match(sanitizer,/safeV\.put\("rows",valuationComplete\?rows\(/);
+ assert.match(sanitizer,/if\(!complete\)safe\.put\("complete",false\)/);
+ assert.match(sanitizer,/safe\.put\("rows",complete\?rows\(scenario\.optJSONArray\("rows"\),true\):new JSONArray\(\)\)/);
+});
 test('incomplete valuation and scenario totals cannot become approved Gemini money claims',()=>{
  const guard=read('app/src/main/java/in/smkt/haldesk/AiNumericClaimGuard.java');
  assert.match(guard,/valuation\.optBoolean\("complete",false\)/);
