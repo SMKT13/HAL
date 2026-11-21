@@ -32,17 +32,19 @@
 22. Added a chronological Ask Atlas conversation transcript, search of encrypted local history, and historical-answer labels; no remote history index is used.
 23. Added explicit report sharing via Android's system share sheet **after a full native privacy preview and confirmation**. No tradebook mutations or automatic sharing.
 24. Added Java test sources for the monetary guard and native integration tests for conversation UI and consent-based sharing.
+25. Extended the private native Compose Daily Brief with a saved Room v2 snapshot using `RoomReadOnlyPreview.read` and `nominalCoverage`. Data conflicts and unsupported exposures withhold quantities; no market marks, ledger writes or unverified recovery totals are created.
+26. Added regression guards covering readonly Room exposure and approved three-view navigation.
 
 ## Checks executed in the assistant tool runtime
 - Parsed `ui4.js` and `ai-intelligence5.js` with a JavaScript parser: no syntax errors.
-- Executed the **21 focused JavaScript tests** (priority/privacy tests and native-integration guard tests) in an isolated tool runtime: 21 passed.
+- Executed the **22 focused JavaScript tests** (priority/privacy tests and native-integration guard tests) in an isolated tool runtime: 22 passed.
 - Parsed `ui4.js`, `ai-intelligence5.js`, `ai-intelligence5.test.js`, and `scripts/build-assets.js` successfully.
 - Passed 10 earlier structural wiring checks covering build order, native opt-in context, six-agent invocation, schema and model probe connections.
 - Reviewed the new branch files via the connected GitHub repository.
 
 ## Not yet proven or incomplete
 - No full `npm test`, `npm run assets`, Gradle, Robolectric, Android lint, APK build, signing, or device run was performed in this environment (Java and Node exist locally, but Android SDK/Gradle and direct GitHub network access are absent). Do not interpret checked-in tests as passing.
-- A native Compose AI gateway is implemented, including encrypted-history viewing and launch into the full desk; native in-screen Gemini chat and verified live market data parity remain incomplete.
+- A native Compose AI gateway is implemented, including encrypted-history viewing, read-only reconciled Room v2 nominal-coverage preview, and launch into the full desk; native in-screen Gemini chat and verified live market data parity remain incomplete.
 - Initial threaded follow-ups are wired through saved conversation IDs, with up to eight bounded, consented, revision-matched previous exchanges. A full chat transcript and local history filtering now exist, but transcript pagination, export formats and Android device usability are unverified.
 - Structured response format, field bounds, approved URL validation and a conservative monetary-token guard are implemented; complete claim-level numerical/semantic verification is **not** implemented. Gemini should never be trusted as the source of position P&L.
 - Exact NSE trading-session expiry counting is not connected; the priority engine accepts a verified count but does not invent one.
