@@ -42,6 +42,8 @@ public final class AiNumericClaimGuardTest {
         AiNumericClaimGuard.validate(response("Saved net value is -₹5,650.50 (verify marks)."),permitted);
         check(true);
         rejected(response("Exposure costs ₹300."),permitted); // futureUnits is not money
+        rejected(response("Guaranteed gain ₹5.00 lakh."),permitted);
+        rejected(response("Estimated proceeds INR 5 crore."),permitted);
         rejected(response("The model estimates ₹15,000 future gains."),permitted);
         JSONObject listAnswer=response("Based only on approved values.");
         listAnswer.put("riskWarnings",new JSONArray().put("Unknown additional ₹20,000 margin requirement."));
