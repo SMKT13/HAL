@@ -45,10 +45,14 @@
 35. Aligned the WebView's `insights4.js` evidence packet with the same incomplete-data filtering, so the initial request preview also excludes unverified totals. Added independent Java and JavaScript regression cases for both levels and validated idempotent native sanitization in synthetic fixtures.
 36. Fixed an obsolete `AgentDeskTest` expectation that incorrectly required the F&O role to exclude technical evidence. Included approved technical levels in the Risk Chair stage to support its numerical-claim validation, with updated role-isolation tests.
 37. Added `android/tests/test-native-coverage.sh` and `android/tests/native-coverage-smoke.kt` for standalone Kotlin verification without Android SDK, JUnit, Gradle or external downloads. Pure `NativeCoverage.kt` calculations were independently compiled and exercised using the locally installed Kotlin compiler. This does not compile Compose or Android services.
+38. Fixed a structured-output citation mismatch: validated approved HTTPS URLs can be up to 2000 characters, consistent with the existing evidence sanitizer, instead of failing on the prior 200-character limit. Added a Java fixture covering long citations.
+39. Added `android/scripts/verify-ai-desk-5.4.ps1`, a development-only Windows verification entry point for npm/JS, Python, Gradle debug unit tests, lint, and debug APK assembly. It never signs or deploys the APK and refuses an unexpected app ID/version; it requires an installed SDK 35 and Gradle wrapper.
+40. Found a possible concurrency race between the WebView-backed MainActivity and Compose AI-history gateway, which instantiate separate encrypted history stores. All list/context/save/pin/delete/clear operations now share a process-wide lock, preserving atomic read/prune/write operations across these activity instances.
+41. Added focused source guards for the Windows verification script and cross-activity history lock. These are not a substitute for device concurrency or Keystore testing.
 
 ## Checks executed in the assistant tool runtime
 - Parsed `ui4.js` and `ai-intelligence5.js` with a JavaScript parser: no syntax errors.
-- Executed **66 focused JavaScript checks** across `insights4`, `ai-intelligence5`, and native integration guards using an isolated JavaScript runtime (with a test-only URL shim): 66 passed, 0 failed. These are not a full Node/npm suite.
+- Executed **68 focused JavaScript checks** across `insights4`, `ai-intelligence5`, and native integration guards using an isolated JavaScript runtime (with a test-only URL shim): 68 passed, 0 failed. These are not a full Node/npm suite.
 - Parsed `ui4.js`, `ai-intelligence5.js`, `ai-intelligence5.test.js`, and `scripts/build-assets.js` successfully.
 - Passed 10 earlier structural wiring checks covering build order, native opt-in context, six-agent invocation, schema and model probe connections.
 - Compiled and ran a standalone smoke harness for the pure Kotlin `NativeCoverage.kt` logic: passed. Android/Compose code was not compiled.
@@ -56,7 +60,7 @@
 - Reviewed the new branch files via the connected GitHub repository.
 
 ## Not yet proven or incomplete
-- No full `npm test`, `npm run assets`, Java org.json suite, Gradle, Robolectric, Android lint, APK build, signing, or device run was performed in this environment (Java/Node/Kotlin compiler exist locally, but Android SDK/Gradle and Maven downloads are unavailable). Focused isolated JS and pure Kotlin smoke checks have run; checked-in Java/Android tests have **not** run.
+- No full `npm test`, `npm run assets`, Java org.json suite, Gradle, Robolectric, Android lint, APK build, signing, or device run was performed in this environment (Java/Node/Kotlin compiler exist locally, but Android SDK/Gradle and Maven downloads are unavailable). Focused isolated JS and pure Kotlin smoke checks have run; checked-in Java/Android tests have **not** run. Windows verifier is committed but has not been executed in Windows.
 - A native Compose AI gateway is implemented, including encrypted-history viewing, read-only reconciled Room v2 nominal-coverage preview, and launch into the full desk; native in-screen Gemini chat and verified live market data parity remain incomplete.
 - Initial threaded follow-ups are wired through saved conversation IDs, with up to eight bounded, consented, revision-matched previous exchanges. A full chat transcript and local history filtering now exist, but transcript pagination, export formats and Android device usability are unverified.
 - Structured response format, field bounds, approved URL validation and a conservative monetary-token guard (which excludes incomplete basket/scenario totals) are implemented; complete claim-level numerical/semantic verification is **not** implemented. Gemini should never be trusted as the source of position P&L.
