@@ -38,13 +38,13 @@ public final class AgentDeskTest {
         JSONObject business=AgentDesk.stageEvidence("agent_business",e,past);
         check(business.has("fundamentals")&&!business.has("funding")&&!business.has("portfolio"));
         JSONObject futures=AgentDesk.stageEvidence("agent_derivatives",e,past);
-        check(futures.has("portfolio")&&!futures.has("technical"));
+        check(futures.has("portfolio")&&futures.has("technical")&&!futures.has("fundamentals"));
         JSONObject bull=AgentDesk.stageEvidence("agent_bull",e,past);
         check(bull.getJSONArray("analystSummaries").length()==1);
         JSONObject bear=AgentDesk.stageEvidence("agent_bear",e,past);
         check(bear.has("analystSummaries"));
         JSONObject risk=AgentDesk.stageEvidence("agent_risk",e,past);
-        check(risk.has("portfolio")&&risk.has("analystSummaries"));
+        check(risk.has("portfolio")&&risk.has("technical")&&risk.has("analystSummaries"));
         rejects(()->AgentDesk.stageEvidence("agent_execute",e,past));
         check(AgentDesk.summaries(past,5).getJSONObject(0).getString("reply").equals("RSI source dated"));
         check(AiPolicy.sanitizeEvidence(technical,"agent_technical").getJSONObject("technical").getInt("rsi")==50);
@@ -52,6 +52,7 @@ public final class AgentDeskTest {
         check(AiPolicy.sanitizeEvidence(futures,"agent_derivatives").getJSONObject("risk").getInt("futureUnits")==200);
         check(AiPolicy.sanitizeEvidence(bull,"agent_bull").getJSONArray("analystSummaries").length()==1);
         check(AiPolicy.sanitizeEvidence(risk,"agent_risk").getJSONArray("analystSummaries").length()==1);
+        check(AiPolicy.sanitizeEvidence(risk,"agent_risk").getJSONObject("technical").getInt("rsi")==50);
         check(AiPolicy.prompt("agent_risk","Review",risk.toString()).contains("RISK CHAIR"));
         System.out.println("PASS "+count+" agent role isolation and validation checks");
     }
