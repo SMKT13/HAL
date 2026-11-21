@@ -20,6 +20,9 @@ final class AiHistoryStore {
     private static final String PREFS="hal_atlas_ai_history_private_v1";
     private static final String ALIAS="hal-atlas-ai-history-v1";
     private static final String DATA="history";
+    // Both MainActivity and the Compose gateway instantiate this store.
+    // Serialise read-prune-write transactions across those instances.
+    private static final Object HISTORY_LOCK=new Object();
     private final SharedPreferences preferences;
     AiHistoryStore(Context context){preferences=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);}
     private SecretKey key(boolean create)throws Exception {
@@ -53,16 +56,16 @@ final class AiHistoryStore {
                 Base64.encodeToString(cipher.doFinal(plain),Base64.NO_WRAP);
         if(!preferences.edit().putString(DATA,encoded).commit())throw new Exception("AI history could not be saved.");
     }
-    synchronized JSONObject list()throws Exception {
+    synchronized JSONObject list()throws Exception { synchronized(HISTORY_LOCK){
         JSONObject original=loadRaw(),current=AiHistoryRetention.prune(original,System.currentTimeMillis());
         if(current.getJSONArray("items").length()!=original.getJSONArray("items").length())write(current);
         return current;
-    }
-    synchronized JSONObject context(String threadId,String currentRevision,boolean allowPortfolio)throws Exception {
+    }}
+    synchronized JSONObject context(String threadId,String currentRevision,boolean allowPortfolio)throws Exception { synchronized(HISTORY_LOCK){
         JSONObject valid=AiHistoryRetention.prune(loadRaw(),System.currentTimeMillis());
         return AiConversationContext.select(valid,threadId,currentRevision,allowPortfolio);
-    }
-    synchronized void save(String id,String threadId,String question,String mode,JSONObject result,JSONObject evidence)throws Exception {
+    }}
+    synchronized void save(String id,String threadId,String question,String mode,JSONObject result,JSONObject evidence)throws Exception { synchronized(HISTORY_LOCK){
         if(threadId==null||!threadId.matches("[A-Za-z0-9_-]{1,80}"))
             throw new Exception("Invalid AI conversation identifier.");
         if(id==null||!id.matches("[A-Za-z0-9_-]{1,80}")||question==null||question.length()>2000)
@@ -90,14 +93,14 @@ final class AiHistoryStore {
             item.put("agents",safe);
         }
         write(AiHistoryRetention.upsert(loadRaw(),item,System.currentTimeMillis()));
-    }
-    synchronized JSONObject pin(String id,boolean pinned)throws Exception {
+    }}
+    synchronized JSONObject pin(String id,boolean pinned)throws Exception { synchronized(HISTORY_LOCK){
         JSONObject next=AiHistoryRetention.setPinned(loadRaw(),id,pinned,System.currentTimeMillis());write(next);return next;
-    }
-    synchronized JSONObject delete(String id)throws Exception {
+    }}
+    synchronized JSONObject delete(String id)throws Exception { synchronized(HISTORY_LOCK){
         JSONObject next=AiHistoryRetention.remove(loadRaw(),id,System.currentTimeMillis());write(next);return next;
-    }
-    synchronized JSONObject clear()throws Exception {
+    }}
+    synchronized JSONObject clear()throws Exception { synchronized(HISTORY_LOCK){
         JSONObject empty=AiHistoryRetention.empty();write(empty);return empty;
-    }
+    }}
 }
