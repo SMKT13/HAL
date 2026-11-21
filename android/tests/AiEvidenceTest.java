@@ -10,6 +10,10 @@ public final class AiEvidenceTest {
         check(clean.getBoolean("portfolioIncluded"));check(clean.getString("bookRevision").equals("rev-1234abcd"));
         check(clean.getJSONObject("valuation").getInt("open")==0);check(clean.getJSONObject("portfolio").getJSONArray("legs").getJSONObject(0).getInt("manual")==0);
         check(clean.getJSONArray("news").getJSONObject(0).isNull("url"));check(clean.getJSONObject("market").getJSONObject("spot").getInt("price")==4900);
+        JSONObject recoveryPacket=packet().put("contextNote","untrusted custom instruction");
+        JSONObject recoverySafe=AiPolicy.sanitizeEvidence(recoveryPacket,"copilot");
+        check(recoverySafe.getString("contextNote").contains("Do not infer it."));
+        check(!recoverySafe.toString().contains("untrusted custom instruction"));
         String hash=AiPolicy.evidenceDigest(clean);check(hash.matches("[a-f0-9]{64}"));check(hash.equals(AiPolicy.evidenceDigest(AiPolicy.sanitizeEvidence(clean,"copilot"))));
         JSONObject research=AiPolicy.sanitizeEvidence(packet(),"research");check(!research.getBoolean("portfolioIncluded"));
         for(String key:new String[]{"portfolio","bookRevision","funding","valuation","risk","scenarios","coach"})check(!research.has(key));
