@@ -72,6 +72,9 @@ final class AgentDesk {
             }
             String reply=result.optString("reply","").trim();
             if(reply.isEmpty())throw new Exception("An agent returned no usable analysis.");
+            try{AiNumericClaimGuard.validateFreeForm(reply,packet);}
+            catch(Exception unsupported){throw new AiClient.Failure(
+                LABELS[i]+" (stage "+(i+1)+"/6) cited an unsupported INR value. Retry with only verified app figures.");}
             findings.put(new JSONObject().put("role",LABELS[i]).put("reply",reply));
         }
         JSONArray sources=evidence.optJSONArray("sources");
