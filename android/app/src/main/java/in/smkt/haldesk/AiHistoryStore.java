@@ -58,13 +58,19 @@ final class AiHistoryStore {
         if(current.getJSONArray("items").length()!=original.getJSONArray("items").length())write(current);
         return current;
     }
-    synchronized void save(String id,String question,String mode,JSONObject result,JSONObject evidence)throws Exception {
+    synchronized JSONObject context(String threadId,String currentRevision,boolean allowPortfolio)throws Exception {
+        JSONObject valid=AiHistoryRetention.prune(loadRaw(),System.currentTimeMillis());
+        return AiConversationContext.select(valid,threadId,currentRevision,allowPortfolio);
+    }
+    synchronized void save(String id,String threadId,String question,String mode,JSONObject result,JSONObject evidence)throws Exception {
+        if(threadId==null||!threadId.matches("[A-Za-z0-9_-]{1,80}"))
+            throw new Exception("Invalid AI conversation identifier.");
         if(id==null||!id.matches("[A-Za-z0-9_-]{1,80}")||question==null||question.length()>2000)
             throw new Exception("Invalid AI history item.");
         String reply=result.optString("reply","");
         if(reply.length()>24000)throw new Exception("AI history answer exceeds the storage limit.");
         String now=Instant.now().toString();
-        JSONObject item=new JSONObject().put("id",id).put("createdAt",now).put("updatedAt",now)
+        JSONObject item=new JSONObject().put("id",id).put("conversationId",threadId).put("createdAt",now).put("updatedAt",now)
             .put("question",question).put("mode",mode).put("reply",reply)
             .put("source",result.optString("source","")).put("generatedAt",result.opt("generatedAt"))
             .put("bookRevision",evidence.opt("bookRevision")).put("portfolioIncluded",evidence.optBoolean("portfolioIncluded",false))
