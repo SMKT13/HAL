@@ -408,7 +408,7 @@ function showAiHistory(query=''){
     btn('ai-history-open','Read','data-id="'+id+'"')+btn('ai-history-continue','Continue','data-id="'+id+'"')+
     btn('ai-history-pin',item.pinned?'Unpin':'Pin','data-id="'+id+'" data-pinned="'+(item.pinned?'true':'false')+'"')+
     btn('ai-history-delete','Delete','data-id="'+id+'"')+'</div></section>';
- }).join(''):empty('No saved AI reports','Approved AI answers are stored securely on this device.');
+ }).join(''):empty(cleaned?'No matching conversations':'No saved AI reports',cleaned?'Try a different search term.':'Approved AI answers are stored securely on this device.');
  modal('AI history · local only','<p class="fine">Ordinary reports expire 90 days after their last activity. Pinned reports remain until deleted. Deleting these records does not affect the HAL tradebook.</p>'+
   '<label>Search saved questions and answers<input id="ai-history-query" maxlength="100" value="'+esc(cleaned)+'" placeholder="Search on this device"></label>'+
   '<div class="toolbar">'+btn('ai-history-search','Search')+btn('ai-history-reset','Show all')+'</div>'+
