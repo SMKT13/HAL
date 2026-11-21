@@ -14,6 +14,8 @@ final class AiUsageMetrics {
         for(String key:KEYS){
             Object value=source.opt(key);
             if(!(value instanceof Number))continue;
+            double numeric=((Number)value).doubleValue();
+            if(!Double.isFinite(numeric)||numeric!=Math.rint(numeric))continue;
             long count=((Number)value).longValue();
             if(count>=0&&count<=10000000L)out.put(key,count);
         }
@@ -25,6 +27,8 @@ final class AiUsageMetrics {
         for(String key:KEYS){
             Object value=additional.opt(key);
             if(!(value instanceof Number))continue;
+            double numeric=((Number)value).doubleValue();
+            if(!Double.isFinite(numeric)||numeric!=Math.rint(numeric))continue;
             long count=((Number)value).longValue();
             if(count<0||count>10000000L)continue;
             long previous=out.optLong(key,0);
