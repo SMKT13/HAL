@@ -423,6 +423,24 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void aiConfig(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,true));}
         @JavascriptInterface public void ai(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,false));}
         @JavascriptInterface public void aiSettings(){runOnUiThread(()->showAiSettings());}
+        @JavascriptInterface public void aiModelCheck(){
+            if(!foreground)return;
+            aiExecutor.execute(()->{
+                try{
+                    if(!foreground)return;
+                    String model=AiPolicy.model(prefs.getString("ai_model",AiPolicy.DEFAULT_MODEL));
+                    String key=secrets.get("gemini");
+                    JSONObject result=AiModelProbe.verify(key,model);
+                    send("ai_model_status",result);
+                }catch(Exception error){
+                    JSONObject result=object("available",false);
+                    try{result.put("details",error.getMessage()==null?"Gemini model verification failed.":error.getMessage());}
+                    catch(Exception ignored){}
+                    send("ai_model_status",result);
+                }
+            });
+        }
+
         @JavascriptInterface public String aiHistoryContext(String conversationId,String bookRevision,boolean shareFinancial){
             try{return aiHistory.context(conversationId,bookRevision,shareFinancial).toString();}
             catch(Exception error){return object("error","Selected conversation history cannot be shared. Check your saved reports.").toString();}
