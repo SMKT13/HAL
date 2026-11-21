@@ -37,9 +37,20 @@ public final class AiNumericClaimGuardTest {
             .put("market",new JSONObject().put("spot",new JSONObject().put("price",5020.50)))
             .put("portfolio",new JSONObject().put("legs",new JSONArray().put(
                 new JSONObject().put("entry",4927.35).put("lots",2).put("lotSize",150))))
-            .put("valuation",new JSONObject().put("net",-5650.50))
+            .put("valuation",new JSONObject().put("net",-5650.50).put("complete",true))
             .put("risk",new JSONObject().put("futureUnits",300).put("coveredUnits",300));
         AiNumericClaimGuard.validate(response("Saved net value is -₹5,650.50 (verify marks)."),permitted);
+        check(true);
+        JSONObject incomplete=new JSONObject(permitted.toString())
+            .put("valuation",new JSONObject().put("net",-5650.50).put("complete",false))
+            .put("scenarios",new JSONArray().put(new JSONObject()
+                .put("complete",false).put("total",-10000.0).put("spot",4400.0)));
+        rejected(response("The basket net was ₹5,650.50."),incomplete);
+        rejected(response("Modeled loss ₹10,000."),incomplete);
+        JSONObject validScenario=new JSONObject(permitted.toString())
+            .put("scenarios",new JSONArray().put(new JSONObject()
+                .put("complete",true).put("total",-10000.0).put("spot",4400.0)));
+        AiNumericClaimGuard.validate(response("Verified model scenario loss ₹10,000."),validScenario);
         check(true);
         rejected(response("Exposure costs ₹300."),permitted); // futureUnits is not money
         rejected(response("Guaranteed gain ₹5.00 lakh."),permitted);
