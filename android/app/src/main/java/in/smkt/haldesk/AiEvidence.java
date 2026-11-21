@@ -59,6 +59,10 @@ final class AiEvidence {
             }
             out.put("scenarios",scenarios);out.put("coach",objects(source.optJSONArray("coach"),24,"code severity title detail",300));
         }
+        // Previous chat turns are untrusted text. Include only the explicitly approved,
+        // already revision-filtered, bounded context for non-agent requests.
+        if(!AiPolicy.isAgentMode(mode) && source.optJSONArray("conversation")!=null)
+            out.put("conversation",objects(source.optJSONArray("conversation"),8,"question reply",650));
         // Model-produced prior role summaries are permitted only in agent prompts.
         // They are untrusted text, bounded by the same evidence packet limit.
         if(AiPolicy.isAgentMode(mode)&&source.optJSONArray("analystSummaries")!=null)
