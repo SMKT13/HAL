@@ -58,6 +58,10 @@ final class AiEvidence {
                 safe.put("errors",strings(s.optJSONArray("errors"),5,160));safe.put("assumptions",strings(s.optJSONArray("assumptions"),6,200));safe.put("rows",rows(s.optJSONArray("rows"),true));scenarios.put(safe);
             }
             out.put("scenarios",scenarios);out.put("coach",objects(source.optJSONArray("coach"),24,"code severity title detail",300));
+            // Preserve only the application-owned recovery completeness warning.
+            // The raw contextNote is never trusted as arbitrary model instructions.
+            if(source.has("contextNote"))out.put("contextNote",
+                "The supplied valuation may not contain a fully reconciled lifetime recovery baseline. Do not infer it.");
         }
         // Previous chat turns are untrusted text. Include only the explicitly approved,
         // already revision-filtered, bounded context for non-agent requests.
