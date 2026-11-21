@@ -69,13 +69,18 @@ final class AiNumericClaimGuard {
         if(legs!=null)for(int i=0;i<Math.min(legs.length(),40);i++)
             props(out,legs.optJSONObject(i),"entry strike manual");
         JSONObject valuation=evidence.optJSONObject("valuation");
-        props(out,valuation,"open realized charges net openPutPremium settlements fundingMovements");
-        if(valuation!=null)rows(out,valuation.optJSONArray("rows"));
+        // Incomplete baskets can contain valid individual marks but do NOT prove a
+        // total, charges or net position value. Never endorse those as complete.
+        if(valuation!=null&&valuation.optBoolean("complete",false)){
+            props(out,valuation,"open realized charges net openPutPremium settlements fundingMovements");
+            rows(out,valuation.optJSONArray("rows"));
+        }
+        // Funding is manually recorded, not a broker-verified margin requirement.
         props(out,evidence.optJSONObject("funding"),"margin free");
         JSONArray scenarios=evidence.optJSONArray("scenarios");
         if(scenarios!=null)for(int i=0;i<Math.min(scenarios.length(),20);i++){
             JSONObject scenario=scenarios.optJSONObject(i);
-            if(scenario==null)continue;
+            if(scenario==null||!scenario.optBoolean("complete",false))continue;
             props(out,scenario,"total spot");
             rows(out,scenario.optJSONArray("rows"));
         }
