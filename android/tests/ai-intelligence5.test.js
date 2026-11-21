@@ -50,3 +50,9 @@ test('daily intelligence brief includes all approved relevant evidence',()=>{
  assert.equal(x.scope,'comprehensive');assert.equal(x.evidence.portfolioIncluded,true);
  assert.ok(x.evidence.news);assert.ok(x.evidence.technical);assert.ok(x.evidence.risk);
 });
+test('calendar expiry review never claims verified trading sessions',()=>{
+ const r=AI.priority({savedExpiryCalendarDays:4,hasContinuingFutures:true});
+ assert.equal(r.code,'SAVED_EXPIRY_CALENDAR_REVIEW');
+ assert.match(r.detail,/calendar/);assert.match(r.detail,/not verified/);
+ assert.equal(AI.priority({savedExpiryCalendarDays:4,hasContinuingFutures:false}).code,'ROUTINE');
+});
