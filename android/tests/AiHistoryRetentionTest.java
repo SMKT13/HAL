@@ -26,6 +26,15 @@ public final class AiHistoryRetentionTest {
         check(clean.getJSONArray("items").getJSONObject(1).getBoolean("pinned"));
         clean=AiHistoryRetention.remove(clean,"fresh",now);
         check(clean.getJSONArray("items").length()==2);
+        JSONArray activeThread=new JSONArray()
+            .put(item("old-turn",now-120*days,false).put("conversationId","running"))
+            .put(item("new-turn",now-days,false).put("conversationId","running"));
+        JSONObject inThread=AiHistoryRetention.prune(new JSONObject().put("schema",1).put("items",activeThread),now);
+        check(inThread.getJSONArray("items").length()==2);
+        check(inThread.getJSONArray("items").getJSONObject(1).getString("id").equals("old-turn"));
+        JSONObject pinnedOnly=new JSONObject().put("schema",1).put("items",new JSONArray().put(item("old-pinned",now-200*days,true)));
+        check(AiHistoryRetention.prune(pinnedOnly,now).getJSONArray("items").length()==1);
+        check(AiHistoryRetention.setPinned(pinnedOnly,"old-pinned",false,now).getJSONArray("items").length()==0);
         System.out.println("PASS "+count+" encrypted-store retention policy checks");
     }
 }
