@@ -707,7 +707,7 @@ function receive(event,data){
  // Do not interrupt editing or a consent preview while new market data arrives.
  if(!document.activeElement?.matches('main input,main select,main textarea'))render();
 }
-window.HALApp={receive,back:()=>{if(!$('modal').hidden)closeModal();else if(ui.screen!=='position'||ui.position!=='overview'||ui.reviewOpen)navigate('position','overview');else native('minimize');}};
+window.HALApp={receive,openAiDesk:page=>{if(['brief','assistant','deep'].includes(page))navigate('ai',page);},back:()=>{if(!$('modal').hidden)closeModal();else if(ui.screen!=='position'||ui.position!=='overview'||ui.reviewOpen)navigate('position','overview');else native('minimize');}};
 try{const x=D.loadBook(N,localStorage);book=x.book;revision=x.revision;if(x.migrated){const saved=D.saveBook(N,localStorage,book,revision);book=saved.book;revision=saved.revision;}}catch(e){storageError=e.message;}
 try{let raw;if(N?.cacheGet){const r=JSON.parse(N.cacheGet('snapshot'));raw=r.ok?r.data:null;}else raw=JSON.parse(localStorage.getItem('hal_cache_v4')||'null');if(!raw){const old=JSON.parse(localStorage.getItem('hal_cache_v2')||'null');if(old)raw={snapshot:old.snapshot,research:old.research,lastSuccess:old.snapshot?.fetched_at_iso};}s=D.restoreCache(raw);}catch(_){s=D.empty();}
 beginReview();
