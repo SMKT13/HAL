@@ -29,6 +29,16 @@ test('deep research can explicitly exclude private financial records',()=>{
  assert.match(ui,/includePortfolio:ui.share/);
  assert.match(agents,/if\(evidence.optBoolean\("portfolioIncluded",false\)\&\&/);
 });
+test('encrypted conversation transcripts and search are local and revision-aware',()=>{
+ const ui=read('app/src/main/assets/ui4.js');
+ assert.match(ui,/function aiConversationTranscript\(\)/);
+ assert.match(ui,/item\.conversationId\|\|item\.id/);
+ assert.match(ui,/item\.id!==ui\.ai\?\.historyId/);
+ assert.match(ui,/Historical answer, not a live market observation/);
+ assert.match(ui,/ai-history-search/);
+ assert.match(ui,/ai-history-reset/);
+ assert.match(ui,/function aiHistoryRead\(\)/);
+});
 test('structured answers, privacy and history routing retain safety boundaries',()=>{
  const main=read('app/src/main/java/in/smkt/haldesk/MainActivity.java');
  const client=read('app/src/main/java/in/smkt/haldesk/AiClient.java');
