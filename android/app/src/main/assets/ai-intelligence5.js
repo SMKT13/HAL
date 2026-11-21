@@ -48,6 +48,12 @@ function priority(input){
  }
  if(src.verifiedExpirySessions!=null&&Number.isInteger(src.verifiedExpirySessions)&&src.verifiedExpirySessions>=0&&src.verifiedExpirySessions<=2&&src.hasContinuingFutures===true)return {level:1,code:'EXPIRY_IMMINENT',title:'Protection expires soon',detail:'The verified put expiry falls within two NSE trading sessions while futures exposure continues.'};
  if(src.verifiedExpirySessions!=null&&Number.isInteger(src.verifiedExpirySessions)&&src.verifiedExpirySessions>=3&&src.verifiedExpirySessions<=5&&src.hasContinuingFutures===true)return {level:2,code:'EXPIRY_APPROACHING',title:'Review approaching put expiry',detail:'Protection expires within five verified NSE trading sessions.'};
+ if(Number.isInteger(src.savedExpiryCalendarDays)&&src.savedExpiryCalendarDays>=0&&
+    src.savedExpiryCalendarDays<=7&&src.hasContinuingFutures===true){
+  return {level:2,code:'SAVED_EXPIRY_CALENDAR_REVIEW',title:'Review recorded put expiry',
+   detail:'A saved protective put approaches expiry in '+src.savedExpiryCalendarDays+
+    ' calendar day(s) while futures continue. Exchange sessions, holidays and broker cutoffs are not verified.'};
+ }
  const spot=market.spot||{},pct=spot.changePct;
  if(src.marketVerified===true&&finite(pct)&&Math.abs(pct)>=3)return {level:3,code:'MARKET_MOVE',title:'Material HAL market move',detail:'The verified cash-equity change exceeds the configured 3% review threshold.'};
  if(src.verifiedMaterialFiling===true)return {level:3,code:'NEW_FILING',title:'New HAL filing needs review',detail:'A material official disclosure was verified. Inspect its contents and source.'};
