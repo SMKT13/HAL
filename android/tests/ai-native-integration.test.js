@@ -22,6 +22,13 @@ test('native-to-WebView navigation remains validated and opt-in',()=>{
  assert.match(ui,/openAiDesk:page=>\{if\(\['brief','assistant','deep'\]\.includes\(page\)\)navigate\('ai',page\)/);
  assert.match(main,/setPositiveButton\("Send to Gemini"/);
 });
+test('deep research can explicitly exclude private financial records',()=>{
+ const ui=read('app/src/main/assets/ui4.js');
+ const agents=read('app/src/main/java/in/smkt/haldesk/AgentDesk.java');
+ assert.match(ui,/id="ai-deep-share"/);
+ assert.match(ui,/includePortfolio:ui.share/);
+ assert.match(agents,/if\(evidence.optBoolean\("portfolioIncluded",false\)\&\&/);
+});
 test('structured answers, privacy and history routing retain safety boundaries',()=>{
  const main=read('app/src/main/java/in/smkt/haldesk/MainActivity.java');
  const client=read('app/src/main/java/in/smkt/haldesk/AiClient.java');
