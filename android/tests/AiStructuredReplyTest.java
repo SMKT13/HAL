@@ -29,6 +29,12 @@ public final class AiStructuredReplyTest {
         JSONObject valid=AiStructuredReply.validate(sample().toString(),evidence);
         check(valid.getString("marketBias").equals("UNAVAILABLE"));
         check(AiStructuredReply.display(valid).contains("POSITION IMPLICATIONS"));
+        String longApproved="https://example.org/filing/"+new String(new char[290]).replace('\0','x');
+        JSONObject longEvidence=new JSONObject().put("sources",new JSONArray()
+            .put(new JSONObject().put("url",longApproved)));
+        JSONObject longCited=sample().put("sourceIds",new JSONArray().put(longApproved));
+        check(AiStructuredReply.validate(longCited.toString(),longEvidence)
+            .getJSONArray("sourceIds").getString(0).equals(longApproved));
         rejects(()->AiStructuredReply.validate("invalid-json",evidence));
         rejects(()->AiStructuredReply.validate(sample().put("sourceIds",new JSONArray().put("https://fake.example")).toString(),evidence));
         rejects(()->AiStructuredReply.validate(sample().put("marketBias","GUARANTEED").toString(),evidence));
