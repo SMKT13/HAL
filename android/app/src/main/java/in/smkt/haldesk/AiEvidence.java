@@ -18,6 +18,8 @@ final class AiEvidence {
         JSONObject out=pick(source,"generatedAt quoteAsOf",300).put("schemaVersion",4);
         boolean portfolio=!"research".equals(mode)&&source.optBoolean("portfolioIncluded",false);
         out.put("portfolioIncluded",portfolio);
+        if(AiPolicy.isAgentMode(mode)&&!portfolio)
+            out.put("analysisScope","Public HAL research only. No verified private position, hedge, charges, funding or recovery evidence was approved; do not infer those facts.");
         JSONObject market=source.optJSONObject("market"),safeMarket=new JSONObject();
         {
             for(String key:new String[]{"spot","nifty","vix"})safeMarket.put(key,(market==null||market.isNull(key))?JSONObject.NULL:pick(market.optJSONObject(key),"instrumentKey symbol price last_price change changePct prevClose quoteAt tradeAt retrievedAt source status cached lastSuccess lastFailure error",300));
