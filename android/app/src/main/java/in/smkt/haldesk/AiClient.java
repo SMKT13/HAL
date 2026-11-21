@@ -75,6 +75,8 @@ final class AiClient {
             }
             JSONObject result=new JSONObject().put("success",true).put("direct",true).put("source",model).put("reply",reply).put("grounded",false);
             if(structured!=null)result.put("structured",structured);
+            JSONObject usage=AiUsageMetrics.fromProvider(response.optJSONObject("usageMetadata"));
+            if(usage.length()>0)result.put("usage",usage);
             result.put("generatedAt",java.time.Instant.now().toString());result.put("dataAsOf",evidence.opt("quoteAsOf"));
             result.put("evidenceDigest",AiPolicy.evidenceDigest(evidence));result.put("portfolioIncluded",evidence.optBoolean("portfolioIncluded",false));
             result.put("bookRevision",evidence.opt("bookRevision"));result.put("evidenceGeneratedAt",evidence.opt("generatedAt"));
