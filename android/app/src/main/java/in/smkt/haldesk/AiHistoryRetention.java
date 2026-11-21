@@ -42,11 +42,7 @@ final class AiHistoryRetention {
             retained.add(item);
         }
         retained.sort(Comparator.comparingLong(AiHistoryRetention::time).reversed());
-        if(retained.size()>MAX_RECORDS){
-            // Keep pinned records, remove only oldest unpinned records.
-            for(int i=retained.size()-1;i>=0&&retained.size()>MAX_RECORDS;i--)
-                if(!retained.get(i).optBoolean("pinned",false))retained.remove(i);
-        }
+        // Never silently discard valid conversation turns to satisfy a storage cap.
         JSONArray records=new JSONArray();for(JSONObject item:retained)records.put(item);
         return new JSONObject().put("schema",1).put("items",records);
     }
@@ -62,7 +58,10 @@ final class AiHistoryRetention {
         }
         next.put("pinned",pinned);
         out.put(next);
-        return prune(new JSONObject().put("schema",1).put("items",out),now);
+        JSONObject bounded=prune(new JSONObject().put("schema",1).put("items",out),now);
+        if(bounded.getJSONArray("items").length()>MAX_RECORDS)
+            throw new Exception("AI history record limit reached. Delete or export old reports before saving.");
+        return bounded;
     }
     static JSONObject setPinned(JSONObject doc,String id,boolean pinned,long now)throws Exception {
         JSONObject clean=prune(doc,now);JSONArray records=clean.getJSONArray("items");
