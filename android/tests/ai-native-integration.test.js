@@ -59,6 +59,20 @@ test('native AI Brief uses verified read-only Room coverage, not guessed P&L',()
  assert.match(ui,/not a guaranteed loss floor/);
  assert.doesNotMatch(ui,/openOrCreateDatabase\(|writableDatabase|insert\(|UPDATE TradeLedgerEntity/);
 });
+test('all AI modes preserve bounded monetary evidence and reported token usage',()=>{
+ const client=read('app/src/main/java/in/smkt/haldesk/AiClient.java');
+ const agents=read('app/src/main/java/in/smkt/haldesk/AgentDesk.java');
+ const history=read('app/src/main/java/in/smkt/haldesk/AiHistoryStore.java');
+ const ui=read('app/src/main/assets/ui4.js');
+ const validator=read('app/src/main/java/in/smkt/haldesk/AiNumericClaimGuard.java');
+ assert.match(client,/AiUsageMetrics\.fromProvider\(response\.optJSONObject\("usageMetadata"\)\)/);
+ assert.match(agents,/AiUsageMetrics\.combine\(usage,result\.optJSONObject\("usage"\)\)/);
+ assert.match(agents,/AiNumericClaimGuard\.validateFreeForm\(reply,packet\)/);
+ assert.match(validator,/private static void technicalPrices\(/);
+ assert.match(history,/item\.put\("usage",AiUsageMetrics\.fromProvider\(usage\)\)/);
+ assert.match(ui,/Google-reported tokens/);
+ assert.match(ui,/Not a billing statement/);
+});
 test('structured answers, privacy and history routing retain safety boundaries',()=>{
  const main=read('app/src/main/java/in/smkt/haldesk/MainActivity.java');
  const client=read('app/src/main/java/in/smkt/haldesk/AiClient.java');
