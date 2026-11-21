@@ -88,6 +88,7 @@ final class AiStructuredReply {
             verified.put(id);
         }
         safe.put("sourceIds",verified);
+        AiNumericClaimGuard.validate(safe,evidence);
         return safe;
     }
     static String display(JSONObject valid)throws Exception {
