@@ -79,6 +79,8 @@ final class AiHistoryStore {
         JSONObject structured=result.optJSONObject("structured");
         if(structured!=null && structured.toString().length()<=16000)
             item.put("structured",structured);
+        JSONObject usage=result.optJSONObject("usage");
+        if(usage!=null)item.put("usage",AiUsageMetrics.fromProvider(usage));
         JSONArray agents=result.optJSONArray("agents");if(agents!=null){
             JSONArray safe=new JSONArray();
             for(int i=0;i<Math.min(6,agents.length());i++){
