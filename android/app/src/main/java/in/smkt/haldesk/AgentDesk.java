@@ -45,7 +45,7 @@ final class AgentDesk {
             case "agent_business":
                 out=select(source,"generatedAt","quoteAsOf","fundamentals","news","sources");break;
             case "agent_derivatives":
-                out=select(source,"generatedAt","quoteAsOf","portfolioIncluded","bookRevision","portfolio","valuation","risk","scenarios","funding","coach","sources");break;
+                out=select(source,"generatedAt","quoteAsOf","market","technical","portfolioIncluded","bookRevision","portfolio","valuation","risk","scenarios","funding","coach","sources");break;
             case "agent_bull":case "agent_bear":
                 out=select(source,"generatedAt","quoteAsOf","market","technical","portfolioIncluded","bookRevision","portfolio","valuation","risk","sources");
                 out.put("analystSummaries",summaries(previous,3));break;
