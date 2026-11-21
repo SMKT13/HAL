@@ -74,7 +74,7 @@ final class AiStructuredReply {
         for(String name:new String[]{"supportingEvidence","contraryEvidence","riskWarnings","nextReview","limitations"})
             safe.put(name,list(raw,name,8,600));
         safe.put("positionImplications",bounded(raw,"positionImplications",1200,false));
-        JSONArray ids=list(raw,"sourceIds",12,200);
+        JSONArray ids=list(raw,"sourceIds",12,2000);
         Set<String> allowed=new HashSet<>();
         JSONArray sources=evidence==null?null:evidence.optJSONArray("sources");
         if(sources!=null)for(int i=0;i<sources.length();i++){
