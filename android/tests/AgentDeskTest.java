@@ -20,6 +20,16 @@ public final class AgentDeskTest {
             .put("fundamentals",new JSONObject().put("metrics",new JSONArray()))
             .put("funding",new JSONObject().put("free",10000));
         AgentDesk.validate("",e);
+        JSONObject publicOnly=new JSONObject().put("portfolioIncluded",false)
+            .put("market",new JSONObject().put("spot",new JSONObject().put("price",5000)));
+        AgentDesk.validate("Public HAL analysis",publicOnly);
+        JSONObject publicFno=AgentDesk.stageEvidence("agent_derivatives",publicOnly,new JSONArray());
+        check(publicFno.has("market")&&!publicFno.has("portfolio"));
+        JSONObject publicSafe=AiPolicy.sanitizeEvidence(publicFno,"agent_derivatives");
+        check(!publicSafe.getBoolean("portfolioIncluded"));
+        check(publicSafe.getString("analysisScope").contains("Public HAL research only"));
+        check(!publicSafe.has("portfolio")&&!publicSafe.has("funding"));
+
         rejects(()->AgentDesk.validate("",new JSONObject()));
         rejects(()->AgentDesk.validate(new String(new char[2001]),e));
         JSONArray past=new JSONArray().put(new JSONObject().put("role","Technical analyst").put("reply","RSI source dated"));
