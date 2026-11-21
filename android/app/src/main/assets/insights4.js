@@ -52,12 +52,25 @@ function technicalEvidence(t={}){
  return out;
 }
 function valuationEvidence(v={}){
- return {...select(v,['open','realized','charges','net','complete','openPutPremium','settlements','fundingMovements']),rows:array(v.rows).slice(0,30).map(r=>({leg:contract(r.leg||{}),units:number(r.units),pnl:number(r.pnl),mark:select(r.mark,['price','source','quoteAt','tradeAt','retrievedAt','status'])}))};
+ // Keep incomplete financial totals out of the *first* consent preview, not only
+ // the later Android sanitizer. Retain a visible incompleteness marker.
+ const complete=v.complete===true;
+ return {...(complete?select(v,['open','realized','charges','net','openPutPremium','settlements','fundingMovements']):{}),
+  complete,
+  rows:complete?array(v.rows).slice(0,30).map(r=>({leg:contract(r.leg||{}),units:number(r.units),pnl:number(r.pnl),mark:select(r.mark,['price','source','quoteAt','tradeAt','retrievedAt','status'])})):[]
+ };
 }
 function riskEvidence(r={}){
  return {...select(r,['futureUnits','putUnits','coveredUnits','uncoveredUnits','coverage','delta','theta','greeksComplete','nextExpiry']),warnings:array(r.warnings).slice(0,12).map(w=>typeof w==='string'?text(w,220):select(w,['code','title','detail'])),distribution:array(r.distribution).slice(0,30).map(x=>select(x,['expiry','strike','units','lots','type']))};
 }
-function scenarioEvidence(s){return array(s).slice(0,12).map(x=>({...select(x,['total','horizon','complete','spot','shock','ivShift','rate','dividend']),errors:array(x.errors).map(x=>text(x,160)).slice(0,5),assumptions:array(x.assumptions).map(x=>text(x,200)).slice(0,6),rows:array(x.rows).slice(0,30).map(r=>({leg:contract(r.leg||{}),modelPrice:number(r.modelPrice),pnl:number(r.pnl),iv:number(r.iv)}))}));}
+function scenarioEvidence(s){return array(s).slice(0,12).map(x=>{
+ const complete=x.complete===true;
+ return {...select(x,complete?['total','horizon','spot','shock','ivShift','rate','dividend']:['horizon','spot','shock','ivShift','rate','dividend']),
+  complete,errors:array(x.errors).map(v=>text(v,160)).slice(0,5),
+  assumptions:array(x.assumptions).map(v=>text(v,200)).slice(0,6),
+  rows:complete?array(x.rows).slice(0,30).map(r=>({leg:contract(r.leg||{}),modelPrice:number(r.modelPrice),pnl:number(r.pnl),iv:number(r.iv)})):[]
+ };
+});}
 function fundamentalEvidence(f={}){
  const profile=select(f.profile,['name','symbol','sector','industry','description','source','retrievedAt']);profile.url=safeURL(f.profile?.url);
  const metrics=array(f.metrics).slice(0,30).map(m=>({...select(m,['label','value','unit','period','source','retrievedAt','kind']),url:safeURL(m.url)})).filter(m=>m.label&&(m.kind==='provider'||m.kind==='derived'));
