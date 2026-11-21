@@ -18,6 +18,9 @@ final class AiNumericClaimGuard {
     private static final Pattern MONEY=Pattern.compile(
         "(?:₹\\s*|\\bINR\\s*|\\bRs\\.?\\s*)([+-]?[0-9][0-9,]*(?:\\.[0-9]{1,4})?)",
         Pattern.CASE_INSENSITIVE);
+    private static final Pattern SCALED_MONEY=Pattern.compile(
+        "(?:₹\\s*|\\bINR\\s*|\\bRs\\.?\\s*)[+-]?[0-9][0-9,]*(?:\\.[0-9]{1,4})?\\s*(?:lakh|lac|crore|cr|million|billion|bn|k|m|l)\\b",
+        Pattern.CASE_INSENSITIVE);
     private AiNumericClaimGuard(){}
 
     private static void number(Set<String> values, Object v) {
@@ -67,6 +70,8 @@ final class AiNumericClaimGuard {
         return out;
     }
     private static void scan(String text,Set<String> allowed)throws Exception {
+        if(SCALED_MONEY.matcher(text==null?"":text).find())
+            throw new Exception("Gemini used an unverified scaled INR amount; inspect the app's exact financial figures.");
         Matcher m=MONEY.matcher(text==null?"":text);
         while(m.find()){
             final String numeric=m.group(1).replace(",","");
