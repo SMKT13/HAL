@@ -26,6 +26,10 @@ final class AiClient {
         body.put("contents",new JSONArray().put(new JSONObject().put("role","user").put("parts",new JSONArray().put(new JSONObject().put("text",prompt)))));
         JSONObject generation=new JSONObject().put("maxOutputTokens",AiPolicy.outputLimit(mode));
         if(AiPolicy.preferLowThinking(model))generation.put("thinkingConfig",new JSONObject().put("thinkingLevel","low"));
+        if(AiStructuredReply.enabled(mode)){
+            generation.put("responseMimeType","application/json");
+            generation.put("responseSchema",AiStructuredReply.schema());
+        }
         body.put("generationConfig",generation);
         byte[] payload=body.toString().getBytes(StandardCharsets.UTF_8);
         if(payload.length>160000)throw new Failure("The AI request is too large. Shorten the question or saved book.");
@@ -60,7 +64,17 @@ final class AiClient {
             }
             String reply=text.toString().trim().replace(key,"[redacted]");
             if(reply.isEmpty()||reply.length()>24000)throw new Failure("Gemini returned no usable text within the answer limit. Try a shorter question.");
+            JSONObject structured=null;
+            if(AiStructuredReply.enabled(mode)){
+                try{
+                    structured=AiStructuredReply.validate(reply,evidence);
+                    reply=AiStructuredReply.display(structured);
+                }catch(Exception invalid){
+                    throw new Failure("Gemini returned an unverifiable structured answer. "+invalid.getMessage());
+                }
+            }
             JSONObject result=new JSONObject().put("success",true).put("direct",true).put("source",model).put("reply",reply).put("grounded",false);
+            if(structured!=null)result.put("structured",structured);
             result.put("generatedAt",java.time.Instant.now().toString());result.put("dataAsOf",evidence.opt("quoteAsOf"));
             result.put("evidenceDigest",AiPolicy.evidenceDigest(evidence));result.put("portfolioIncluded",evidence.optBoolean("portfolioIncluded",false));
             result.put("bookRevision",evidence.opt("bookRevision"));result.put("evidenceGeneratedAt",evidence.opt("generatedAt"));
