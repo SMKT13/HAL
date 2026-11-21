@@ -56,3 +56,13 @@ test('calendar expiry review never claims verified trading sessions',()=>{
  assert.match(r.detail,/calendar/);assert.match(r.detail,/not verified/);
  assert.equal(AI.priority({savedExpiryCalendarDays:4,hasContinuingFutures:false}).code,'ROUTINE');
 });
+test('imminent verified expiry outranks lesser hedge coverage issue',()=>{
+ const result=AI.priority({verifiedExpirySessions:1,hasContinuingFutures:true,bookConfirmed:true,risk:{futureUnits:300,uncoveredUnits:30}});
+ assert.equal(result.code,'EXPIRY_IMMINENT');
+ assert.equal(result.level,1);
+});
+test('critical coverage outranks non-imminent expiry review',()=>{
+ const result=AI.priority({verifiedExpirySessions:4,hasContinuingFutures:true,bookConfirmed:true,risk:{futureUnits:300,uncoveredUnits:150}});
+ assert.equal(result.code,'COVERAGE_CRITICAL');
+ assert.equal(result.level,1);
+});
