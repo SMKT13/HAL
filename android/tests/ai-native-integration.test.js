@@ -73,6 +73,16 @@ test('all AI modes preserve bounded monetary evidence and reported token usage',
  assert.match(ui,/Google-reported tokens/);
  assert.match(ui,/Not a billing statement/);
 });
+test('AI WebView bridge cannot load untrusted network pages',()=>{
+ const main=read('app/src/main/java/in/smkt/haldesk/MainActivity.java');
+ assert.match(main,/setAllowFileAccess\(false\)/);
+ assert.match(main,/setAllowContentAccess\(false\)/);
+ assert.match(main,/setAllowUniversalAccessFromFileURLs\(false\)/);
+ assert.match(main,/setMixedContentMode\(WebSettings\.MIXED_CONTENT_NEVER_ALLOW\)/);
+ assert.match(main,/shouldOverrideUrlLoading\(WebView view,WebResourceRequest request\)\{return true;/);
+ assert.match(main,/for\(String name:new String\[\]\{"index\.html","desk4\.js","nse4\.js","style4\.css"\}\)/);
+ assert.match(main,/web\.setWebViewClient\(new WebViewClient\(\)/);
+});
 test('structured answers, privacy and history routing retain safety boundaries',()=>{
  const main=read('app/src/main/java/in/smkt/haldesk/MainActivity.java');
  const client=read('app/src/main/java/in/smkt/haldesk/AiClient.java');
