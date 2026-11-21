@@ -19,7 +19,7 @@ public final class AiUsageMetricsTest {
         check(merged.getLong("candidatesTokenCount")==67);
         JSONObject invalid=AiUsageMetrics.fromProvider(new JSONObject()
             .put("promptTokenCount",-2).put("totalTokenCount",11000000)
-            .put("candidatesTokenCount","bogus"));
+            .put("candidatesTokenCount","bogus").put("thoughtsTokenCount",1.25));
         check(invalid.length()==0);
         System.out.println("PASS "+checked+" provider token metadata checks");
     }
