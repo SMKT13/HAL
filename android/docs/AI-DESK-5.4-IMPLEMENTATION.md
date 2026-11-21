@@ -1,4 +1,4 @@
-# HAL Atlas AI Desk 5.4 — implementation audit (20 Nov 2026)
+# HAL Atlas AI Desk 5.4 — implementation audit (21 Nov 2026)
 
 ## Branch and rollback boundaries
 - Development-only branch: `feature/hal-atlas-ai-desk-5.4.0`
@@ -16,19 +16,26 @@
 6. Preserved role summaries through bounded sanitization so Bull, Bear and Risk Chair stages can consider earlier analysts.
 7. Added a separate AndroidKeyStore AES-GCM encrypted AI history store. Ordinary saved reports expire after 90 days; pinned reports remain until manual deletion. Includes native bridge methods and history read/pin/delete/clear UI.
 8. Added independent test inputs for JS context/privacy/priority and Java 90-day retention policy, with native test-script registration.
+9. Added encrypted conversation IDs, opt-in follow-up context, native revision-scope filtering, and an exact-payload equality check before Android sends approved previous turns.
+10. Corrected 90-day expiry to apply to the last activity of an ordinary conversation rather than deleting individual turns mid-discussion. Removed silent record truncation on storage limits.
+11. Added a structured Gemini response schema for Brief and Ask Atlas (not the six short role calls), validation of required sections and citations against the approved source URLs, plus sectioned screen rendering.
+12. Added a manually triggered read-only model metadata check. It does not generate text, use portfolio evidence, or silently switch model IDs.
+13. Fixed the 'fresh' versus 'current' quote-status mismatch; added cautious, labeled calendar-day expiry review when a verified NSE session count is not provided.
 
 ## Checks executed in the assistant tool runtime
 - Parsed `ui4.js` and `ai-intelligence5.js` with a JavaScript parser: no syntax errors.
-- Executed the **12 focused** smart-context/priority checks in an isolated JavaScript runtime: 12 passed.
+- Executed the **13 focused** smart-context/priority checks in an isolated JavaScript runtime: 13 passed.
+- Parsed `ui4.js`, `ai-intelligence5.js`, `ai-intelligence5.test.js`, and `scripts/build-assets.js` successfully.
+- Passed 10 structural wiring checks covering build order, native opt-in context, six-agent invocation, schema and model probe connections.
 - Reviewed the new branch files via the connected GitHub repository.
 
 ## Not yet proven or incomplete
 - No full `npm test`, `npm run assets`, Gradle, Robolectric, Android lint, APK build, signing, or device run was performed in this environment. Do not interpret checked-in tests as passing.
 - Native Compose AI Desk parity with the WebView is not complete.
-- Stored AI responses are independent encrypted report records, **not yet complete multi-turn, resumable conversation threads**. Future work must safely attach bounded, consented prior turns.
-- Structured output schema validation with claim-level numerical verification is not implemented.
+- Initial threaded follow-ups are wired through saved conversation IDs, with up to eight bounded, consented, revision-matched previous exchanges. A polished full chat transcript and message search UX remain incomplete.
+- Structured response format, field bounds, and source URL validation are implemented; independent claim-level numerical verification is **not** complete. Gemini should never be trusted as the source of position P&L.
 - Exact NSE trading-session expiry counting is not connected; the priority engine accepts a verified count but does not invent one.
-- Broader billing/quota telemetry, model capability probe, optional search grounding and robust export remain incomplete.
+- Live model metadata verification is available on demand, but remains untested with a real API key. Billing/quota telemetry, optional search grounding, and robust report export remain incomplete.
 - A database upgrade rehearsal against the user's signed installation and a live API verification are outstanding.
 - Restore baseline requires an independently retained original-key-signed APK; this branch has not replaced it.
 
@@ -41,8 +48,8 @@
 
 ## Next implementation gates
 1. Run full offline asset/JS and Java/Android test suites, resolve regressions.
-2. Implement chat thread persistence with scope-checked contextual history and privacy preview.
-3. Add strict structured-output validation and claim verification.
-4. Complete native Compose UX and cross-screen consistency.
+2. Complete conversation transcript and safe resumable-thread UX, building on revision-scoped opt-in history.
+3. Test the structured Gemini API contract live; add independent numerical-claim checks and ensure reports remain usable when a provider cannot support JSON output.
+4. Complete native Compose UX, conversation-history search, usage limits and cross-screen consistency.
 5. Rehearse signed data-preserving installation from 5.3.0 on a backed-up Android device.
 6. Only then prepare a versionCode >59 candidate and request separate merge/release approval.
