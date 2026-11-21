@@ -467,6 +467,9 @@ function aiStructuredView(answer){
     body+='<section class="ai-answer-section"><h3>'+esc(part.label)+'</h3><p>'+esc(value)+'</p></section>';
   }
  }
+ const verifiedLinks=Array.isArray(data.sourceIds)?data.sourceIds.filter(u=>E.safeURL(u)):[]; 
+ if(verifiedLinks.length)body+='<section class="ai-answer-section"><h3>Approved evidence links</h3><ul>'+
+  verifiedLinks.map(u=>'<li><a href="'+esc(u)+'">'+esc(u)+'</a></li>').join('')+'</ul></section>';
  return body+'<p class="fine">AI analysis is not a source of live quotes or guaranteed risk limits. Verify figures against the app calculations.</p></div>';
 }
 function aiDeep(){
