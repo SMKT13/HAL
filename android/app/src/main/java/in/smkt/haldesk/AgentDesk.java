@@ -59,6 +59,7 @@ final class AgentDesk {
     static JSONObject run(AiClient client,String key,String model,String question,JSONObject evidence,Progress progress)throws Exception{
         validate(question,evidence);
         JSONArray findings=new JSONArray();
+        JSONObject usage=new JSONObject();
         String focus=question.trim().isEmpty()
             ?"Review the saved HAL position, uncertain evidence, hedge and next rollover risks.":question;
         for(int i=0;i<MODES.length;i++){
@@ -76,12 +77,13 @@ final class AgentDesk {
             catch(Exception unsupported){throw new AiClient.Failure(
                 LABELS[i]+" (stage "+(i+1)+"/6) cited an unsupported INR value. Retry with only verified app figures.");}
             findings.put(new JSONObject().put("role",LABELS[i]).put("reply",reply));
+            usage=AiUsageMetrics.combine(usage,result.optJSONObject("usage"));
         }
         JSONArray sources=evidence.optJSONArray("sources");
         return new JSONObject().put("success",true).put("direct",true)
             .put("source",model+" · six sequential calls")
             .put("reply",findings.getJSONObject(5).optString("reply"))
-            .put("agents",findings).put("grounded",false)
+            .put("agents",findings).put("usage",usage).put("grounded",false)
             .put("generatedAt",Instant.now().toString()).put("dataAsOf",evidence.opt("quoteAsOf"))
             .put("sources",sources==null?new JSONArray():sources)
             .put("portfolioIncluded",evidence.optBoolean("portfolioIncluded",false))
