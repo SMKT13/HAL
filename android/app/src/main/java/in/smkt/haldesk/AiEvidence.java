@@ -47,8 +47,16 @@ final class AiEvidence {
             out.put("bookRevision",revision);
             JSONObject p=source.optJSONObject("portfolio"),safeP=pick(p,"confirmedAt",100);
             safeP.put("legs",objects(p==null?null:p.optJSONArray("legs"),30,LEG,300));out.put("portfolio",safeP);
-            JSONObject val=source.optJSONObject("valuation"),safeV=pick(val,"open realized charges net complete openPutPremium settlements fundingMovements",100);
-            safeV.put("rows",rows(val==null?null:val.optJSONArray("rows"),false));out.put("valuation",safeV);
+            JSONObject val=source.optJSONObject("valuation");
+            // Withhold *all* P&L totals and leg P&L rows when a basket is incomplete.
+            // A prompt must never contain unverified totals, even if downstream prose
+            // validators would reject an unsupported INR amount.
+            boolean valuationComplete=val!=null&&val.optBoolean("complete",false);
+            JSONObject safeV=valuationComplete
+                ?pick(val,"open realized charges net complete openPutPremium settlements fundingMovements",100)
+                :new JSONObject().put("complete",false);
+            safeV.put("rows",valuationComplete?rows(val.optJSONArray("rows"),false):new JSONArray());
+            out.put("valuation",safeV);
             JSONObject risk=source.optJSONObject("risk"),safeR=pick(risk,"futureUnits putUnits coveredUnits uncoveredUnits coverage delta theta greeksComplete nextExpiry",100);
             JSONArray warnings=new JSONArray(),raw=risk==null?null:risk.optJSONArray("warnings");
             if(raw!=null)for(int i=0;i<Math.min(12,raw.length());i++){Object w=raw.opt(i);if(w instanceof String)warnings.put(clean((String)w,300));else if(w instanceof JSONObject)warnings.put(pick((JSONObject)w,"code title detail",300));}
@@ -56,8 +64,17 @@ final class AiEvidence {
             out.put("funding",pick(source.optJSONObject("funding"),"margin free at source",100));
             JSONArray scenarios=new JSONArray(),rawScenarios=source.optJSONArray("scenarios");
             if(rawScenarios!=null)for(int i=0;i<Math.min(12,rawScenarios.length());i++){
-                JSONObject s=rawScenarios.optJSONObject(i);if(s==null)continue;JSONObject safe=pick(s,"total horizon complete spot shock ivShift rate dividend",150);
-                safe.put("errors",strings(s.optJSONArray("errors"),5,160));safe.put("assumptions",strings(s.optJSONArray("assumptions"),6,200));safe.put("rows",rows(s.optJSONArray("rows"),true));scenarios.put(safe);
+                JSONObject scenario=rawScenarios.optJSONObject(i);
+                if(scenario==null)continue;
+                boolean complete=scenario.optBoolean("complete",false);
+                JSONObject safe=pick(scenario,complete
+                    ?"total horizon complete spot shock ivShift rate dividend"
+                    :"horizon complete spot shock ivShift rate dividend",150);
+                if(!complete)safe.put("complete",false);
+                safe.put("errors",strings(scenario.optJSONArray("errors"),5,160));
+                safe.put("assumptions",strings(scenario.optJSONArray("assumptions"),6,200));
+                safe.put("rows",complete?rows(scenario.optJSONArray("rows"),true):new JSONArray());
+                scenarios.put(safe);
             }
             out.put("scenarios",scenarios);out.put("coach",objects(source.optJSONArray("coach"),24,"code severity title detail",300));
             // Preserve only the application-owned recovery completeness warning.
