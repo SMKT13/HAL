@@ -46,7 +46,7 @@ final class AiNumericClaimGuard {
         Set<String> out=new HashSet<>();
         if(evidence==null)return out;
         JSONObject market=evidence.optJSONObject("market");
-        if(market!=null)for(String key:new String[]{"spot","nifty","vix"})
+        if(market!=null)for(String key:new String[]{"spot","nifty"})
             props(out,market.optJSONObject(key),"price last_price prevClose");
         if(!evidence.optBoolean("portfolioIncluded",false))return out;
         JSONObject portfolio=evidence.optJSONObject("portfolio");
