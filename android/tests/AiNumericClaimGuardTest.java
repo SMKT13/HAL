@@ -48,6 +48,17 @@ public final class AiNumericClaimGuardTest {
         JSONObject listAnswer=response("Based only on approved values.");
         listAnswer.put("riskWarnings",new JSONArray().put("Unknown additional ₹20,000 margin requirement."));
         rejected(listAnswer,permitted);
+        JSONObject technical=new JSONObject().put("portfolioIncluded",false)
+            .put("technical",new JSONObject().put("support",new JSONArray().put(4875.50))
+                .put("resistance",new JSONArray().put(5100))
+                .put("pivots",new JSONObject().put("r1",5060.25)));
+        AiNumericClaimGuard.validateFreeForm("Verified support ₹4,875.50 and R1 ₹5,060.25.",technical);
+        check(true);
+        rejected(response("The upside target is ₹4,900."),technical);
+        boolean specialistRejected=false;
+        try{AiNumericClaimGuard.validateFreeForm("Potential gains INR 35,000.",technical);}
+        catch(Exception expected){specialistRejected=true;}
+        check(specialistRejected);
         System.out.println("PASS "+checks+" approved-amount and hallucination guards");
     }
 }
