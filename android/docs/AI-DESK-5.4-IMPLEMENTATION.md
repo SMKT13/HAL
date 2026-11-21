@@ -41,16 +41,22 @@
 31. Found and corrected a monetary-evidence validation gap: incomplete basket valuations and incomplete stress scenarios no longer authorize Gemini to quote their totals as verified rupee amounts. Market observation and recorded individual leg amounts remain separate evidence categories.
 32. Added source and Java regression cases covering incomplete valuation/scenario rejection, preserving validated complete scenarios and avoiding false claims of financial completeness.
 33. Rechecked the Android Gradle build task: `preBuild` regenerates and verifies `desk4.js` through Node/esbuild, but `npm ci`, Android SDK 35, Gradle/AGP and dependency access must be available. The local session lacks Android SDK and Gradle and cannot access public Maven, so full APK compilation is not possible here.
+34. Corrected the actual sanitized request boundary: `AiEvidence.sanitize` now removes incomplete basket open/net/charge totals and incomplete scenario P&L rows **before** they reach the native consent preview or Gemini. Missing-data errors and complete scenarios remain visible.
+35. Aligned the WebView's `insights4.js` evidence packet with the same incomplete-data filtering, so the initial request preview also excludes unverified totals. Added independent Java and JavaScript regression cases for both levels and validated idempotent native sanitization in synthetic fixtures.
+36. Fixed an obsolete `AgentDeskTest` expectation that incorrectly required the F&O role to exclude technical evidence. Included approved technical levels in the Risk Chair stage to support its numerical-claim validation, with updated role-isolation tests.
+37. Added `android/tests/test-native-coverage.sh` and `android/tests/native-coverage-smoke.kt` for standalone Kotlin verification without Android SDK, JUnit, Gradle or external downloads. Pure `NativeCoverage.kt` calculations were independently compiled and exercised using the locally installed Kotlin compiler. This does not compile Compose or Android services.
 
 ## Checks executed in the assistant tool runtime
 - Parsed `ui4.js` and `ai-intelligence5.js` with a JavaScript parser: no syntax errors.
-- Executed the **25 focused JavaScript tests** (priority/privacy tests and native-integration guard tests) in an isolated tool runtime: 25 passed.
+- Executed **66 focused JavaScript checks** across `insights4`, `ai-intelligence5`, and native integration guards using an isolated JavaScript runtime (with a test-only URL shim): 66 passed, 0 failed. These are not a full Node/npm suite.
 - Parsed `ui4.js`, `ai-intelligence5.js`, `ai-intelligence5.test.js`, and `scripts/build-assets.js` successfully.
 - Passed 10 earlier structural wiring checks covering build order, native opt-in context, six-agent invocation, schema and model probe connections.
+- Compiled and ran a standalone smoke harness for the pure Kotlin `NativeCoverage.kt` logic: passed. Android/Compose code was not compiled.
+- Checked the local toolchain: Java, javac, Node and Kotlin compiler available; Android SDK/Gradle and Maven network dependencies unavailable.
 - Reviewed the new branch files via the connected GitHub repository.
 
 ## Not yet proven or incomplete
-- No full `npm test`, `npm run assets`, Gradle, Robolectric, Android lint, APK build, signing, or device run was performed in this environment (Java and Node exist locally, but Android SDK/Gradle and direct GitHub network access are absent). Do not interpret checked-in tests as passing.
+- No full `npm test`, `npm run assets`, Java org.json suite, Gradle, Robolectric, Android lint, APK build, signing, or device run was performed in this environment (Java/Node/Kotlin compiler exist locally, but Android SDK/Gradle and Maven downloads are unavailable). Focused isolated JS and pure Kotlin smoke checks have run; checked-in Java/Android tests have **not** run.
 - A native Compose AI gateway is implemented, including encrypted-history viewing, read-only reconciled Room v2 nominal-coverage preview, and launch into the full desk; native in-screen Gemini chat and verified live market data parity remain incomplete.
 - Initial threaded follow-ups are wired through saved conversation IDs, with up to eight bounded, consented, revision-matched previous exchanges. A full chat transcript and local history filtering now exist, but transcript pagination, export formats and Android device usability are unverified.
 - Structured response format, field bounds, approved URL validation and a conservative monetary-token guard (which excludes incomplete basket/scenario totals) are implemented; complete claim-level numerical/semantic verification is **not** implemented. Gemini should never be trusted as the source of position P&L.
