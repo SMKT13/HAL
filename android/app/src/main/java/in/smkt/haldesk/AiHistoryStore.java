@@ -76,6 +76,9 @@ final class AiHistoryStore {
             .put("bookRevision",evidence.opt("bookRevision")).put("portfolioIncluded",evidence.optBoolean("portfolioIncluded",false))
             .put("evidenceDigest",AiPolicy.evidenceDigest(evidence)).put("dataAsOf",evidence.opt("quoteAsOf"))
             .put("pinned",false);
+        JSONObject structured=result.optJSONObject("structured");
+        if(structured!=null && structured.toString().length()<=16000)
+            item.put("structured",structured);
         JSONArray agents=result.optJSONArray("agents");if(agents!=null){
             JSONArray safe=new JSONArray();
             for(int i=0;i<Math.min(6,agents.length());i++){
