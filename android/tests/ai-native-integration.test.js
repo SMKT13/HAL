@@ -39,6 +39,16 @@ test('encrypted conversation transcripts and search are local and revision-aware
  assert.match(ui,/ai-history-reset/);
  assert.match(ui,/function aiHistoryRead\(\)/);
 });
+test('exporting a saved AI report requires explicit native review and consent',()=>{
+ const native=read('app/src/main/java/in/smkt/haldesk/MainActivity.java');
+ const ui=read('app/src/main/assets/ui4.js');
+ assert.match(native,/private void shareAiHistory\(String id\)/);
+ assert.match(native,/setTitle\("Share this AI report\?"\)/);
+ assert.match(native,/setPositiveButton\("Share selected report"/);
+ assert.match(native,/new Intent\(Intent\.ACTION_SEND\)/);
+ assert.match(native,/setNegativeButton\("Cancel",null\)/);
+ assert.match(ui,/'ai-history-share':b=>native\('aiHistoryShare',b\.dataset\.id\)/);
+});
 test('structured answers, privacy and history routing retain safety boundaries',()=>{
  const main=read('app/src/main/java/in/smkt/haldesk/MainActivity.java');
  const client=read('app/src/main/java/in/smkt/haldesk/AiClient.java');
