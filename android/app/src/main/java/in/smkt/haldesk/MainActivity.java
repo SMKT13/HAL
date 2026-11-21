@@ -120,6 +120,24 @@ public final class MainActivity extends Activity {
         final String script="window.HALApp && window.HALApp.receive("+JSONObject.quote(event)+","+data.toString().replace("\u2028","\\u2028").replace("\u2029","\\u2029")+");";
         runOnUiThread(()->{if(!isFinishing() && !isDestroyed() && pageReady && allowed.getAsBoolean())web.evaluateJavascript(script,null);});
     }
+    /** Navigate to the existing consent-protected AI workspace from the native gateway. */
+    private void openRequestedAiDesk(){
+        if(!pageReady||web==null||!foreground)return;
+        Intent intent=getIntent();
+        if(intent==null)return;
+        String page=intent.getStringExtra("open_ai_desk");
+        if(page==null)return;
+        intent.removeExtra("open_ai_desk");
+        if(!"brief".equals(page)&&!"assistant".equals(page)&&!"deep".equals(page))return;
+        final String action="window.HALApp && window.HALApp.openAiDesk && window.HALApp.openAiDesk("
+            +JSONObject.quote(page)+");";
+        web.evaluateJavascript(action,null);
+    }
+    @Override protected void onNewIntent(Intent intent){
+        super.onNewIntent(intent);
+        setIntent(intent);
+        runOnUiThread(this::openRequestedAiDesk);
+    }
     private JSONObject object(String key,Object value) {
         JSONObject obj=new JSONObject();try{obj.put(key,value);}catch(Exception ignored){}return obj;
     }
@@ -414,7 +432,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void streamStart(){MainActivity.this.startStream();}
         @JavascriptInterface public void streamStop(){stopStream();}
         @JavascriptInterface public void minimize(){runOnUiThread(()->moveTaskToBack(true));}
-        @JavascriptInterface public void ready(){runOnUiThread(()->{pageReady=true;status();});}
+        @JavascriptInterface public void ready(){runOnUiThread(()->{pageReady=true;status();openRequestedAiDesk();});}
         @JavascriptInterface public void settings(){runOnUiThread(()->showSettings());}
         @JavascriptInterface public void terminal(){runOnUiThread(()->startActivityForResult(new Intent(MainActivity.this,NativeTerminalActivity.class), NATIVE_TERMINAL_REQUEST));}
         @JavascriptInterface public void refresh(String expiry){MainActivity.this.refresh(expiry);}
@@ -504,7 +522,7 @@ public final class MainActivity extends Activity {
         });}
     }
     @Override protected void onPause(){backgroundAt=android.os.SystemClock.elapsedRealtime();foreground=false;generation.incrementAndGet();invalidateAi("AI review cancelled when the app left the foreground.");client.cancel();cancelOffline();stopStream();super.onPause();if(web!=null){web.onPause();web.pauseTimers();}}
-    @Override protected void onResume(){super.onResume();if(books!=null && books.requiresReopen(this)){recreate();return;}long awayMs=backgroundAt<0?0:Math.max(0,android.os.SystemClock.elapsedRealtime()-backgroundAt);backgroundAt=-1;foreground=true;lastRequest=0;lastNseRequest=0;researchRequests.clear();if(web!=null){web.onResume();web.resumeTimers();if(pageReady){JSONObject resumed=object("state","resumed");try{resumed.put("awayMs",awayMs);}catch(Exception ignored){}send("lifecycle",resumed);offlineStatus();}}}
+    @Override protected void onResume(){super.onResume();if(books!=null && books.requiresReopen(this)){recreate();return;}long awayMs=backgroundAt<0?0:Math.max(0,android.os.SystemClock.elapsedRealtime()-backgroundAt);backgroundAt=-1;foreground=true;lastRequest=0;lastNseRequest=0;researchRequests.clear();if(web!=null){web.onResume();web.resumeTimers();if(pageReady){openRequestedAiDesk();JSONObject resumed=object("state","resumed");try{resumed.put("awayMs",awayMs);}catch(Exception ignored){}send("lifecycle",resumed);offlineStatus();}}}
     @Override protected void onDestroy(){foreground=false;client.cancel();cancelOffline();streamGeneration.incrementAndGet();stream.shutdown();generation.incrementAndGet();invalidateAi("AI settings or the saved book changed. Review updated evidence before retrying.");executor.shutdownNow();researchExecutor.shutdownNow();nseExecutor.shutdownNow();aiExecutor.shutdownNow();offlineExecutor.shutdownNow();if (offlineFinbert!=null)offlineFinbert.close();if(web!=null){web.removeJavascriptInterface("HALNative");web.destroy();}if(books!=null)books.close();super.onDestroy();}
     @Override public void onBackPressed(){if(pageReady)web.evaluateJavascript("window.HALApp && window.HALApp.back()",null);else super.onBackPressed();}
 }
