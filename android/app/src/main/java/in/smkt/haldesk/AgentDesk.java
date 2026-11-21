@@ -50,7 +50,7 @@ final class AgentDesk {
                 out=select(source,"generatedAt","quoteAsOf","market","technical","portfolioIncluded","bookRevision","portfolio","valuation","risk","sources");
                 out.put("analystSummaries",summaries(previous,3));break;
             case "agent_risk":
-                out=select(source,"generatedAt","quoteAsOf","market","portfolioIncluded","bookRevision","portfolio","valuation","risk","scenarios","funding","coach","sources");
+                out=select(source,"generatedAt","quoteAsOf","market","technical","portfolioIncluded","bookRevision","portfolio","valuation","risk","scenarios","funding","coach","sources");
                 out.put("analystSummaries",summaries(previous,5));break;
             default:throw new Exception("Unknown agent role.");
         }
