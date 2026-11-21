@@ -35,7 +35,7 @@
 
 ## Checks executed in the assistant tool runtime
 - Parsed `ui4.js` and `ai-intelligence5.js` with a JavaScript parser: no syntax errors.
-- Executed the **20 focused JavaScript tests** (priority/privacy tests and native-integration guard tests) in an isolated tool runtime: 20 passed.
+- Executed the **21 focused JavaScript tests** (priority/privacy tests and native-integration guard tests) in an isolated tool runtime: 21 passed.
 - Parsed `ui4.js`, `ai-intelligence5.js`, `ai-intelligence5.test.js`, and `scripts/build-assets.js` successfully.
 - Passed 10 earlier structural wiring checks covering build order, native opt-in context, six-agent invocation, schema and model probe connections.
 - Reviewed the new branch files via the connected GitHub repository.
