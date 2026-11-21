@@ -14,6 +14,29 @@ public final class AiEvidenceTest {
         JSONObject recoverySafe=AiPolicy.sanitizeEvidence(recoveryPacket,"copilot");
         check(recoverySafe.getString("contextNote").contains("Do not infer it."));
         check(!recoverySafe.toString().contains("untrusted custom instruction"));
+        JSONObject partial=packet()
+            .put("valuation",new JSONObject().put("complete",false)
+                .put("open",-19000.50).put("net",-25000.25)
+                .put("rows",new JSONArray().put(new JSONObject().put("pnl",-111111))))
+            .put("scenarios",new JSONArray()
+                .put(new JSONObject().put("complete",false).put("total",-222222)
+                    .put("rows",new JSONArray().put(new JSONObject().put("pnl",-333333)))
+                    .put("errors",new JSONArray().put("Missing option mark")))
+                .put(new JSONObject().put("complete",true).put("total",-1200)
+                    .put("rows",new JSONArray())));
+        JSONObject partialSafe=AiPolicy.sanitizeEvidence(partial,"copilot");
+        JSONObject valuationSafe=partialSafe.getJSONObject("valuation");
+        check(!valuationSafe.getBoolean("complete"));
+        check(!valuationSafe.has("net")&&!valuationSafe.has("open"));
+        check(valuationSafe.getJSONArray("rows").length()==0);
+        JSONObject invalidScenario=partialSafe.getJSONArray("scenarios").getJSONObject(0);
+        check(!invalidScenario.has("total")&&invalidScenario.getJSONArray("rows").length()==0);
+        check(invalidScenario.getJSONArray("errors").getString(0).contains("Missing option mark"));
+        check(partialSafe.getJSONArray("scenarios").getJSONObject(1).getInt("total")==-1200);
+        check(!partialSafe.toString().contains("111111")&&!partialSafe.toString().contains("222222")
+            &&!partialSafe.toString().contains("333333"));
+        check(AiPolicy.evidenceDigest(partialSafe).equals(
+            AiPolicy.evidenceDigest(AiPolicy.sanitizeEvidence(partialSafe,"copilot"))));
         String hash=AiPolicy.evidenceDigest(clean);check(hash.matches("[a-f0-9]{64}"));check(hash.equals(AiPolicy.evidenceDigest(AiPolicy.sanitizeEvidence(clean,"copilot"))));
         JSONObject roleWithoutPrivate=AiPolicy.sanitizeEvidence(packet().put("portfolioIncluded",false),"agent_derivatives");
         check(!roleWithoutPrivate.has("portfolio")&&!roleWithoutPrivate.has("risk"));
