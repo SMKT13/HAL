@@ -213,6 +213,58 @@ public final class MainActivity extends Activity {
     }
     private void stopStream(){streamGeneration.incrementAndGet();if(stream!=null)stream.stop();}
     private void cancelOffline(){offlineGeneration.incrementAndGet();if(offlineFinbert!=null)offlineFinbert.cancel();}
+    private void shareAiHistory(String id) {
+        if(id==null||!id.matches("[A-Za-z0-9_-]{1,80}"))return;
+        try{
+            JSONObject selected=null;
+            JSONArray records=aiHistory.list().getJSONArray("items");
+            for(int i=0;i<records.length();i++){
+                JSONObject item=records.optJSONObject(i);
+                if(item!=null&&id.equals(item.optString("id"))){selected=item;break;}
+            }
+            if(selected==null)throw new Exception("Saved AI report no longer exists.");
+            String question=selected.optString("question","");
+            String answer=selected.optString("reply","");
+            if(answer.isEmpty())throw new Exception("This report has no completed answer to share.");
+            String report="HAL Atlas · Historical AI analysis\n"
+                +"Generated: "+selected.optString("generatedAt","unavailable")+"\n"
+                +"Model: "+selected.optString("source","unavailable")+"\n"
+                +"Question: "+question+"\n\n"+answer
+                +"\n\nHistorical AI interpretation only. Verify any current prices, positions and risk calculations in HAL Atlas.";
+            JSONObject structured=selected.optJSONObject("structured");
+            if(structured!=null){
+                JSONArray links=structured.optJSONArray("sourceIds");
+                if(links!=null)for(int i=0;i<Math.min(12,links.length());i++){
+                    String url=links.optString(i,"");
+                    try{
+                        Uri parsed=Uri.parse(url);
+                        if("https".equalsIgnoreCase(parsed.getScheme())&&parsed.getHost()!=null)
+                            report+="\nSource: "+url;
+                    }catch(Exception ignored){}
+                }
+            }
+            if(report.length()>36000)throw new Exception("The selected report is too large to share.");
+            final String payload=report;
+            ScrollView scroll=new ScrollView(this);
+            TextView preview=text("Review the exact report below. This may disclose your financial positions and recovery information to another application.\n\n"+payload);
+            preview.setTextIsSelectable(true);preview.setPadding(dp(18),dp(8),dp(18),dp(16));scroll.addView(preview);
+            AlertDialog dialog=new AlertDialog.Builder(this)
+                .setTitle("Share this AI report?")
+                .setView(scroll)
+                .setPositiveButton("Share selected report",(d,w)->{
+                    Intent send=new Intent(Intent.ACTION_SEND);
+                    send.setType("text/plain");
+                    send.putExtra(Intent.EXTRA_SUBJECT,"HAL Atlas AI analysis");
+                    send.putExtra(Intent.EXTRA_TEXT,payload);
+                    startActivity(Intent.createChooser(send,"Share historical AI analysis"));
+                })
+                .setNegativeButton("Cancel",null).create();
+            dialog.show();
+            if(dialog.getWindow()!=null)dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }catch(Exception error){
+            android.widget.Toast.makeText(this,"Saved AI report unavailable; no financial records were changed.",android.widget.Toast.LENGTH_LONG).show();
+        }
+    }
     private void showAiSettings(){
         if(aiSettingsShowing)return;aiSettingsShowing=true;
         LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(24),dp(8),dp(24),dp(16));
@@ -479,6 +531,9 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public String aiHistoryContext(String conversationId,String bookRevision,boolean shareFinancial){
             try{return aiHistory.context(conversationId,bookRevision,shareFinancial).toString();}
             catch(Exception error){return object("error","Selected conversation history cannot be shared. Check your saved reports.").toString();}
+        }
+        @JavascriptInterface public void aiHistoryShare(String id){
+            runOnUiThread(()->shareAiHistory(id));
         }
         @JavascriptInterface public String aiHistoryList(){
             try{return aiHistory.list().toString();}
