@@ -38,10 +38,13 @@
 28. Added Google-reported token metadata to standard requests and six-role aggregate reports, stored only inside encrypted AI history. The UI clearly distinguishes provider token counts from a bill or cost estimate. Invalid/fractional usage counts are ignored.
 29. Added regression checks protecting the local-only WebView bridge against external navigation or non-allowlisted resources.
 30. Confirmed that manifest backup is disabled, cloud/device transfer excludes private preferences, and this branch has not altered protected Room/legacy database migrations.
+31. Found and corrected a monetary-evidence validation gap: incomplete basket valuations and incomplete stress scenarios no longer authorize Gemini to quote their totals as verified rupee amounts. Market observation and recorded individual leg amounts remain separate evidence categories.
+32. Added source and Java regression cases covering incomplete valuation/scenario rejection, preserving validated complete scenarios and avoiding false claims of financial completeness.
+33. Rechecked the Android Gradle build task: `preBuild` regenerates and verifies `desk4.js` through Node/esbuild, but `npm ci`, Android SDK 35, Gradle/AGP and dependency access must be available. The local session lacks Android SDK and Gradle and cannot access public Maven, so full APK compilation is not possible here.
 
 ## Checks executed in the assistant tool runtime
 - Parsed `ui4.js` and `ai-intelligence5.js` with a JavaScript parser: no syntax errors.
-- Executed the **24 focused JavaScript tests** (priority/privacy tests and native-integration guard tests) in an isolated tool runtime: 24 passed.
+- Executed the **25 focused JavaScript tests** (priority/privacy tests and native-integration guard tests) in an isolated tool runtime: 25 passed.
 - Parsed `ui4.js`, `ai-intelligence5.js`, `ai-intelligence5.test.js`, and `scripts/build-assets.js` successfully.
 - Passed 10 earlier structural wiring checks covering build order, native opt-in context, six-agent invocation, schema and model probe connections.
 - Reviewed the new branch files via the connected GitHub repository.
@@ -50,7 +53,7 @@
 - No full `npm test`, `npm run assets`, Gradle, Robolectric, Android lint, APK build, signing, or device run was performed in this environment (Java and Node exist locally, but Android SDK/Gradle and direct GitHub network access are absent). Do not interpret checked-in tests as passing.
 - A native Compose AI gateway is implemented, including encrypted-history viewing, read-only reconciled Room v2 nominal-coverage preview, and launch into the full desk; native in-screen Gemini chat and verified live market data parity remain incomplete.
 - Initial threaded follow-ups are wired through saved conversation IDs, with up to eight bounded, consented, revision-matched previous exchanges. A full chat transcript and local history filtering now exist, but transcript pagination, export formats and Android device usability are unverified.
-- Structured response format, field bounds, approved URL validation and a conservative monetary-token guard are implemented; complete claim-level numerical/semantic verification is **not** implemented. Gemini should never be trusted as the source of position P&L.
+- Structured response format, field bounds, approved URL validation and a conservative monetary-token guard (which excludes incomplete basket/scenario totals) are implemented; complete claim-level numerical/semantic verification is **not** implemented. Gemini should never be trusted as the source of position P&L.
 - Exact NSE trading-session expiry counting is not connected; the priority engine accepts a verified count but does not invent one.
 - Live model metadata verification is available on demand, but remains untested with a real API key. A conservative local request allowance has been implemented; Google-reported token counts are shown when present, but exact pricing, provider billing/quota telemetry, and optional search grounding remain incomplete.
 - A database upgrade rehearsal against the user's signed installation and a live API verification are outstanding.
