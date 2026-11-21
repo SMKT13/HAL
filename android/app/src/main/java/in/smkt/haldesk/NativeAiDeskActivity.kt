@@ -1,5 +1,6 @@
 package `in`.smkt.haldesk
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
@@ -47,6 +48,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -68,6 +70,8 @@ class NativeAiDeskActivity : ComponentActivity() {
                 AiHistoryStore(applicationContext).list()
             }, keySaved = {
                 SecretStore(applicationContext).has("gemini")
+            }, risk = {
+                readNativeRisk(applicationContext)
             })
         }
     }
@@ -81,6 +85,42 @@ private val aiMuted = Color(0xFFBBC9DB)
 private val aiBorder = Color(0xFF34435A)
 private val aiDates = DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm 'IST'")
     .withZone(ZoneId.of("Asia/Kolkata"))
+
+private data class NativeRiskPreview(
+    val status: String = "Checking saved Room tradebook…",
+    val futures: Long? = null,
+    val puts: Long? = null,
+    val uncovered: Long? = null,
+    val notes: List<String> = emptyList()
+)
+
+/** Room v2 only, opened read-only. Missing/mismatched records never imply zero risk. */
+private fun readNativeRisk(context: Context): NativeRiskPreview {
+    return try {
+        val raw = RoomReadOnlyPreview.read(context)
+            ?: return NativeRiskPreview(status = "Legacy or empty book: use the full HAL desk for the current saved position.")
+        if (!raw.optBoolean("ledgerReconciled", false))
+            return NativeRiskPreview(status = "Saved ledgers disagree. Reconcile Room and legacy records before trusting risk totals.")
+        if (raw.optInt("legacyOnly", 0) > 0 || raw.optInt("contractDifferences", 0) > 0)
+            return NativeRiskPreview(status = "Legacy and native position records differ. Review the complete book before interpreting exposure.")
+        val legs = raw.getJSONArray("legs")
+        val exposure = (0 until legs.length()).map { i ->
+            val leg = legs.getJSONObject(i)
+            ExposureLeg(leg.getString("type"),leg.getString("expiry"),
+                leg.getInt("lots"),leg.getInt("lotSize"),leg.optString("side","BUY"))
+        }
+        val coverage = nominalCoverage(exposure,LocalDate.now(ZoneId.of("Asia/Kolkata")))
+        NativeRiskPreview(
+            status = if (exposure.isEmpty()) "Reconciled Room v2 ledger; no open contracts recorded."
+                     else "Read-only Room v2 position · source: saved device records, not live exchange marks.",
+            futures = coverage.futures, puts = coverage.puts, uncovered = coverage.uncovered,
+            notes = coverage.notes + if (raw.optInt("nativeOnly",0)>0)
+                listOf("Native-only position records are included in the Room snapshot.") else emptyList()
+        )
+    } catch (_: Exception) {
+        NativeRiskPreview(status = "Saved-book verification failed. Do not infer exposure or P&L. Original records were not changed.")
+    }
+}
 
 private data class ReportPreview(
     val id: String, val question: String, val reply: String,
@@ -102,20 +142,24 @@ private fun NativeAiDesk(
     onClose: () -> Unit,
     open: (String) -> Unit,
     history: () -> JSONObject,
-    keySaved: () -> Boolean
+    keySaved: () -> Boolean,
+    risk: () -> NativeRiskPreview
 ) {
     var tab by remember { mutableIntStateOf(0) }
     var reports by remember { mutableStateOf<List<ReportPreview>>(emptyList()) }
     var historyError by remember { mutableStateOf<String?>(null) }
     var configured by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
+    var localRisk by remember { mutableStateOf(NativeRiskPreview()) }
 
     LaunchedEffect(tab) {
         val loaded = withContext(Dispatchers.IO) {
-            Pair(runCatching { keySaved() }.getOrDefault(false),
-                runCatching { parseHistory(history()) })
+            Triple(runCatching { keySaved() }.getOrDefault(false),
+                runCatching { parseHistory(history()) },
+                risk())
         }
         configured = loaded.first
+        localRisk = loaded.third
         loaded.second.onSuccess {
             reports = it
             historyError = null
@@ -183,6 +227,21 @@ private fun NativeAiDesk(
                                             onClick = { open("brief") })
                                     }
                                 }
+                            }
+                            NativeAiPanel("Saved position · local risk review") {
+                                Text(localRisk.status, color = aiMuted, fontSize = 12.sp)
+                                if (localRisk.futures != null && localRisk.puts != null && localRisk.uncovered != null) {
+                                    Text("Long futures units: ${localRisk.futures}", color = aiMuted)
+                                    Text("Long put units: ${localRisk.puts}", color = aiMuted)
+                                    Text("Nominal uncovered units: ${localRisk.uncovered}", color = aiAccent,
+                                        fontWeight = FontWeight.Bold)
+                                }
+                                localRisk.notes.forEach { note ->
+                                    Text(note, color = aiMuted, fontSize = 12.sp)
+                                }
+                                Text("Quantity overlap is not a guaranteed loss floor. No live marks, Greeks or verified lifetime P&L are calculated here.",
+                                    color = aiViolet, fontSize = 12.sp)
+                                Button(onClick = { open("brief") }) { Text("View full position intelligence") }
                             }
                             Text("No automatic Gemini calls. Every remote analysis requires explicit evidence consent.",
                                 color = aiMuted, fontSize = 12.sp)
