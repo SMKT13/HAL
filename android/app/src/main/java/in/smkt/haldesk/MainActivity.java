@@ -238,7 +238,7 @@ public final class MainActivity extends Activity {
                     String url=links.optString(i,"");
                     try{
                         Uri parsed=Uri.parse(url);
-                        if("https".equalsIgnoreCase(parsed.getScheme())&&parsed.getHost()!=null)
+                        if("https".equalsIgnoreCase(parsed.getScheme())&&parsed.getHost()!=null&&parsed.getUserInfo()==null&&url.length()<=2000)
                             report+="\nSource: "+url;
                     }catch(Exception ignored){}
                 }
