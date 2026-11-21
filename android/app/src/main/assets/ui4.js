@@ -433,7 +433,15 @@ function showSavedAI(id){
 }
 function aiBrief(m,l,r){
  const evidenceStatus=E.quoteQuality(m.spot||{}),markState=l&&l.complete===false;
- const p=AI.priority({integrityIssue:storageError,hasOpenPosition:book.legs.length>0,bookConfirmed:isBookConfirmed(),valuation:l,risk:r,market:m,marketVerified:evidenceStatus.status==='current'&&evidenceStatus.valid===true&&evidenceStatus.fresh===true});
+ const now=Date.now();
+ const futures=book.legs.filter(x=>x.type==='FUT'&&E.validDate(x.expiry)&&E.expiryTime(x.expiry)>=now);
+ const puts=book.legs.filter(x=>x.type==='PE'&&E.validDate(x.expiry)&&E.expiryTime(x.expiry)>=now);
+ const earliestPut=puts.length?Math.min(...puts.map(x=>E.expiryTime(x.expiry))):null;
+ const calendarDays=earliestPut==null?null:Math.max(0,Math.ceil((earliestPut-now)/E.DAY));
+ const continues=earliestPut!=null&&futures.some(x=>E.expiryTime(x.expiry)>earliestPut);
+ const p=AI.priority({integrityIssue:storageError,hasOpenPosition:book.legs.length>0,bookConfirmed:isBookConfirmed(),valuation:l,risk:r,market:m,
+  marketVerified:evidenceStatus.status==='current'&&evidenceStatus.valid===true&&evidenceStatus.fresh===true,
+  hasContinuingFutures:continues,savedExpiryCalendarDays:isBookConfirmed()?calendarDays:null});
  const banner='<div class="ai-brief-hero"><p class="eyebrow">ADAPTIVE INTELLIGENCE · LOCAL ANALYSIS</p><h2>'+esc(p.title)+'</h2><p>'+esc(p.detail)+'</p><p class="fine">Priority P'+p.level+' · HAL quote '+when(m.spot?.quoteAt)+' · '+esc(evidenceStatus.status||'Unverified')+'</p><div class="toolbar">'+btn('ai-brief','Generate AI Brief','class="primary"')+btn('ai-settings','AI settings')+btn('ai-history','History')+'</div><p class="fine">No Gemini request occurs until you review and approve the selected evidence.</p></div>';
  const boxes=[
   ['Market Outlook', 'HAL cash '+money(m.spot?.price)+' · '+esc(m.spot?.changePct==null?'Change unavailable':pct(m.spot.changePct))],
