@@ -142,15 +142,29 @@ public final class MainActivity extends Activity {
             if(!foreground)throw new Exception("Open HAL Atlas before requesting an AI review.");
             if(!Boolean.TRUE.equals(args.opt("consent")))throw new Exception("Confirm sharing the selected evidence with Gemini.");
             if(!secrets.has("gemini"))throw new Exception("Enter your Gemini API key in AI settings first.");
-            final String mode=args.optString("mode"),question=args.optString("message");final JSONObject evidence=AiPolicy.sanitizeEvidence(args.optJSONObject("evidence"),mode);AiPolicy.prompt(mode,question,evidence.toString());final int current=aiGeneration.get();
+            final String mode=args.optString("mode"),question=args.optString("message");
+            final String conversationId=args.optString("conversationId",id);
+            if(!conversationId.matches("[A-Za-z0-9_-]{1,80}"))throw new Exception("Invalid AI conversation.");
+            final boolean includeConversation=args.optBoolean("includeConversation",false);
+            final JSONObject evidence=AiPolicy.sanitizeEvidence(args.optJSONObject("evidence"),mode);
+            if(includeConversation){
+                if("deliberate".equals(mode))throw new Exception("Deep research cannot include prior chat text.");
+                JSONObject expected=aiHistory.context(conversationId,evidence.optString("bookRevision",""),
+                    evidence.optBoolean("portfolioIncluded",false));
+                JSONArray accepted=expected.getJSONArray("conversation"),shown=evidence.optJSONArray("conversation");
+                if(shown==null||!AiPolicy.evidenceDigest(new JSONObject().put("items",accepted)).equals(
+                        AiPolicy.evidenceDigest(new JSONObject().put("items",shown))))
+                    throw new Exception("Conversation context changed. Reopen the context preview.");
+            }else if(evidence.has("conversation"))throw new Exception("Conversation context requires explicit sharing approval.");
+            AiPolicy.prompt(mode,question,evidence.toString());final int current=aiGeneration.get();
             if(aiWorking.get()!=null)throw new Exception("The previous API request is still finishing.");
             if(consentDialog!=null&&consentDialog.isShowing())throw new Exception("Review or cancel the open sharing request first.");
             ScrollView scroll=new ScrollView(this);TextView contents=text("Model: "+model+("deliberate".equals(mode)?" · 6 sequential AI requests":" · 1 AI request")+"\nQuestion: "+question+"\n\nExact evidence sent to Google:\n"+evidence.toString(2));contents.setTextIsSelectable(true);contents.setPadding(dp(20),dp(8),dp(20),dp(16));scroll.addView(contents);
-            activeAiId=id;consentDialog=new AlertDialog.Builder(this).setTitle("Send this evidence to Gemini?").setView(scroll).setPositiveButton("Send to Gemini",(d,w)->runAi(id,model,mode,question,evidence,current)).setNegativeButton("Cancel",(d,w)->send("ai_error",withId(id,"message","Review cancelled before any API call."))).setOnCancelListener(d->send("ai_error",withId(id,"message","Review cancelled before any API call."))).create();consentDialog.show();consentDialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            activeAiId=id;consentDialog=new AlertDialog.Builder(this).setTitle("Send this evidence to Gemini?").setView(scroll).setPositiveButton("Send to Gemini",(d,w)->runAi(id,conversationId,model,mode,question,evidence,current)).setNegativeButton("Cancel",(d,w)->send("ai_error",withId(id,"message","Review cancelled before any API call."))).setOnCancelListener(d->send("ai_error",withId(id,"message","Review cancelled before any API call."))).create();consentDialog.show();consentDialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         }catch(Exception e){send(config?"ai_config_error":"ai_error",withId(id,"message",e.getMessage()));}
     }
     private JSONObject withId(String id,String key,Object value){JSONObject out=object("id",id);try{out.put(key,value);}catch(Exception ignored){}return out;}
-    private void runAi(String id,String model,String mode,String question,JSONObject evidence,int current){
+    private void runAi(String id,String conversationId,String model,String mode,String question,JSONObject evidence,int current){
         try{if(current!=aiGeneration.get()||!foreground)throw new Exception("Evidence changed or the app paused. Review the current book and retry.");
             final String key;try{key=secrets.get("gemini");}catch(Exception e){throw new Exception("Secure key storage unavailable. Unlock the phone and retry.");}if(!AiPolicy.validKey(key))throw new Exception("Enter a valid Gemini API key in AI settings.");
             final Object ticket=new Object();if(!aiWorking.compareAndSet(null,ticket))throw new Exception("The previous API request is still finishing.");final AiClient client=new AiClient();activeAi=client;activeAiId=id;
@@ -162,7 +176,7 @@ public final class MainActivity extends Activity {
                             sendAi("ai_progress",withId(id,"data",progress),current);
                         });
                     }else result=client.generate(key,model,mode,question,evidence);if(current==aiGeneration.get()&&foreground){
-                            try{aiHistory.save(id,question,mode,result,evidence);result.put("historySaved",true);}
+                            try{aiHistory.save(id,conversationId,question,mode,result,evidence);result.put("historySaved",true);}
                             catch(Exception historyError){result.put("historySaved",false);}
                             sendAi("ai_result",withId(id,"data",result),current);
                         }}catch(Exception e){if(current==aiGeneration.get())sendAi("ai_error",withId(id,"message",e instanceof AiClient.Failure?e.getMessage():"The Gemini request could not finish. Check quota or connectivity and retry."),current);}finally{if(aiWorking.compareAndSet(ticket,null)){activeAiId="";activeAi=null;}}});
@@ -409,6 +423,10 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void aiConfig(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,true));}
         @JavascriptInterface public void ai(String request){runOnUiThread(()->MainActivity.this.aiRequest(request,false));}
         @JavascriptInterface public void aiSettings(){runOnUiThread(()->showAiSettings());}
+        @JavascriptInterface public String aiHistoryContext(String conversationId,String bookRevision,boolean shareFinancial){
+            try{return aiHistory.context(conversationId,bookRevision,shareFinancial).toString();}
+            catch(Exception error){return object("error","Selected conversation history cannot be shared. Check your saved reports.").toString();}
+        }
         @JavascriptInterface public String aiHistoryList(){
             try{return aiHistory.list().toString();}
             catch(Exception error){return object("error","Encrypted AI history is unavailable; existing records have not been deleted.").toString();}
