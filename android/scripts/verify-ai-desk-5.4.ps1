@@ -1,5 +1,5 @@
 # HAL Atlas AI Desk 5.4 - development-only Windows verification.
-# Never signs, installs, uninstalls, changes data, or runs GitHub Actions.
+# Verification only: no APK deployment, credentials, device changes, or GitHub Actions.
 [CmdletBinding()]
 param(
     [switch]$Offline,
