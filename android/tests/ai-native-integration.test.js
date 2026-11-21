@@ -49,6 +49,16 @@ test('exporting a saved AI report requires explicit native review and consent',(
  assert.match(native,/setNegativeButton\("Cancel",null\)/);
  assert.match(ui,/'ai-history-share':b=>native\('aiHistoryShare',b\.dataset\.id\)/);
 });
+test('native AI Brief uses verified read-only Room coverage, not guessed P&L',()=>{
+ const ui=read('app/src/main/java/in/smkt/haldesk/NativeAiDeskActivity.kt');
+ assert.match(ui,/RoomReadOnlyPreview\.read\(context\)/);
+ assert.match(ui,/ledgerReconciled/);
+ assert.match(ui,/contractDifferences/);
+ assert.match(ui,/legacyOnly/);
+ assert.match(ui,/nominalCoverage\(exposure/);
+ assert.match(ui,/not a guaranteed loss floor/);
+ assert.doesNotMatch(ui,/openOrCreateDatabase\(|writableDatabase|insert\(|UPDATE TradeLedgerEntity/);
+});
 test('structured answers, privacy and history routing retain safety boundaries',()=>{
  const main=read('app/src/main/java/in/smkt/haldesk/MainActivity.java');
  const client=read('app/src/main/java/in/smkt/haldesk/AiClient.java');
