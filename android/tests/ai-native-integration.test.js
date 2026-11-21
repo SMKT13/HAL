@@ -15,7 +15,7 @@ test('all encrypted AI history read-modify-write operations share a process lock
  const history=read('app/src/main/java/in/smkt/haldesk/AiHistoryStore.java');
  assert.match(history,/private static final Object HISTORY_LOCK=new Object\(\)/);
  for(const method of ['list','context','save','pin','delete','clear']){
-   const expression=new RegExp('synchronized (?:JSONObject|void) '+method+'\\([^\\n]+\\)throws Exception \\{ synchronized\\(HISTORY_LOCK\\)\\{');
+   const expression=new RegExp('synchronized (?:JSONObject|void) '+method+'\\([^\\n]*\\)throws Exception \\{ synchronized\\(HISTORY_LOCK\\)\\{');
    assert.match(history,expression);
  }
 });
