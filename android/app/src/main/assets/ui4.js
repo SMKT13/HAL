@@ -444,7 +444,9 @@ function aiBrief(m,l,r){
   hasContinuingFutures:continues,savedExpiryCalendarDays:isBookConfirmed()?calendarDays:null});
  const banner='<div class="ai-brief-hero"><p class="eyebrow">ADAPTIVE INTELLIGENCE · LOCAL ANALYSIS</p><h2>'+esc(p.title)+'</h2><p>'+esc(p.detail)+'</p><p class="fine">Priority P'+p.level+' · HAL quote '+when(m.spot?.quoteAt)+' · '+esc(evidenceStatus.status||'Unverified')+'</p><div class="toolbar">'+btn('ai-brief','Generate AI Brief','class="primary"')+btn('ai-settings','AI settings')+btn('ai-history','History')+btn('ai-model-check','Verify model')+'</div>'+(ui.aiModelCheck?'<p class="fine">'+esc(ui.aiModelCheck.available?'Model supports generateContent':'Model needs review')+' · '+esc(ui.aiModelCheck.details||'')+'</p>':'')+'<p class="fine">No Gemini request occurs until you review and approve the selected evidence.</p></div>';
  const boxes=[
-  ['Market Outlook', 'HAL cash '+money(m.spot?.price)+' · '+esc(m.spot?.changePct==null?'Change unavailable':pct(m.spot.changePct))],
+  ['Market Outlook', evidenceStatus.valid&&E.finite(m.spot?.price)?
+      ('Last HAL observation '+money(m.spot.price)+' · '+esc(m.spot?.changePct==null?'Change unavailable':pct(m.spot.changePct))+' · '+esc(evidenceStatus.status)):
+      'Verified cash quote unavailable; review provider status'],
   ['Position & Hedge',book.legs.length?esc(String(book.legs.length))+' recorded open contract(s) · coverage '+esc(E.finite(r.coverage)?pct(r.coverage):'unavailable'):'No saved open contracts'],
   ['Lifetime Recovery','Use the reconciled lifetime recovery report; never infer missing historical charges.'],
   ['News Impact','Review verified sources, dated announcements and any missing filings.']
@@ -699,7 +701,7 @@ function receive(event,data){
  if(event==='reset'){s=D.empty();invalidateCalculations();ui.pattern=null;cache();}
  if(event==='import_preview'){try{importPreview(data);}catch(e){toast('Backup rejected: '+e.message);}return;}
  if(event==='file_saved')toast('File saved.');if(event==='file_error')toast(data.message||'File operation failed.');
- if(event==='ai_result'&&ui.pendingAI?.id===data.id){ui.aiConversationId=ui.pendingAI.conversationId;const p=ui.pendingAI.evidence;ui.ai={...data.data,evidenceAt:data.data?.evidenceGeneratedAt||p.generatedAt,bookRevision:data.data?.bookRevision||p.bookRevision,portfolioIncluded:data.data?.portfolioIncluded??p.portfolioIncluded};ui.pendingAI=null;}
+ if(event==='ai_result'&&ui.pendingAI?.id===data.id){if(data.data?.historySaved===false)toast('AI answer received but local encrypted history could not be saved.');ui.aiConversationId=ui.pendingAI.conversationId;const p=ui.pendingAI.evidence;ui.ai={...data.data,evidenceAt:data.data?.evidenceGeneratedAt||p.generatedAt,bookRevision:data.data?.bookRevision||p.bookRevision,portfolioIncluded:data.data?.portfolioIncluded??p.portfolioIncluded};ui.pendingAI=null;}
  if(event==='ai_progress'&&ui.pendingAI?.id===data.id){ui.pendingAI.stage=data.data?.stage;ui.pendingAI.label=data.data?.label;}
  if(event==='ai_error'&&ui.pendingAI?.id===data.id){ui.aiError=data.message||'Gemini request failed.';ui.pendingAI=null;}
  if(event==='finbert_status')ui.finbert={...ui.finbert,...data};if(event==='finbert_error')ui.finbert={state:'error',message:data.message};if(event==='finbert_results')for(const x of data.items||[])if(['positive','negative','neutral'].includes(x.label)&&E.finite(x.confidence))ui.sentiments[x.id]=x;
