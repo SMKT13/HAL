@@ -476,8 +476,19 @@ function aiBrief(m,l,r){
   card('What changed?','<p class="fine">Compare verified checkpoints; do not treat historical observations as current forecasts.</p>'+btn('period-review','Review checkpoints'))+
   card('Next Review','<p class="fine">'+esc(markState?'Position marks are incomplete.':p.detail)+'</p>');
 }
+function aiUsageView(data){
+ const usage=data?.usage;
+ if(!usage||typeof usage!=='object')return '';
+ const out=[];
+ for(const [key,label] of [['promptTokenCount','Input'],['candidatesTokenCount','Output'],
+  ['thoughtsTokenCount','Reasoning'],['totalTokenCount','Total']]){
+  const v=usage[key];
+  if(Number.isSafeInteger(v)&&v>=0&&v<=60000000)out.push(label+': '+v.toLocaleString('en-IN'));
+ }
+ return out.length?'<p class="fine">Google-reported tokens · '+esc(out.join(' · '))+' · Not a billing statement</p>':'';
+}
 function aiStructuredView(answer){
- if(!answer?.structured)return '<div class="ai-output">'+esc(answer?.reply||'No AI answer returned')+'</div>';
+ if(!answer?.structured)return '<div class="ai-output">'+esc(answer?.reply||'No AI answer returned')+'</div>'+aiUsageView(answer);
  const data=answer.structured;
  let body='<div class="ai-structured"><p class="fine">Model interpretation · '+esc(data.marketBias||'UNAVAILABLE')+'</p>';
  for(const part of AI.sections(data)){
@@ -492,7 +503,7 @@ function aiStructuredView(answer){
  const verifiedLinks=Array.isArray(data.sourceIds)?data.sourceIds.filter(u=>E.safeURL(u)):[]; 
  if(verifiedLinks.length)body+='<section class="ai-answer-section"><h3>Approved evidence links</h3><ul>'+
   verifiedLinks.map(u=>'<li><a href="'+esc(u)+'">'+esc(u)+'</a></li>').join('')+'</ul></section>';
- return body+'<p class="fine">AI analysis is not a source of live quotes or guaranteed risk limits. Verify figures against the app calculations.</p></div>';
+ return body+aiUsageView(answer)+'<p class="fine">AI analysis is not a source of live quotes or guaranteed risk limits. Verify figures against the app calculations.</p></div>';
 }
 function aiDeep(){
  const stages=['Technical Analyst','Business & News Analyst','F&O Position Analyst','Bull Researcher','Bear Researcher','Risk Chair'];
@@ -501,7 +512,7 @@ function aiDeep(){
  if(ui.pendingAI?.stage)body+='<p class="fine" role="status">Analyst '+esc(ui.pendingAI.stage)+'/6 · '+esc(ui.pendingAI.label||'Review running')+'</p>';
  if(ui.aiError)body+='<p class="warning">'+esc(ui.aiError)+'</p>';
  const agents=Array.isArray(ui.ai?.agents)?ui.ai.agents:[];
- if(agents.length)body+='<h3>Risk-chair conclusion</h3><div class="ai-output">'+esc(ui.ai.reply||'No conclusion')+'</div>';
+ if(agents.length)body+='<h3>Risk-chair conclusion</h3><div class="ai-output">'+esc(ui.ai.reply||'No conclusion')+'</div>'+aiUsageView(ui.ai);
  return card('Deep Research',body)+agents.map(a=>card(a.role||'Analyst','<div class="ai-output">'+esc(a.reply||'')+'</div>')).join('');
 }
 function workspace(m,l,r){
