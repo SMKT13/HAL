@@ -11,6 +11,14 @@ test('Windows development verification never signs or installs the protected app
  assert.match(script,/SHA256/);
  assert.doesNotMatch(script,/(?:apksigner|adb\s+install|uninstall|keytool|--ks-pass|HAL_SIGNING_KEY_FILE)/i);
 });
+test('all encrypted AI history read-modify-write operations share a process lock',()=>{
+ const history=read('app/src/main/java/in/smkt/haldesk/AiHistoryStore.java');
+ assert.match(history,/private static final Object HISTORY_LOCK=new Object\(\)/);
+ for(const method of ['list','context','save','pin','delete','clear']){
+   const expression=new RegExp('synchronized (?:JSONObject|void) '+method+'\\([^\\n]+\\)throws Exception \\{ synchronized\\(HISTORY_LOCK\\)\\{');
+   assert.match(history,expression);
+ }
+});
 test('native AI Desk remains private, read-only and reachable from native terminal',()=>{
  const manifest=read('app/src/main/AndroidManifest.xml');
  const compose=read('app/src/main/java/in/smkt/haldesk/NativeAiDeskActivity.kt');
