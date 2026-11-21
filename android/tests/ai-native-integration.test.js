@@ -2,6 +2,15 @@
 const test=require('node:test'), assert=require('node:assert/strict'), fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+test('Windows development verification never signs or installs the protected app',()=>{
+ const script=read('scripts/verify-ai-desk-5.4.ps1');
+ assert.match(script,/applicationId 'in\.smkt\.haldesk'/);
+ assert.match(script,/versionCode 59/);
+ assert.match(script,/:app:testDebugUnitTest/);
+ assert.match(script,/:app:assembleDebug/);
+ assert.match(script,/SHA256/);
+ assert.doesNotMatch(script,/(?:apksigner|adb\s+install|uninstall|keytool|--ks-pass|HAL_SIGNING_KEY_FILE)/i);
+});
 test('native AI Desk remains private, read-only and reachable from native terminal',()=>{
  const manifest=read('app/src/main/AndroidManifest.xml');
  const compose=read('app/src/main/java/in/smkt/haldesk/NativeAiDeskActivity.kt');
