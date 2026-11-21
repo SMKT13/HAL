@@ -5,6 +5,8 @@ import org.json.JSONObject;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Pure 90-day local AI retention policy. Pinned research is never pruned. */
 final class AiHistoryRetention {
@@ -19,12 +21,24 @@ final class AiHistoryRetention {
     static JSONObject prune(JSONObject doc,long now)throws Exception {
         if(doc==null||doc.optInt("schema",0)!=1)throw new Exception("Unsupported AI history schema.");
         JSONArray raw=doc.optJSONArray("items");if(raw==null)throw new Exception("Invalid AI history records.");
+        // Ordinary chat expiration is based on the last activity of its thread,
+        // not the age of individual turns within an otherwise active conversation.
+        Map<String,Long> lastActivity=new HashMap<>();
+        for(int i=0;i<raw.length();i++){
+            JSONObject item=raw.optJSONObject(i);if(item==null)continue;
+            long updated=time(item);
+            if(updated<0||updated>now+86400000)continue;
+            String thread=item.optString("conversationId",item.optString("id",""));
+            Long previous=lastActivity.get(thread);
+            if(previous==null||updated>previous)lastActivity.put(thread,updated);
+        }
         ArrayList<JSONObject> retained=new ArrayList<>();
         for(int i=0;i<raw.length();i++){
             JSONObject item=raw.optJSONObject(i);if(item==null)continue;
             boolean pinned=item.optBoolean("pinned",false);
-            long updated=time(item);
-            if(!pinned&&(updated<0||updated>now+86400000||now-updated>=RETENTION_MS))continue;
+            String thread=item.optString("conversationId",item.optString("id",""));
+            Long activity=lastActivity.get(thread);
+            if(!pinned&&(activity==null||now-activity>=RETENTION_MS))continue;
             retained.add(item);
         }
         retained.sort(Comparator.comparingLong(AiHistoryRetention::time).reversed());
@@ -54,7 +68,7 @@ final class AiHistoryRetention {
         JSONObject clean=prune(doc,now);JSONArray records=clean.getJSONArray("items");
         for(int i=0;i<records.length();i++){
             JSONObject item=records.getJSONObject(i);
-            if(item.optString("id").equals(id)){item.put("pinned",pinned);return clean;}
+            if(item.optString("id").equals(id)){item.put("pinned",pinned);return prune(clean,now);}
         }
         throw new Exception("AI history record not found.");
     }
