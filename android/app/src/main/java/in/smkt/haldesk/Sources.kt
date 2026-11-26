@@ -54,7 +54,7 @@ class PublicSources(private val prefs:SharedPreferences){
             require(reply.optString("id")==id);reply.getJSONObject("result")
         }
     }
-        val hello=exchange("initialize",JSONObject().put("protocolVersion",version).put("capabilities",JSONObject()).put("clientInfo",JSONObject().put("name","HAL Tradebook").put("version","5.3.0")))
+        val hello=exchange("initialize",JSONObject().put("protocolVersion",version).put("capabilities",JSONObject()).put("clientInfo",JSONObject().put("name","HAL Tradebook").put("version","5.4.0")))
         version=hello.getString("protocolVersion")
         exchange("notifications/initialized",JSONObject(),true)
         return exchange(method,params)

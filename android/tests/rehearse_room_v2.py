@@ -97,7 +97,11 @@ def rehearse(path):
         assert target.execute("SELECT COUNT(*) FROM FoPositionEntity").fetchone()[0] == len(book["legs"])
         assert target.execute("SELECT COUNT(*) FROM TradeLedgerEntity").fetchone()[0] == len(entries)
         assert source.execute("PRAGMA user_version").fetchone()[0] == 1
-        return {"status": "in_memory_projection_passed", "legacy_positions": len(book["legs"]),
+        gross, fees = target.execute(
+            "SELECT COALESCE(SUM(gross),0),COALESCE(SUM(fees),0) FROM TradeLedgerEntity"
+        ).fetchone()
+        return {"status": "in_memory_projection_passed",
+                "realized_gross_paise": gross, "charges_paise": fees, "legacy_positions": len(book["legs"]),
                 "projected_ledger_rows": len(entries), "source_schema_unchanged": True,
                 "note": "Not a Room migration or installability certification"}
     finally:

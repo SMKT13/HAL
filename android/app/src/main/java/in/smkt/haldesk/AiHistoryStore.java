@@ -23,9 +23,19 @@ final class AiHistoryStore {
     // Both MainActivity and the Compose gateway instantiate this store.
     // Serialise read-prune-write transactions across those instances.
     private static final Object HISTORY_LOCK=new Object();
+    interface KeySource {
+        SecretKey get(boolean create) throws Exception;
+    }
+    private final KeySource keys;
     private final SharedPreferences preferences;
-    AiHistoryStore(Context context){preferences=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);}
-    private SecretKey key(boolean create)throws Exception {
+    AiHistoryStore(Context context) {
+        this(context, AiHistoryStore::androidKey);
+    }
+    AiHistoryStore(Context context, KeySource keys) {
+        this.preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        this.keys = keys;
+    }
+    private static SecretKey androidKey(boolean create)throws Exception {
         KeyStore store=KeyStore.getInstance("AndroidKeyStore");store.load(null);
         if(store.containsAlias(ALIAS))return (SecretKey)store.getKey(ALIAS,null);
         if(!create)throw new Exception("History encryption key unavailable. Existing records were not erased.");
@@ -41,7 +51,7 @@ final class AiHistoryStore {
         if(raw.isEmpty())return AiHistoryRetention.empty();
         String[] parts=raw.split(":",2);if(parts.length!=2)throw new Exception("AI history ciphertext is damaged; no records were erased.");
         Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE,key(false),new GCMParameterSpec(128,Base64.decode(parts[0],Base64.NO_WRAP)));
+        cipher.init(Cipher.DECRYPT_MODE,keys.get(false),new GCMParameterSpec(128,Base64.decode(parts[0],Base64.NO_WRAP)));
         cipher.updateAAD(DATA.getBytes(StandardCharsets.UTF_8));
         byte[] plain=cipher.doFinal(Base64.decode(parts[1],Base64.NO_WRAP));
         if(plain.length>524288)throw new Exception("AI history exceeds supported size; no records were erased.");
@@ -50,7 +60,7 @@ final class AiHistoryStore {
     private void write(JSONObject doc)throws Exception {
         byte[] plain=doc.toString().getBytes(StandardCharsets.UTF_8);
         if(plain.length>524288)throw new Exception("AI history storage is full. Unpin or delete older reports.");
-        Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,key(true));
+        Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,keys.get(true));
         cipher.updateAAD(DATA.getBytes(StandardCharsets.UTF_8));
         String encoded=Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP)+":"+
                 Base64.encodeToString(cipher.doFinal(plain),Base64.NO_WRAP);

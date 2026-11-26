@@ -423,7 +423,7 @@ function aiHistoryUpdate(action,id,pin){
 function continueAI(id){
  const item=aiHistoryRead().find(x=>x.id===id);
  if(!item)throw Error('Saved conversation not found.');
- ui.aiConversationId=item.conversationId||item.id;
+ ui.aiTranscriptPage=0;ui.aiConversationId=item.conversationId||item.id;
  ui.aiMode='copilot';ui.includeChat=false;ui.question='';
  ui.ai=null;ui.aiError='';ui.aiPage='assistant';ui.screen='ai';
  closeModal();render();window.scrollTo(0,0);
@@ -432,14 +432,21 @@ function aiConversationTranscript(){
  if(!ui.aiConversationId)return '';
  try{
   const records=aiHistoryRead().filter(item=>(item.conversationId||item.id)===ui.aiConversationId&&item.id!==ui.ai?.historyId)
-   .sort((a,b)=>String(a.updatedAt||'').localeCompare(String(b.updatedAt||''))).slice(-12);
+   .sort((a,b)=>String(a.updatedAt||'').localeCompare(String(b.updatedAt||'')));
   if(!records.length)return '';
-  return card('Conversation · historical context','<div class="ai-thread">'+records.map(item=>
+  const pageCount=Math.ceil(records.length/12);
+  const page=Math.min(pageCount-1,Math.max(0,ui.aiTranscriptPage||0));
+  const end=records.length-page*12;
+  const turns=records.slice(Math.max(0,end-12),end);
+  const navigation=pageCount>1?'<div class="toolbar">'+
+   (page+1<pageCount?btn('ai-transcript-page','Older turns','data-page="'+(page+1)+'"'):'')+
+   (page>0?btn('ai-transcript-page','Newer turns','data-page="'+(page-1)+'"'):'')+'</div>':'';
+  return card('Conversation · historical context','<div class="ai-thread">'+turns.map(item=>
    '<section class="ai-thread-turn"><div class="ai-thread-question">'+esc(item.question||'Question unavailable')+'</div>'+
    '<div class="ai-thread-response">'+aiStructuredView(item)+'</div>'+
    '<p class="fine">'+esc(when(item.updatedAt))+' · Historical answer, not a live market observation'+
    (item.portfolioIncluded?' · Prior portfolio context':'')+'</p></section>').join('')+'</div>'+
-   '<p class="fine">The eight most relevant previous exchanges may be used only after separate consent. Open History to inspect older exchanges.</p>');
+   navigation+'<p class="fine">The eight most relevant previous exchanges may be used only after separate consent. Open History to inspect older exchanges.</p>');
  }catch(error){return card('Conversation history','<p class="warning">Saved chat cannot be displayed. No records were removed.</p>');}
 }
 function showSavedAI(id){
@@ -449,7 +456,7 @@ function showSavedAI(id){
   ' · '+esc(item.bookRevision||'No portfolio shared')+'</p><h3>'+esc(item.question||'Question')+
   '</h3>'+aiStructuredView(item)+
   (Array.isArray(item.agents)?item.agents.map(a=>'<h3>'+esc(a.role)+'</h3><div class="ai-output">'+esc(a.reply)+'</div>').join(''):'')+
-  '<p class="fine">Stored interpretation, not a live verified position calculation.</p>'+btn('ai-history-share','Share report','data-id="'+esc(id)+'"'),null,null);
+  '<p class="fine">Stored interpretation, not a live verified position calculation.</p>'+btn('ai-history-share','Share or save report','data-id="'+esc(id)+'"'),null,null);
 }
 function aiBrief(m,l,r){
  const evidenceStatus=E.quoteQuality(m.spot||{}),markState=l&&l.complete===false;
@@ -655,7 +662,7 @@ function quickScenario(kind){
  ui.screen='position';ui.position='stress';ui.plan='stress';ui.result=E.scenario(book,m,scenarioParams());ui.resultAt=stamp();ui.reduction=null;
  if(!ui.result.complete)ui.advanced=true;render();window.scrollTo(0,0);
 }
-const actions={'ai-model-check':()=>{ui.aiModelCheck=null;native('aiModelCheck');toast('Checking Gemini model availability…');},'ai-history':()=>showAiHistory(),'ai-history-search':()=>showAiHistory($('ai-history-query')?.value||''),'ai-history-reset':()=>showAiHistory(),'ai-new-chat':()=>{ui.aiConversationId='';ui.includeChat=false;ui.ai=null;ui.question='';ui.aiError='';render();},'ai-history-continue':b=>continueAI(b.dataset.id),'ai-history-share':b=>native('aiHistoryShare',b.dataset.id),'ai-history-open':b=>showSavedAI(b.dataset.id),'ai-history-pin':b=>aiHistoryUpdate('aiHistoryPin',b.dataset.id,b.dataset.pinned!=='true'),'ai-history-delete':b=>aiHistoryUpdate('aiHistoryDelete',b.dataset.id),'ai-history-clear':()=>modal('Delete all AI history?','<p>This permanently deletes saved AI analysis and pinned research, but leaves all financial records unchanged.</p>','Delete',()=>{const out=JSON.parse(N.aiHistoryClear());if(out.error)throw Error(out.error);toast('AI history deleted.');}),'ai-brief':()=>{ui.aiConversationId='';ui.includeChat=false;aiReview({mode:'copilot',question:'Prepare my daily HAL intelligence brief. Explain verified market signals, my position and hedge risks, lifetime recovery implications only when supported, contrary evidence and next review conditions. Do not invent missing financial figures.'})},'ai-deep':()=>{ui.aiConversationId='';ui.includeChat=false;aiReview({mode:'deliberate',includePortfolio:ui.share,question:'Review my HAL position, market evidence, hedge and lifetime recovery from six perspectives. Compare alternatives and highlight invalidation and missing data.'})},'go-history':()=>navigate('history'),'bt-load':()=>request('candles','D',true),'bt-run':()=>{
+const actions={'ai-transcript-page':b=>{ui.aiTranscriptPage=Number(b.dataset.page);render();},'ai-model-check':()=>{ui.aiModelCheck=null;native('aiModelCheck');toast('Checking Gemini model availability…');},'ai-history':()=>showAiHistory(),'ai-history-search':()=>showAiHistory($('ai-history-query')?.value||''),'ai-history-reset':()=>showAiHistory(),'ai-new-chat':()=>{ui.aiConversationId='';ui.includeChat=false;ui.ai=null;ui.question='';ui.aiError='';render();},'ai-history-continue':b=>continueAI(b.dataset.id),'ai-history-share':b=>native('aiHistoryShare',b.dataset.id),'ai-history-open':b=>showSavedAI(b.dataset.id),'ai-history-pin':b=>aiHistoryUpdate('aiHistoryPin',b.dataset.id,b.dataset.pinned!=='true'),'ai-history-delete':b=>aiHistoryUpdate('aiHistoryDelete',b.dataset.id),'ai-history-clear':()=>modal('Delete all AI history?','<p>This permanently deletes saved AI analysis and pinned research, but leaves all financial records unchanged.</p>','Delete',()=>{const out=JSON.parse(N.aiHistoryClear());if(out.error)throw Error(out.error);toast('AI history deleted.');}),'ai-brief':()=>{ui.aiConversationId='';ui.includeChat=false;aiReview({mode:'copilot',question:'Prepare my daily HAL intelligence brief. Explain verified market signals, my position and hedge risks, lifetime recovery implications only when supported, contrary evidence and next review conditions. Do not invent missing financial figures.'})},'ai-deep':()=>{ui.aiConversationId='';ui.includeChat=false;aiReview({mode:'deliberate',includePortfolio:ui.share,question:'Review my HAL position, market evidence, hedge and lifetime recovery from six perspectives. Compare alternatives and highlight invalidation and missing data.'})},'go-history':()=>navigate('history'),'bt-load':()=>request('candles','D',true),'bt-run':()=>{
  const p=D.rawCandles(s,'D');
  if(p.error)throw Error('Daily candle request failed. Refresh provider data before backtesting.');
  const cleaned=E.candles(p.raw),bars=E.completed(cleaned,'D',Date.now()).slice(-2000);
@@ -701,7 +708,7 @@ Object.assign(actions,{
   ui.reduction=W.compareReduction(book,market(),scenarioParams(),ui.compare.leg,ui.compare.lots,ui.compare.costs);
   if(!ui.reduction.complete)ui.advanced=true;render();
  },
- 'explain-position':()=>aiReview({mode:'copilot',question:'Explain my combined HAL futures and puts. Describe quantity coverage, strikes, protection expiries and any gaps in plain language. Distinguish recorded facts, model assumptions and missing data. Do not infer a guaranteed loss limit.'}),
+ 'explain-position':()=>aiReview({mode:'copilot',question:'Explain my position in HAL futures and puts. Describe quantity coverage, strikes, protection expiries and any gaps in plain language. Distinguish recorded facts, model assumptions and missing data. Do not infer a guaranteed loss limit.'}),
  'explain-news':b=>{const n=news().find(n=>n.url===b.dataset.url)||book.bookmarks.find(n=>n.url===b.dataset.url);if(n)aiReview({mode:'research',news:[{...n,publishedAt:n.publishedAt||n.published}],question:'Explain this HAL headline and its possible relevance to orders, deliveries, margins or cash flow: '+n.title+'. Use only the supplied headline/summary and sources; identify missing detail and do not claim to have read the full filing.'});}
 });
 const viewAPI={get:()=>({book,market:market(),evidence:evidence(),sessionBaseline:reviewBaseline}),getBook:()=>book,commit,render,modal,esc,money,num,pct,date,when,row,table,card,btn,tile,badge,input,select,empty,native,navigate,backup:()=>actions.export()};
@@ -732,7 +739,7 @@ function receive(event,data){
  if(event==='reset'){s=D.empty();invalidateCalculations();ui.pattern=null;cache();}
  if(event==='import_preview'){try{importPreview(data);}catch(e){toast('Backup rejected: '+e.message);}return;}
  if(event==='file_saved')toast('File saved.');if(event==='file_error')toast(data.message||'File operation failed.');
- if(event==='ai_result'&&ui.pendingAI?.id===data.id){if(data.data?.historySaved===false)toast('AI answer received but local encrypted history could not be saved.');ui.aiConversationId=ui.pendingAI.conversationId;const p=ui.pendingAI.evidence;ui.ai={...data.data,historyId:data.id,evidenceAt:data.data?.evidenceGeneratedAt||p.generatedAt,bookRevision:data.data?.bookRevision||p.bookRevision,portfolioIncluded:data.data?.portfolioIncluded??p.portfolioIncluded};ui.pendingAI=null;}
+ if(event==='ai_result'&&ui.pendingAI?.id===data.id){if(data.data?.historySaved===false)toast('AI answer received but local encrypted history could not be saved.');ui.aiTranscriptPage=0;ui.aiConversationId=ui.pendingAI.conversationId;const p=ui.pendingAI.evidence;ui.ai={...data.data,historyId:data.id,evidenceAt:data.data?.evidenceGeneratedAt||p.generatedAt,bookRevision:data.data?.bookRevision||p.bookRevision,portfolioIncluded:data.data?.portfolioIncluded??p.portfolioIncluded};ui.pendingAI=null;}
  if(event==='ai_progress'&&ui.pendingAI?.id===data.id){ui.pendingAI.stage=data.data?.stage;ui.pendingAI.label=data.data?.label;}
  if(event==='ai_error'&&ui.pendingAI?.id===data.id){ui.aiError=data.message||'Gemini request failed.';ui.pendingAI=null;}
  if(event==='finbert_status')ui.finbert={...ui.finbert,...data};if(event==='finbert_error')ui.finbert={state:'error',message:data.message};if(event==='finbert_results')for(const x of data.items||[])if(['positive','negative','neutral'].includes(x.label)&&E.finite(x.confidence))ui.sentiments[x.id]=x;

@@ -10,6 +10,11 @@ public final class AiEvidenceTest {
         check(clean.getBoolean("portfolioIncluded"));check(clean.getString("bookRevision").equals("rev-1234abcd"));
         check(clean.getJSONObject("valuation").getInt("open")==0);check(clean.getJSONObject("portfolio").getJSONArray("legs").getJSONObject(0).getInt("manual")==0);
         check(clean.getJSONArray("news").getJSONObject(0).isNull("url"));check(clean.getJSONObject("market").getJSONObject("spot").getInt("price")==4900);
+        JSONObject privateUrl=packet().put("sources",new JSONArray().put(new JSONObject().put("url","https://example.org/report?access_token=private#secret")));
+        check(AiPolicy.sanitizeEvidence(privateUrl,"research").getJSONArray("sources").getJSONObject(0).isNull("url"));
+        check(!AiPolicy.sanitizeEvidence(packet(),"agent_business").has("portfolio"));
+        check(!AiPolicy.sanitizeEvidence(packet(),"agent_technical").has("funding"));
+        check(!AiPolicy.sanitizeEvidence(packet().put("portfolioIncluded","true"),"copilot").has("portfolio"));
         JSONObject recoveryPacket=packet().put("contextNote","untrusted custom instruction");
         JSONObject recoverySafe=AiPolicy.sanitizeEvidence(recoveryPacket,"copilot");
         check(recoverySafe.getString("contextNote").contains("Do not infer it."));

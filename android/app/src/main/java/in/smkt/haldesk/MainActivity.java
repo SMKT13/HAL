@@ -144,7 +144,7 @@ public final class MainActivity extends Activity {
     }
     private String mode(){return "direct";}
     private void status() {
-        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","5.3.0");}catch(Exception ignored){}
+        JSONObject obj=new JSONObject();try{obj.put("mode",mode());obj.put("configured",secrets.has(mode()));obj.put("version","5.4.0");}catch(Exception ignored){}
         send("connection",obj);
         aiStatus();
     }
@@ -162,6 +162,7 @@ public final class MainActivity extends Activity {
             if(!Boolean.TRUE.equals(args.opt("consent")))throw new Exception("Confirm sharing the selected evidence with Gemini.");
             if(!secrets.has("gemini"))throw new Exception("Enter your Gemini API key in AI settings first.");
             final String mode=args.optString("mode"),question=args.optString("message");
+            if(AiPolicy.isAgentMode(mode))throw new Exception("Start Deep Research to request a specialist review.");
             final String conversationId=args.optString("conversationId",id);
             if(!conversationId.matches("[A-Za-z0-9_-]{1,80}"))throw new Exception("Invalid AI conversation.");
             final boolean includeConversation=args.optBoolean("includeConversation",false);
@@ -256,8 +257,10 @@ public final class MainActivity extends Activity {
                     send.setType("text/plain");
                     send.putExtra(Intent.EXTRA_SUBJECT,"HAL Atlas AI analysis");
                     send.putExtra(Intent.EXTRA_TEXT,payload);
-                    startActivity(Intent.createChooser(send,"Share historical AI analysis"));
+                    try { startActivity(Intent.createChooser(send,"Share historical AI analysis")); }
+                    catch(android.content.ActivityNotFoundException unavailable){send("file_error",object("message","No application can share this report."));}
                 })
+                .setNeutralButton("Save text file",(d,w)->saveDocument(payload,"text/plain","HAL-Atlas-report-"+id+".txt"))
                 .setNegativeButton("Cancel",null).create();
             dialog.show();
             if(dialog.getWindow()!=null)dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
@@ -389,9 +392,13 @@ public final class MainActivity extends Activity {
     private void exportDocument(String data,boolean csv){
         if(data==null||data.length()>2000000){send("file_error",object("message","Export is too large."));return;}
         try{if(!csv)BookValidator.rejectCredentials(new JSONObject(data),0);}catch(Exception e){send("file_error",object("message","Backup contains invalid or credential fields."));return;}
+        saveDocument(data,csv?"text/csv":"application/json","HAL-Atlas-"+(csv?"Journal":"Backup")+"-"+java.time.LocalDate.now()+(csv?".csv":".json"));
+    }
+    private void saveDocument(String data,String mime,String name){
+        if(pendingExport!=null){send("file_error",object("message","Finish the current export first."));return;}
         pendingExport=data.getBytes(StandardCharsets.UTF_8);
-        Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType(csv?"text/csv":"application/json");
-        intent.putExtra(Intent.EXTRA_TITLE,"HAL-Atlas-"+(csv?"Journal":"Backup")+"-"+java.time.LocalDate.now()+ (csv?".csv":".json"));
+        Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);intent.addCategory(Intent.CATEGORY_OPENABLE);intent.setType(mime);
+        intent.putExtra(Intent.EXTRA_TITLE,name);
         try{startActivityForResult(intent,41);}catch(Exception e){pendingExport=null;send("file_error",object("message","A document picker is not available."));}
     }
     private void openLink(String address){

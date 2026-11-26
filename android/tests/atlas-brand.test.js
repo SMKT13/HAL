@@ -14,8 +14,8 @@ test('HAL Atlas launcher display and identity coexist with preserved Android pac
  A.match(manifest,/android:allowBackup="false"/);
  A.match(gradle,/applicationId 'in\.smkt\.haldesk'/);
  A.match(gradle,/namespace 'in\.smkt\.haldesk'/);
- A.match(gradle,/versionCode 59\b/);
- A.match(gradle,/versionName '5\.3\.0'/);
+ A.match(gradle,/versionCode 60\b/);
+ A.match(gradle,/versionName '5\.4\.0'/);
  A.match(icon,/android:viewportWidth="108"/);
  A.match(icon,/android:strokeColor="#FFCE78"/);
 });
@@ -47,7 +47,7 @@ test('existing accounts, local book history, signing secrets and migrations rema
  A.match(storage,/hal_desk_v4/);
  A.match(storage,/hal_desk_v2/);
  A.match(storage,/app:'HAL Atlas'/);
- A.match(main,/obj.put\("version","5\.3\.0"\)/);
+ A.match(main,/obj.put\("version","5\.4\.0"\)/);
  A.doesNotMatch(main,/deleteDatabase\(|clearApplicationUserData\(/);
  const E=require('../app/src/main/assets/engine4.js');
  const D=require('../app/src/main/assets/data4.js');

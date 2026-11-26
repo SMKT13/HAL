@@ -5,7 +5,7 @@ const read=p=>fs.readFileSync(path.join(root,p),'utf8');
 test('Windows development verification never signs or installs the protected app',()=>{
  const script=read('scripts/verify-ai-desk-5.4.ps1');
  assert.match(script,/applicationId 'in\.smkt\.haldesk'/);
- assert.match(script,/versionCode 59/);
+ assert.match(script,/versionCode 60/);
  assert.match(script,/:app:testDebugUnitTest/);
  assert.match(script,/:app:assembleDebug/);
  assert.match(script,/SHA256/);

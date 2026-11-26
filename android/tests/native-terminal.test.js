@@ -19,8 +19,8 @@ test('Compose build preserves original DB identity and uses versionCode above Li
  const gradle=read('app/build.gradle');
  A.match(read('build.gradle'),/org\.jetbrains\.kotlin\.plugin\.compose/);
  A.match(gradle,/buildFeatures \{ compose true \}/);
- A.match(gradle,/versionCode 59/);
- A.match(gradle,/versionName '5\.3\.0'/);
+ A.match(gradle,/versionCode 60/);
+ A.match(gradle,/versionName '5\.4\.0'/);
  A.match(read('app/src/main/java/in/smkt/haldesk/BookStore.java'),/haldesk_book\.db",null,observedSchema==1\?1:2,PRESERVE_CORRUPT/);
 });
 

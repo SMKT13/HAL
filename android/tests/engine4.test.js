@@ -203,3 +203,11 @@ test('backup normalization and completed journal refuse zero futures exit but pr
  A.equal(result.journal[0].exit,0);
  A.equal(result.journal[0].gross,-750000);
 });
+
+test('legacy book import withholds short open and closed rows from long-only accounting', () => {
+ const leg = {id:'short', side:'SELL', type:'FUT', expiry:'2030-06-25', entry:100, lots:1, lotSize:10};
+ const close = {kind:'close', id:'sold', date:'2030-01-01', leg, exit:105, fees:1};
+ for (const book of [{legs:[leg],journal:[]}, {legs:[],journal:[close]}]) {
+  A.throws(() => E.validateBook({version:4,...book}), /long HAL/);
+ }
+});

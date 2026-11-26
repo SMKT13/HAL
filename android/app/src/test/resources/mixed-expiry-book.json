@@ -1,0 +1,87 @@
+{
+  "version": 4,
+  "legs": [
+    {
+      "id": "future",
+      "type": "FUT",
+      "expiry": "2029-03-29",
+      "lots": 2,
+      "lotSize": 10,
+      "entry": 100,
+      "manual": 108,
+      "manualAt": "2029-01-02T06:00:00Z"
+    },
+    {
+      "id": "put",
+      "type": "PE",
+      "expiry": "2029-02-22",
+      "lots": 1,
+      "lotSize": 10,
+      "strike": 95,
+      "entry": 5,
+      "manual": 3,
+      "manualAt": "2029-01-02T06:00:00Z"
+    }
+  ],
+  "funding": {
+    "margin": 3000,
+    "free": 500,
+    "at": "2029-01-02T06:00:00Z"
+  },
+  "journal": [
+    {
+      "id": "historic-close",
+      "kind": "close",
+      "date": "2029-01-01",
+      "leg": {
+        "id": "future",
+        "type": "FUT",
+        "expiry": "2029-03-29",
+        "lots": 1,
+        "lotSize": 10,
+        "entry": 100,
+        "manual": 108,
+        "manualAt": "2029-01-02T06:00:00Z"
+      },
+      "exit": 98,
+      "fees": 2
+    },
+    {
+      "id": "fee-after",
+      "kind": "fee",
+      "date": "2029-01-02",
+      "amount": 3.5
+    }
+  ],
+  "legacy": {
+    "realized": -100,
+    "costs": 5,
+    "journal": []
+  },
+  "history": {
+    "version": 1,
+    "excludedJournalIds": [
+      "historic-close"
+    ],
+    "records": [
+      {
+        "id": "statement/1",
+        "type": "FUT",
+        "contractMonth": "2029-03",
+        "units": 10,
+        "gross": -20,
+        "source": {
+          "id": "statement",
+          "name": "Synthetic statement",
+          "row": "1"
+        }
+      }
+    ],
+    "charges": {
+      "asOf": "2029-01-01",
+      "amount": 10,
+      "source": "Synthetic statement",
+      "coversExisting": true
+    }
+  }
+}

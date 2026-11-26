@@ -40,6 +40,26 @@ class RehearsalTests(unittest.TestCase):
             self.assertEqual(before, hashlib.sha256(p.read_bytes()).hexdigest())
             self.assertEqual(sqlite3.connect(p).execute("PRAGMA user_version").fetchone()[0], 1)
 
+    def test_mixed_expiry_sqlite_clone_matches_expected_ledger(self):
+        fixture = Path(__file__).resolve().parents[1] / "app/src/test/resources/mixed-expiry-book.json"
+        raw = fixture.read_text()
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "book.db"
+            make_fixture(source)
+            db = sqlite3.connect(source)
+            try:
+                db.execute("INSERT INTO recovery SELECT * FROM book")
+                db.execute("UPDATE book SET revision=2,payload=?,digest=?",
+                           (raw, hashlib.sha256(raw.encode()).hexdigest()))
+                db.commit()
+            finally:
+                db.close()
+            before = source.read_bytes()
+            result = rehearse(source)
+            self.assertEqual((result["legacy_positions"], result["projected_ledger_rows"]), (2,4))
+            self.assertEqual((result["realized_gross_paise"], result["charges_paise"]), (-12000,1350))
+            self.assertEqual(before, source.read_bytes())
+
     def test_invalid_checksum_fails_closed(self):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "book.db"

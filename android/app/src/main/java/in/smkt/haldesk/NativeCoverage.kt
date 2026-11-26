@@ -39,13 +39,13 @@ fun nominalCoverage(legs: List<ExposureLeg>, today: LocalDate): NominalCoverage 
     if (maxFuture != null && minPut != null && minPut.isBefore(maxFuture)) {
         notes += "One or more puts expire before the latest futures expiry. A protection gap is possible."
     }
-    if (puts.any { dates[it]?.isBefore(today) == true }) {
-        notes += "An option expiry is past. Reconcile settled options; active put coverage is unavailable."
-        return NominalCoverage(f, null, null, notes)
-    }
     if (futures.any { dates[it]?.isBefore(today) == true }) {
         notes += "A futures expiry is past. Reconcile settlement before relying on this snapshot."
         return NominalCoverage(null, null, null, notes)
+    }
+    if (puts.any { dates[it]?.isBefore(today) == true }) {
+        notes += "An option expiry is past. Reconcile settled options; active put coverage is unavailable."
+        return NominalCoverage(f, null, null, notes)
     }
     return NominalCoverage(f, p, (f - p).coerceAtLeast(0L), notes)
 }

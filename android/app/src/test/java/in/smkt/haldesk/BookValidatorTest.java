@@ -18,6 +18,16 @@ public class BookValidatorTest{
   b.put("journal",new org.json.JSONArray().put(record));
   return b.toString();
  }
+ @Test public void legacyShortCannotBeProjectedAsALong() throws Exception {
+  for(String raw : new String[]{book("null"), closeRecord("PE",25)}) {
+   org.json.JSONObject doc = new org.json.JSONObject(raw);
+   org.json.JSONObject leg = doc.getJSONArray("journal").length()==0
+     ? doc.getJSONArray("legs").getJSONObject(0)
+     : doc.getJSONArray("journal").getJSONObject(0).getJSONObject("leg");
+   leg.put("side","SELL");
+   assertEquals("invalid_contract",assertThrows(Exception.class,()->BookValidator.parse(doc.toString())).getMessage());
+  }
+ }
  @Test public void bookedFuturesCloseCannotHaveZeroExitPrice()throws Exception{
   try{BookValidator.parse(closeRecord("FUT",0));fail("zero futures close must fail");}
   catch(Exception e){assertTrue(e.getMessage().contains("invalid_numeric_exit"));}

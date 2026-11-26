@@ -40,8 +40,8 @@ $spec = Get-Content -LiteralPath $build -Raw
 if (-not $spec.Contains("applicationId 'in.smkt.haldesk'")) {
     throw 'HAL Atlas application ID changed; refusing verification.'
 }
-if (-not $spec.Contains("versionCode 59") -or -not $spec.Contains("versionName '5.3.0'")) {
-    throw 'This script is for the feature branch before assigning a 5.4 release candidate version.'
+if (-not $spec.Contains("versionCode 60") -or -not $spec.Contains("versionName '5.4.0'")) {
+    throw 'This script is for the 5.4.0 release candidate.'
 }
 Write-Host '[AI VERIFY] Development identity verified. No signing or installation will occur.'
 

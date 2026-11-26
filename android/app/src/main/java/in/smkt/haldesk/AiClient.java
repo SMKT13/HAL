@@ -73,6 +73,10 @@ final class AiClient {
                     throw new Failure("Gemini returned an unverifiable structured answer. "+invalid.getMessage());
                 }
             }
+            if(structured==null){
+                try{AiNumericClaimGuard.validateFreeForm(reply,evidence);}
+                catch(Exception unsupported){throw new Failure("Gemini returned an unsupported rupee amount. Review the app figures and retry.");}
+            }
             JSONObject result=new JSONObject().put("success",true).put("direct",true).put("source",model).put("reply",reply).put("grounded",false);
             if(structured!=null)result.put("structured",structured);
             JSONObject usage=AiUsageMetrics.fromProvider(response.optJSONObject("usageMetadata"));

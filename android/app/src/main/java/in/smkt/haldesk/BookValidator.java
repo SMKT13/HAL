@@ -21,7 +21,7 @@ final class BookValidator {
   if(!b.isNull("history")) validateHistory(b.getJSONObject("history"),journal);
   rejectCredentials(b,0);return b;
  }
- static void leg(JSONObject l)throws Exception{String t=l.getString("type");if((!t.equals("FUT")&&!t.equals("PE"))||l.optString("id").isEmpty())throw new Exception("invalid_contract");LocalDate.parse(l.getString("expiry"));double lots=number(l,"lots",1,10000),size=number(l,"lotSize",1,100000);if(lots!=Math.rint(lots)||size!=Math.rint(size))throw new Exception("invalid_lot_size");number(l,"entry",t.equals("FUT")?Double.MIN_VALUE:0,1e7);if(t.equals("PE"))number(l,"strike",Double.MIN_VALUE,1e7);if(l.has("manual")&&!l.isNull("manual"))number(l,"manual",0,1e7);}
+ static void leg(JSONObject l)throws Exception{String t=l.getString("type");if((l.has("side")&&!"BUY".equals(l.opt("side")))||(!t.equals("FUT")&&!t.equals("PE"))||l.optString("id").isEmpty())throw new Exception("invalid_contract");LocalDate.parse(l.getString("expiry"));double lots=number(l,"lots",1,10000),size=number(l,"lotSize",1,100000);if(lots!=Math.rint(lots)||size!=Math.rint(size))throw new Exception("invalid_lot_size");number(l,"entry",t.equals("FUT")?Double.MIN_VALUE:0,1e7);if(t.equals("PE"))number(l,"strike",Double.MIN_VALUE,1e7);if(l.has("manual")&&!l.isNull("manual"))number(l,"manual",0,1e7);}
  static double number(JSONObject o,String k,double min,double max)throws Exception{Object v=o.opt(k);if(!(v instanceof Number))throw new Exception("invalid_numeric_"+k);double n=((Number)v).doubleValue();if(!Double.isFinite(n)||n<min||n>max)throw new Exception("invalid_numeric_"+k);return n;}
  private static final int HISTORY_LIMIT=12000;
 

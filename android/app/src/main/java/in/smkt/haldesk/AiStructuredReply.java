@@ -73,6 +73,8 @@ final class AiStructuredReply {
         safe.put("marketBias",bias);
         for(String name:new String[]{"supportingEvidence","contraryEvidence","riskWarnings","nextReview","limitations"})
             safe.put(name,list(raw,name,8,600));
+        if(!(raw.opt("positionImplications") instanceof String))
+            throw new Exception("AI response is missing positionImplications.");
         safe.put("positionImplications",bounded(raw,"positionImplications",1200,false));
         JSONArray ids=list(raw,"sourceIds",12,2000);
         Set<String> allowed=new HashSet<>();

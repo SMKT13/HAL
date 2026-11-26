@@ -31,9 +31,10 @@ public final class AiClientTest {
     }
     public static void main(String[] args)throws Exception {
         URL.setURLStreamHandlerFactory(protocol->"https".equals(protocol)?new URLStreamHandler(){protected URLConnection openConnection(URL url){check(url.toString().equals("https://generativelanguage.googleapis.com/v1beta/models/"+AiPolicy.DEFAULT_MODEL+":generateContent"));check(url.getQuery()==null);return next;}}:null);
-        JSONArray parts=new JSONArray().put(new JSONObject().put("thought",true).put("text","PRIVATE THOUGHT"));parts.put(new JSONObject().put("text","App P&L 20000; "+KEY));
+        JSONArray parts=new JSONArray().put(new JSONObject().put("thought",true).put("text","PRIVATE THOUGHT"));JSONObject structured=AiStructuredReplyTest.sample().put("sourceIds",new JSONArray()).put("conclusion","Limited evidence "+KEY);
+        parts.put(new JSONObject().put("text",structured.toString()));
         next=new Mock(answer("STOP",parts));JSONObject result=run(new AiClient());
-        check(result.getBoolean("direct"));check(result.getString("reply").equals("App P&L 20000; [redacted]"));check(!result.getBoolean("grounded"));check(result.isNull("dataAsOf"));
+        check(result.getBoolean("direct"));check(result.getString("reply").contains("Limited evidence [redacted]")&&!result.getString("reply").contains("PRIVATE THOUGHT"));check(!result.getBoolean("grounded"));check(result.isNull("dataAsOf"));
         check(KEY.equals(next.getRequestProperty("x-goog-api-key")));check(!next.getInstanceFollowRedirects());check("POST".equals(next.getRequestMethod()));check(next.getConnectTimeout()==20000&&next.getReadTimeout()==120000);check(!next.getUseCaches());check(next.disconnected);
         String payload=next.sent.toString("UTF-8");check(!payload.contains(KEY));JSONObject body=new JSONObject(payload);check(body.has("systemInstruction"));
         JSONObject config=body.getJSONObject("generationConfig");
@@ -44,7 +45,13 @@ public final class AiClientTest {
         check(agentReply.getString("reply").startsWith("Technical view"));
         JSONObject agentConfig=new JSONObject(next.sent.toString("UTF-8")).getJSONObject("generationConfig");
         check(agentConfig.getInt("maxOutputTokens")==8192);
-        check(agentConfig.getJSONObject("thinkingConfig").getString("thinkingLevel").equals("low"));check(!body.has("tools"));check(payload.contains("20000")&&body.getJSONArray("contents").getJSONObject(0).getJSONArray("parts").getJSONObject(0).getString("text").contains("\"spot\":null"));
+        check(agentConfig.getJSONObject("thinkingConfig").getString("thinkingLevel").equals("low"));check(!body.has("tools"));check(!payload.contains("20000")&&body.getJSONArray("contents").getJSONObject(0).getJSONArray("parts").getJSONObject(0).getString("text").contains("\"spot\":null"));
+        check("application/json".equals(config.getString("responseMimeType")));
+        check(config.getJSONObject("responseSchema").has("required"));
+        failure(answer("STOP",text("Plain text instead of JSON")),"invalid structured JSON");
+        next=new Mock(answer("STOP",text("Estimated gain ₹999999.")));
+        try{new AiClient().generate(KEY,AiPolicy.DEFAULT_MODEL,"skills","Review",evidence());throw new AssertionError("Accepted unsupported free-form amount");}
+        catch(AiClient.Failure error){check(error.getMessage().contains("unsupported rupee"));}
         for(int code:new int[]{403,429,302,404,503}){
             next=new Mock("untrusted provider error "+KEY);next.code=code;
             try{run(new AiClient());throw new AssertionError("Accepted HTTP error");}catch(AiClient.Failure error){check(error.getMessage().equals(AiPolicy.httpError(code)));check(!error.getMessage().contains(KEY));check(!next.errorBodyRead);check(next.disconnected);}

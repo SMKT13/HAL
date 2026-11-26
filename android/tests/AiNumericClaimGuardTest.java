@@ -2,7 +2,6 @@ package in.smkt.haldesk;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
-import java.util.Set;
 
 /** Pure tests for disallowing unsupported INR claims in Gemini prose. */
 public final class AiNumericClaimGuardTest {
@@ -33,6 +32,10 @@ public final class AiNumericClaimGuardTest {
         check(true);
         rejected(response("Expected guaranteed return of ₹999,999."),marketOnly);
         rejected(response("Position loss ₹10,000."),marketOnly);
+        rejected(response("Expected return 9,999 rupees."),marketOnly);
+        rejected(response("Expected return 8.5 lakh INR."),marketOnly);
+        rejected(response("Expected return INR5020.50001."),marketOnly);
+        rejected(response("Expected return ₹5020.50 crores."),marketOnly);
         JSONObject permitted=new JSONObject().put("portfolioIncluded",true)
             .put("market",new JSONObject().put("spot",new JSONObject().put("price",5020.50)))
             .put("portfolio",new JSONObject().put("legs",new JSONArray().put(

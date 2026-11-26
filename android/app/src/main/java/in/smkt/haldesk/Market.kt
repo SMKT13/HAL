@@ -36,7 +36,7 @@ class HalRepository(c:Context,private val dao:BookDao){
     private val sources=PublicSources(prefs)
     private val http=OkHttpClient.Builder().followRedirects(false).build()
     private fun get(url:String,token:String?=null):JSONObject{
-        val req=Request.Builder().url(url).header("User-Agent","HAL-Atlas/5.3.0")
+        val req=Request.Builder().url(url).header("User-Agent","HAL-Atlas/5.4.0")
         token?.let{req.header("Authorization","Bearer "+it)}
         return http.newCall(req.build()).execute().use{require(it.isSuccessful){"Market service HTTP "+it.code};JSONObject(it.body!!.string())}
     }

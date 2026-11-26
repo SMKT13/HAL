@@ -6,14 +6,14 @@ Personal research, derivatives risk and portfolio accounting for **Hindustan Aer
 
 | Application | Source | Version | Storage |
 | --- | --- | --- | --- |
-| Android HAL Atlas | `android/` | **5.3.0 development source**, versionCode **59** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
+| Android HAL Atlas | `android/` | **5.4.0 upgrade-test candidate**, versionCode **60** | SQLite real-book schema 4, protected Android Keystore credentials, separate PAPER research cache |
 | Desktop/web HAL viewer | `src/`, `backend/`, `server.ts`, `server.py` | Separate web product | Browser-origin-local portfolio, optional local Python market feed |
 
 **The two apps do not automatically share positions, history, model outputs or subscriptions.** Export/import only through documented, validated formats. The web viewer is not the canonical Android portfolio.
 
 ## Getting started on Android
 
-1. If upgrading, export your saved book first and install the signed APK over the existing app. HAL Atlas 5.3.0 targets Android 8.0 and later; a new signed build has not been verified.
+1. HAL Atlas 5.4.0 targets Android 8.0 and later. Rehearse the upgrade on a backed-up test installation before using a phone that holds the original trading book.
 2. Open Settings to connect your read-only Upstox Analytics Token. Refresh market data and check the displayed timestamps before using marks.
 3. In **Position → Book**, review your existing legs or enter your HAL futures and protective puts. Check expiry, lots, units per lot and entry prices against your records.
 4. Use **Position** for performance, protection gaps, stress scenarios and hedge or rollover comparisons. Open **History** for completed trades, charges, funding and backups.
@@ -45,7 +45,7 @@ npm ci
 npm test
 npx playwright install chromium
 npm run test:ui
-HAL_UNSIGNED_ONLY=1 ANDROID_SDK_ROOT="$ANDROID_HOME" bash build.sh
+HAL_BASELINE_APK=/path/to/HAL-Atlas-5.3.0-signed.apk ANDROID_SDK_ROOT="$ANDROID_HOME" bash scripts/release-5.4.sh build
 ```
 
 **4.6 change:** `app/src/main/assets/desk4.js` and `web-assets-sha256.json` are generated artifacts, **not committed files**. The pinned build script `scripts/build-assets.js` regenerates them for browser tests, and Gradle automatically regenerates and verifies them before Android packaging. No hand-edited or stale WebView bundle is used as source of truth.
@@ -85,4 +85,4 @@ The 4.6 source refactor removes stale generated files, adds an immutable PAPER l
 
 See [refactor audit and remaining tasks](docs/REFACTOR-4.6.md).
 
-**Atlas 5.3.0 is development-branch source, not a verified signed APK.** Run the local release checks, retain the original package ID and signing certificate, and compare backup/book values after an in-place install.
+**HAL Atlas 5.3.0 is the restore baseline.** Keep its signed APK and a separately verified data backup. The 5.4.0 candidate uses the same package ID and requires the original signing certificate.

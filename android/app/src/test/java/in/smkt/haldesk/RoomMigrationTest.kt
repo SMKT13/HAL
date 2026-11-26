@@ -17,6 +17,40 @@ class RoomMigrationTest {
     private val first="""{"version":4,"legs":[],"journal":[]}"""
     private val second="""{"version":4,"legs":[{"id":"f","type":"FUT","entry":4900,"lots":2,"lotSize":150,"expiry":"2026-12-29"}],"journal":[{"id":"fee","kind":"fee","date":"2026-10-01","amount":25.25}],"legacy":{"realized":-10000,"costs":50}}"""
 
+    @Test fun syntheticMixedExpiryBookRetainsMarksMarginsChargesAndPriorRevision() {
+        val c:Context=RuntimeEnvironment.getApplication()
+        c.deleteDatabase("haldesk_book.db")
+        val raw=requireNotNull(javaClass.getResource("/mixed-expiry-book.json")).readText()
+        val original=BookStore(c).use { store ->
+            store.save(first,0)
+            store.save(raw,1)
+            store.load(false).getJSONObject("book").toString()
+        }
+        repeat(2) {
+            val db=Room.databaseBuilder(c,TradebookDb::class.java,"haldesk_book.db")
+                .openHelperFactory(PreservingRoomHelper).addMigrations(atlasMigration).allowMainThreadQueries().build()
+            try { runBlocking {
+                assertEquals(original, db.book().cached("atlas-original")!!.payload)
+                val ledger=db.book().ledger().first()
+                assertEquals(-12000L, ledger.sumOf { it.gross })
+                assertEquals(1350L, ledger.sumOf { it.fees })
+                val open=db.book().positions().first().sumOf { row ->
+                    val leg=org.json.JSONObject(row.payload)
+                    paise((leg.getDouble("manual")-leg.getDouble("entry"))*leg.getInt("lots")*leg.getInt("lotSize"))
+                }
+                assertEquals(14000L,open)
+                assertEquals(650L,open+ledger.sumOf { it.gross-it.fees })
+            } } finally { db.close() }
+            BookStore(c).use { store ->
+                val visible=store.load(false).getJSONObject("book")
+                assertEquals(3000,visible.getJSONObject("funding").getInt("margin"))
+                assertEquals(500,visible.getJSONObject("funding").getInt("free"))
+                assertEquals(2,visible.getJSONArray("journal").length())
+                assertEquals(1,store.load(true).getInt("revision"))
+            }
+        }
+    }
+
     @Test fun openingCorruptRoomFilePreservesItsOriginalBytes() {
         val c=RuntimeEnvironment.getApplication() as Context
         val name="room-corruption-test"

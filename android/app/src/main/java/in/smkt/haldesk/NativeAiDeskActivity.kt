@@ -88,6 +88,9 @@ private val aiDates = DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm 'IST'")
 
 private data class NativeRiskPreview(
     val status: String = "Checking saved Room tradebook…",
+    val ledgerNetPaise: Long? = null,
+    val ledgerRows: Long = 0,
+    val checkedAt: String? = null,
     val futures: Long? = null,
     val puts: Long? = null,
     val uncovered: Long? = null,
@@ -113,6 +116,9 @@ private fun readNativeRisk(context: Context): NativeRiskPreview {
         NativeRiskPreview(
             status = if (exposure.isEmpty()) "Reconciled Room v2 ledger; no open contracts recorded."
                      else "Read-only Room v2 position · source: saved device records, not live exchange marks.",
+            checkedAt = aiDates.format(Instant.now()),
+            ledgerNetPaise = if (raw.getLong("ledgerRows") > 0) raw.getLong("ledgerNetPaise") else null,
+            ledgerRows = raw.getLong("ledgerRows"),
             futures = coverage.futures, puts = coverage.puts, uncovered = coverage.uncovered,
             notes = coverage.notes + if (raw.optInt("nativeOnly",0)>0)
                 listOf("Native-only position records are included in the Room snapshot.") else emptyList()
@@ -230,6 +236,12 @@ private fun NativeAiDesk(
                             }
                             NativeAiPanel("Saved position · local risk review") {
                                 Text(localRisk.status, color = aiMuted, fontSize = 12.sp)
+                                localRisk.checkedAt?.let { Text("Device records checked $it", color = aiMuted, fontSize = 12.sp) }
+                                localRisk.ledgerNetPaise?.let { net ->
+                                    val amount = java.math.BigDecimal.valueOf(net, 2).toPlainString()
+                                    Text("Recorded ledger net after fees: ₹$amount · ${localRisk.ledgerRows} entries", color = aiMuted)
+                                    Text("Open-position marks and lifetime recovery require the full brief.", color = aiMuted, fontSize = 12.sp)
+                                }
                                 if (localRisk.futures != null && localRisk.puts != null && localRisk.uncovered != null) {
                                     Text("Long futures units: ${localRisk.futures}", color = aiMuted)
                                     Text("Long put units: ${localRisk.puts}", color = aiMuted)

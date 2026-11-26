@@ -16,7 +16,8 @@ final class AiEvidence {
     static JSONObject sanitize(JSONObject source,String mode)throws Exception {
         if(source==null||source.toString().length()>65536)throw new Exception("Evidence is missing or too large.");
         JSONObject out=pick(source,"generatedAt quoteAsOf",300).put("schemaVersion",4);
-        boolean portfolio=!"research".equals(mode)&&source.optBoolean("portfolioIncluded",false);
+        boolean publicOnly="research".equals(mode)||"agent_technical".equals(mode)||"agent_business".equals(mode);
+        boolean portfolio=!publicOnly&&Boolean.TRUE.equals(source.opt("portfolioIncluded"));
         out.put("portfolioIncluded",portfolio);
         if(AiPolicy.isAgentMode(mode)&&!portfolio)
             out.put("analysisScope","Public HAL research only. No verified private position, hedge, charges, funding or recovery evidence was approved; do not infer those facts.");
@@ -112,7 +113,16 @@ final class AiEvidence {
         }
     }
     private static String clean(String s,int limit){String result=s.replaceAll("[\\p{Cntrl}]"," ").trim();return result.length()>limit?result.substring(0,limit):result;}
-    private static Object safeUrl(String raw){try{URI u=new URI(raw);return "https".equals(u.getScheme())&&u.getHost()!=null&&u.getUserInfo()==null&&raw.length()<=2000?raw:JSONObject.NULL;}catch(Exception ignored){return JSONObject.NULL;}}
+    private static Object safeUrl(String raw){
+        try{
+            URI uri=new URI(raw);
+            // A query can identify the document or carry a private access token.
+            // Do not substitute a different document by stripping its query.
+            if(!"https".equals(uri.getScheme())||uri.getHost()==null||uri.getUserInfo()!=null||
+               uri.getRawQuery()!=null||raw.length()>2000)return JSONObject.NULL;
+            return raw.split("#",2)[0];
+        }catch(Exception ignored){return JSONObject.NULL;}
+    }
     static String digest(JSONObject evidence)throws Exception {byte[] bytes=MessageDigest.getInstance("SHA-256").digest(canonical(evidence).getBytes(StandardCharsets.UTF_8));StringBuilder s=new StringBuilder();for(byte b:bytes)s.append(String.format(Locale.ROOT,"%02x",b&255));return s.toString();}
     private static String canonical(Object value)throws Exception {
         if(value instanceof JSONObject){JSONObject o=(JSONObject)value;ArrayList<String> keys=new ArrayList<>();Iterator<String> it=o.keys();while(it.hasNext())keys.add(it.next());Collections.sort(keys);StringBuilder s=new StringBuilder("{");for(String key:keys){if(s.length()>1)s.append(',');s.append(JSONObject.quote(key)).append(':').append(canonical(o.opt(key)));}return s.append('}').toString();}

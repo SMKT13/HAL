@@ -21,6 +21,9 @@ fun main() {
     check(expired.puts==null && expired.uncovered==null)
     check(expired.notes.any { it.contains("option expiry is past") })
 
+    val bothExpired = nominalCoverage(listOf(leg("FUT","2026-11-20"),leg("PE","2026-11-19")),today)
+    check(bothExpired.futures==null && bothExpired.puts==null && bothExpired.uncovered==null)
+
     val unsupported = nominalCoverage(listOf(leg("FUT"),leg("CE")),today)
     check(unsupported.futures==null && unsupported.uncovered==null)
     val sold = nominalCoverage(listOf(leg("FUT"),leg("PE",side="SELL")),today)

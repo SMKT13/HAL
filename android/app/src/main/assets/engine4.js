@@ -35,7 +35,7 @@ function cleanJSON(x,depth=0){
 function validateLeg(input, index=0) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) fail('Invalid leg record.');
   const l = clone(input);
-  if (!['FUT','PE'].includes(l.type) || !validDate(l.expiry)) fail('Use a long HAL future or put with an exact expiry date.');
+  if (!['FUT','PE'].includes(l.type) || (l.side !== undefined && l.side !== 'BUY') || !validDate(l.expiry)) fail('Use a long HAL future or put with an exact expiry date.');
   if (!Number.isInteger(l.lots) || l.lots < 1 || l.lots > 10000) fail('Lots must be a positive whole number, at most 10,000.');
   if (!Number.isInteger(l.lotSize) || l.lotSize < 1 || l.lotSize > 100000) fail('Units per lot must be a positive verified whole number.');
   if (!finite(l.entry) || l.entry < 0 || l.entry > 1e7 || (l.type === 'FUT' && l.entry === 0)) fail('Entry price must be a valid non-negative premium or positive futures price.');

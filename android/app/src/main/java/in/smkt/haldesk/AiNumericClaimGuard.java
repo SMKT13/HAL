@@ -2,7 +2,6 @@ package in.smkt.haldesk;
 
 import java.math.BigDecimal;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -15,12 +14,14 @@ import org.json.JSONObject;
  * Unsupported derived calculations belong in the app's financial engine.
  */
 final class AiNumericClaimGuard {
+    private static final String NUMBER="[+-]?[0-9][0-9,]*(?:\\.[0-9]+)?";
+    private static final String SCALE="(?:lakhs?|lacs?|crores?|cr|millions?|billions?|bn|k|m|l)";
+    private static final String PREFIX="(?:₹|\\bINR|\\bRs\\.?)";
+    private static final String SUFFIX="(?:INR|rupees?)\\b";
     private static final Pattern MONEY=Pattern.compile(
-        "(?:₹\\s*|\\bINR\\s*|\\bRs\\.?\\s*)([+-]?[0-9][0-9,]*(?:\\.[0-9]{1,4})?)",
-        Pattern.CASE_INSENSITIVE);
+        PREFIX+"\\s*("+NUMBER+")|(?<![0-9.,])("+NUMBER+")\\s*"+SUFFIX,Pattern.CASE_INSENSITIVE);
     private static final Pattern SCALED_MONEY=Pattern.compile(
-        "(?:₹\\s*|\\bINR\\s*|\\bRs\\.?\\s*)[+-]?[0-9][0-9,]*(?:\\.[0-9]{1,4})?\\s*(?:lakh|lac|crore|cr|million|billion|bn|k|m|l)\\b",
-        Pattern.CASE_INSENSITIVE);
+        PREFIX+"\\s*"+NUMBER+"\\s*"+SCALE+"\\b|(?<![0-9.,])"+NUMBER+"\\s*"+SCALE+"\\s*"+SUFFIX,Pattern.CASE_INSENSITIVE);
     private AiNumericClaimGuard(){}
 
     private static void number(Set<String> values, Object v) {
@@ -91,7 +92,7 @@ final class AiNumericClaimGuard {
             throw new Exception("Gemini used an unverified scaled INR amount; inspect the app's exact financial figures.");
         Matcher m=MONEY.matcher(text==null?"":text);
         while(m.find()){
-            final String numeric=m.group(1).replace(",","");
+            final String numeric=(m.group(1)!=null?m.group(1):m.group(2)).replace(",","");
             try{
                 String value=new BigDecimal(numeric).abs().stripTrailingZeros().toPlainString();
                 if(!allowed.contains(value))throw new Exception("Gemini introduced an unverified rupee amount. Open the app's authoritative calculation instead.");

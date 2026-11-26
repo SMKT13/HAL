@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
+if ! grep -Eq "^[[:space:]]*versionName '5\.3\.0'[[:space:]]*$" app/build.gradle; then
+  echo "This restoration script requires 5.3.0. Use scripts/release-5.4.sh for the candidate." >&2
+  exit 1
+fi
 : "${ANDROID_SDK_ROOT:?Set ANDROID_SDK_ROOT to SDK35 and build-tools35}"
 bt="$ANDROID_SDK_ROOT/build-tools/35.0.0"
 # Always run the sidecar/legacy database safety suite before packaging.
