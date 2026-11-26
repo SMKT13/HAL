@@ -3,7 +3,6 @@ package in.smkt.haldesk;
 import android.content.Context;
 import android.content.SharedPreferences;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.ZoneId;
 import org.json.JSONObject;
 
@@ -24,7 +23,7 @@ final class AiDailyBudget {
         prefs=context.getSharedPreferences(STORE,Context.MODE_PRIVATE);
     }
     static String day(long now) {
-        return LocalDate.ofInstant(Instant.ofEpochMilli(now),IST).toString();
+        return Instant.ofEpochMilli(now).atZone(IST).toLocalDate().toString();
     }
     synchronized int limit() {
         return Math.max(1,Math.min(60,prefs.getInt(KEY_LIMIT,DEFAULT_LIMIT)));
