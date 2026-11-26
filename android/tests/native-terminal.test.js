@@ -4,7 +4,7 @@ const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p
 test('native terminal is non-exported and linked only from bundled UI',()=>{
  A.match(read('app/src/main/AndroidManifest.xml'),/<activity android:name="\.NativeTerminalActivity" android:exported="false"/);
  A.match(read('app/src/main/java/in/smkt/haldesk/MainActivity.java'),/@JavascriptInterface public void terminal\(\)/);
- A.match(read('app/src/main/assets/index.html'),/id="native-terminal"/);
+ A.doesNotMatch(read('app/src/main/assets/index.html'),/id="native-terminal"/);
  A.match(read('app/src/main/assets/ui4.js'),/native\('terminal'\)/);
 });
 test('native terminal loads validated book without migrating or fabricating derivative marks',()=>{
@@ -19,8 +19,8 @@ test('Compose build preserves original DB identity and uses versionCode above Li
  const gradle=read('app/build.gradle');
  A.match(read('build.gradle'),/org\.jetbrains\.kotlin\.plugin\.compose/);
  A.match(gradle,/buildFeatures \{ compose true \}/);
- A.match(gradle,/versionCode 60/);
- A.match(gradle,/versionName '5\.4\.0'/);
+ A.match(gradle,/versionCode 61/);
+ A.match(gradle,/versionName '5\.5\.0'/);
  A.match(read('app/src/main/java/in/smkt/haldesk/BookStore.java'),/haldesk_book\.db",null,observedSchema==1\?1:2,PRESERVE_CORRUPT/);
 });
 

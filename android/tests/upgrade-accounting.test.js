@@ -31,3 +31,39 @@ test('mixed-expiry synthetic book retains accounting and conditional recovery af
     assert.deepEqual(summarize(path.resolve(process.env.HAL_PREVIOUS_ASSETS),source),actual);
   }
 });
+
+test('December protective put matches independently specified rupee and recovery values',()=>{
+  const E=require(path.join(candidate,'engine4.js'));
+  const R=require(path.join(candidate,'recovery5.js'));
+  const expiry='2029-12-27', manualAt=new Date(now).toISOString();
+  const common={expiry,lots:2,lotSize:150,manualAt};
+  const b={...E.emptyBook(),legs:[
+    {...common,id:'f',type:'FUT',entry:4927.35,manual:4805.20},
+    {...common,id:'p',type:'PE',strike:4400,entry:29.45,manual:10}
+  ],legacy:{realized:-43900,costs:0,journal:[]}};
+  const ledger=E.ledger(b,{},{now});
+  const paise=n=>Math.round(n*100)/100;
+  assert.deepEqual(ledger.rows.map(r=>paise(r.pnl)),[-36645,-5835]);
+  assert.deepEqual([ledger.openPutPremium,paise(ledger.open),paise(ledger.net)],[8835,-42480,-86380]);
+  assert.equal(E.risk(b,{},now).coverage,100);
+  const result=R.evaluate(b,{},{horizon:expiry,minSpot:100,maxSpot:8000,basis:'carry',rate:0,dividend:0,newCosts:0,openRecordedCharges:0,lifetimeChargesConfirmed:true},now);
+  assert.equal(paise(result.openNet.roots[0].price),4956.80);
+  assert.equal(paise(result.lifetime.roots[0].price),5103.13);
+  const floor=Math.min(...result.curves.map(p=>p.openGross));
+  assert.equal(paise(floor),-167040);
+  assert.equal(paise(ledger.open-floor),124560);
+});
+
+test('portable encrypted book authenticates data and rejects a wrong password or modified payload',async()=>{
+ const portable=require(path.join(candidate,'portable55.js'));
+ const book={schema:4,book:source};
+ const password='fixture password only';
+ const first=await portable.seal(book,password), second=await portable.seal(book,password);
+ assert.notEqual(first.salt,second.salt);
+ assert.notEqual(first.iv,second.iv);
+ assert.deepEqual(await portable.unlock(first,password),book);
+ await assert.rejects(portable.unlock(first,'incorrect'));
+ const changed=Buffer.from(first.ciphertext,'base64');
+ changed[0]^=1;
+ await assert.rejects(portable.unlock({...first,ciphertext:changed.toString('base64')},password));
+});

@@ -14,8 +14,8 @@ test('HAL Atlas launcher display and identity coexist with preserved Android pac
  A.match(manifest,/android:allowBackup="false"/);
  A.match(gradle,/applicationId 'in\.smkt\.haldesk'/);
  A.match(gradle,/namespace 'in\.smkt\.haldesk'/);
- A.match(gradle,/versionCode 60\b/);
- A.match(gradle,/versionName '5\.4\.0'/);
+ A.match(gradle,/versionCode 61\b/);
+ A.match(gradle,/versionName '5\.5\.0'/);
  A.match(icon,/android:viewportWidth="108"/);
  A.match(icon,/android:strokeColor="#FFCE78"/);
 });
@@ -25,12 +25,12 @@ test('Atlas branding is visible and the existing internal route keeps research m
  const css=read('app/src/main/assets/style4.css');
  A.match(html,/<title>HAL Atlas/);
  A.match(html,/HAL <span>ATLAS<\/span>/);
- A.match(html,/data-screen="technicals"[^>]*>[^<]*<span[^>]*>[^<]*<\/span>Analysis/);
+ A.match(html,/data-screen="technicals"[^>]*>Analysis/);
  A.match(ui,/technicals:'analysis'/);
- A.match(ui,/technicals:'Analysis & markets'/);
+ A.match(ui,/marketOverview\(m\)/);
  A.match(ui,/HAL Atlas · Settings/);
- A.match(ui,/\['analysis','Daily Analysis'\]/);
- A.match(css,/repeat\(5,minmax\(0,1fr\)\)/);
+ A.match(ui,/analysisView\.view\(\)/);
+ A.match(css,/repeat\(3,minmax\(0,1fr\)\)/);
  A.match(css,/--atlas-violet/);
  const bundle=read('scripts/build-assets.js');
  A.ok(bundle.indexOf("'analysis5.js'")>0);
@@ -47,7 +47,7 @@ test('existing accounts, local book history, signing secrets and migrations rema
  A.match(storage,/hal_desk_v4/);
  A.match(storage,/hal_desk_v2/);
  A.match(storage,/app:'HAL Atlas'/);
- A.match(main,/obj.put\("version","5\.4\.0"\)/);
+ A.match(main,/obj.put\("version","5\.5\.0"\)/);
  A.doesNotMatch(main,/deleteDatabase\(|clearApplicationUserData\(/);
  const E=require('../app/src/main/assets/engine4.js');
  const D=require('../app/src/main/assets/data4.js');

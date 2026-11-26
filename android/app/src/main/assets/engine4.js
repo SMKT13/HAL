@@ -81,7 +81,7 @@ function validateBook(input) {
   out.legacy={realized:l.realized,costs:l.costs,journal:l.journal.map((j,i)=>{if(!validDate(j.date)||!['close','fee','settlement'].includes(j.kind)||!finite(j.amount))fail('Invalid legacy historical record.');return {id:safeText(j.id,100)||'legacy-'+i,kind:j.kind,date:j.date,amount:j.amount,note:safeText(j.note,10000)};})};
  }
  const f=input.funding||{}; for(const k of ['margin','free']) {if(f[k]!=null&&(!finite(f[k])||f[k]<0))fail('Invalid funding snapshot.');out.funding[k]=f[k]??null;} out.funding.at=f.at==null?null:iso(f.at);
- const p=input.preferences||{}; out.preferences={theme:['dark','light','system'].includes(p.theme)?p.theme:'dark',auto:p.auto!==false,markMode:p.markMode==='bid'?'bid':'ltp'};
+ const p=input.preferences||{}; out.preferences={theme:['dark','light','system','amoled'].includes(p.theme)?p.theme:'dark',auto:p.auto!==false,markMode:p.markMode==='bid'?'bid':'ltp'};
  for(const k of ['capital','maxLoss','hedgeBudget','reserve','reviewBelow','reviewAbove']) {const v=input.riskProfile?.[k];if(v!=null&&(!finite(v)||v<0))fail('Invalid risk limit '+k+'.');out.riskProfile[k]=v??null;}
  if(finite(out.riskProfile.reviewBelow)&&finite(out.riskProfile.reviewAbove)&&out.riskProfile.reviewBelow>=out.riskProfile.reviewAbove)fail('Lower review trigger must be below the upper trigger.');
  out.riskProfile.confirmedAt=iso(input.riskProfile?.confirmedAt);out.riskProfile.confirmedBook=safeText(input.riskProfile?.confirmedBook,50000)||null;

@@ -187,3 +187,13 @@ a{color:var(--accent)}
 .ai-thread-response{align-self:stretch;border:1px solid var(--line);padding:11px 13px;border-radius:15px 15px 15px 5px;background:var(--surface);overflow-wrap:anywhere}
 .ai-thread .fine{font-size:11px;line-height:1.5}
 @media(max-width:360px){.ai-thread-question{max-width:100%}.ai-thread-response{padding:10px}}
+
+body:not(.light){--bg:#0e141e;--surface:#192332;--accent:#49d9a2;--red:#ed8585;--amber:#e5b975;--muted:#aab7c8;--atlas-violet:#a99aff;--atlas-cyan:#91baff}
+body.amoled{--bg:#000}
+nav.bottom-nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.atlas-section{margin-block:12px;background:var(--surface);border-radius:14px;padding:8px}
+.atlas-heading{width:100%;display:flex;align-items:center;justify-content:space-between;background:transparent;border:0;font-weight:650}
+button,.icon-button,.bottom-nav button{min-height:48px}
+
+body[data-density="Compact"] .card{padding:10px}
+body[data-density="Comfortable"] .card{padding:22px}

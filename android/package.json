@@ -1,6 +1,6 @@
 {
   "name": "hal-atlas-android",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "private": true,
   "scripts": {
     "test": "node --test tests/data4.test.js tests/engine4.test.js tests/insights4.test.js tests/attribution5.test.js tests/workflow4.test.js tests/history5.test.js tests/recovery5.test.js tests/optionslab5.test.js tests/optionslab-advanced6.test.js tests/optionslab-audit451.test.js tests/paper-ledger460.test.js tests/risk5.test.js tests/quant5.test.js tests/backtest5.test.js tests/hedge5.test.js tests/lenses5.test.js tests/quality5.test.js tests/continuity5.test.js tests/migrate5.test.js tests/portfolio5.test.js tests/release5.test.js tests/expiry5.test.js tests/reconcile5.test.js tests/path5.test.js tests/rollover5.test.js tests/analysis5.test.js tests/atlas-brand.test.js tests/native-terminal.test.js tests/ai-native-integration.test.js tests/ai-intelligence5.test.js tests/legacy-db-guard.test.js tests/upgrade-accounting.test.js tests/local-price-alerts.test.js",

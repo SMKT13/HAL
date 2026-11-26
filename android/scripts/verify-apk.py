@@ -17,7 +17,7 @@ def identity(apk):
 new, (package,code,version) = identity(a.apk)
 old, (oldpackage,oldcode,oldversion) = identity(a.previous)
 assert package == oldpackage == 'in.smkt.haldesk'
-assert int(code) == 60 and int(code)>int(oldcode) and version=='5.4.0'
+assert int(code) == 61 and int(code)>int(oldcode) and version=='5.5.0'
 assert "application-label:'HAL Atlas'" in new
 assert "sdkVersion:'26'" in new and "targetSdkVersion:'35'" in new
 expected_permissions = {
